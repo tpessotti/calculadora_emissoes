@@ -1,0 +1,13 @@
+{
+  "Seção 2 - Fatores de emissão para combustão estacionária": {
+  "header_row": 61,
+  "start_row": 62,
+  "columns": {
+    "consumivel": "Combustível",
+    "ano": "Referência", 
+    "fator": "CO2 (kg/TJ)",
+    "unidade": "Unidades",
+    "descricao": "Fonte"
+  }
+}
+}
