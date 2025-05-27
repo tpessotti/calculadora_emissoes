@@ -5,81 +5,141 @@
       "Nome": "U1",
       "Localizacao": "BRASIL",
       "Periodo": "2023",
-      "Input": "PE001",
+      "Input": "PS001",
+      "MassaInput": 10.0,
       "Output": "PS001",
-      "Emissao": 100.0,
-      "Pegada": 0.0,
+      "MassaOutput": 10.0,
+      "Consumiveis": [
+        {
+          "nome": "Diesel",
+          "fator": 3.1
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.5
+      ],
+      "IntensidadeEmissao": 1.55,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 1.55,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
       "TaxacaoFronteira": false,
-      "TaxacaoLocal": false
+      "TaxacaoLocal": false,
+      "ConfigOperacional": "Padrão"
     },
     {
       "ID_ELO": "ELO002",
       "Nome": "U2",
       "Localizacao": "BRASIL",
       "Periodo": "2023",
-      "Input": "PE001",
-      "Output": "PE002",
-      "Emissao": 50.0,
-      "Pegada": 0.0,
+      "Input": "PS001",
+      "MassaInput": 10.0,
+      "Output": "PS001",
+      "MassaOutput": 4.0,
+      "Consumiveis": [
+        {
+          "nome": "Diesel",
+          "fator": 3.1
+        },
+        {
+          "nome": "Estanol",
+          "fator": 6.2
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.5,
+        0.7
+      ],
+      "IntensidadeEmissao": 5.89,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 7.4399999999999995,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
       "TaxacaoFronteira": false,
-      "TaxacaoLocal": false
+      "TaxacaoLocal": false,
+      "ConfigOperacional": "Padrão"
     },
     {
       "ID_ELO": "ELO003",
       "Nome": "U3",
       "Localizacao": "BRASIL",
       "Periodo": "2023",
-      "Input": "PE002",
-      "Output": "PE003",
-      "Emissao": 300.0,
-      "Pegada": 0.0,
+      "Input": "PS001",
+      "MassaInput": 7.0,
+      "Output": "PS001",
+      "MassaOutput": 7.0,
+      "Consumiveis": [
+        {
+          "nome": "Diesel",
+          "fator": 3.1
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.5
+      ],
+      "IntensidadeEmissao": 1.55,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 5.934285714285713,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
       "TaxacaoFronteira": false,
-      "TaxacaoLocal": false
-    },
-    {
-      "ID_ELO": "ELO004",
-      "Nome": "UF",
-      "Localizacao": "BRASIL",
-      "Periodo": "2023",
-      "Input": "PE003",
-      "Output": "PF001",
-      "Emissao": 300.0,
-      "Pegada": 0.0,
-      "TaxacaoFronteira": false,
-      "TaxacaoLocal": false
+      "TaxacaoLocal": false,
+      "ConfigOperacional": "Padrão"
     },
     {
       "ID_ELO": "ELO005",
-      "Nome": "U1",
+      "Nome": "U5",
       "Localizacao": "BRASIL",
       "Periodo": "2023",
       "Input": "PE001",
-      "Output": "PS001",
-      "Emissao": 0.0,
-      "Pegada": 0.0,
+      "MassaInput": 3.0,
+      "Output": "PE001",
+      "MassaOutput": 3.0,
+      "Consumiveis": [
+        {
+          "nome": "Diesel",
+          "fator": 3.1
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.1
+      ],
+      "IntensidadeEmissao": 0.31000000000000005,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 0.31000000000000005,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
       "TaxacaoFronteira": false,
-      "TaxacaoLocal": false
+      "TaxacaoLocal": true,
+      "ConfigOperacional": "Padrão"
     }
   ],
   "conexoes": [
+    {
+      "origem": "ELO002",
+      "destino": "ELO003",
+      "label": "Fluxo"
+    },
     {
       "origem": "ELO001",
       "destino": "ELO002",
       "label": "Fluxo"
     },
     {
-      "origem": "ELO004",
-      "destino": "ELO005",
-      "label": "Fluxo"
-    },
-    {
-      "origem": "ELO003",
-      "destino": "ELO004",
-      "label": "Fluxo"
-    },
-    {
-      "origem": "ELO002",
-      "destino": "ELO004",
+      "origem": "ELO005",
+      "destino": "ELO003",
       "label": "Fluxo"
     }
   ]

@@ -13,7 +13,7 @@ CANVAS_CONFIG = {
     },
     "link": {"renderLabel": True},
     "physics": {"enabled": True},
-    "backgroundColor": "#f8f9fa"  # Cinza bem claro
+    "backgroundColor": "#dcdcdc"  # Cinza bem claro
 }
 
 COLORS = {

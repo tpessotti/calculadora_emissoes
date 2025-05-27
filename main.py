@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_agraph import agraph, Node, Edge, Config
 from streamlit_modal import Modal
+import json
 from database import DatabaseManager, UnidadeProdutiva, Conexao
 from calculations import EmissionCalculator
 from config import CANVAS_CONFIG, COLORS, FLOWCHART_LAYOUTS
@@ -71,51 +72,127 @@ class App:
         """Formulário para criação de nova unidade produtiva"""
         with st.form("form_unidade"):
             col1, col2 = st.columns(2)
-            
+
             # Coluna 1 - Dados básicos
             with col1:
                 id_elo = st.text_input("ID ELO*")
                 nome = st.text_input("Nome*")
                 localizacao = st.text_input("Localização*")
                 periodo = st.text_input("Período*", value="2023")
-            
-            # Coluna 2 - Dados de fluxo e emissão
+                consumiveis_json = st.text_area(
+                    "Consumíveis (formato JSON)",
+                    value='[{"nome": "Diesel", "fator": 3.1}]'
+                )
+
+            # Coluna 2 - Dados de fluxo e consumo
             with col2:
                 input_insumo = st.text_input("Insumo Entrada")
                 output_insumo = st.text_input("Insumo Saída")
-                emissao = st.number_input("Emissão (CO₂)", value=0.0)
-                pegada = st.number_input("Pegada", value=0.0)
+                massa_input = st.number_input("Massa de Entrada (t)", value=0.0)
+                massa_output = st.number_input("Massa de Saída (t)", value=0.0)
+                consumo_especifico_str = st.text_input(
+                    "Consumo Específico (lista separada por vírgula)",
+                    value="0.5"
+                )
+                taxacao_fronteira = st.checkbox("Taxação na Fronteira")
+                taxacao_local = st.checkbox("Taxação Local")
 
             if st.form_submit_button("Salvar"):
-                self._save_new_unidade(id_elo, nome, localizacao, periodo, 
-                                     input_insumo, output_insumo, emissao, pegada, modal)
+                try:
+                    # Processar entradas de texto
+                    consumiveis = json.loads(consumiveis_json)
+                    consumo_especifico = [
+                        float(c.strip()) for c in consumo_especifico_str.split(",") if c.strip()
+                    ]
 
-    def _save_new_unidade(self, id_elo, nome, localizacao, periodo, 
-                         input_insumo, output_insumo, emissao, pegada, modal):
-        """Valida e salva uma nova unidade produtiva"""
+                    # Validar
+                    if len(consumiveis) != len(consumo_especifico):
+                        st.error("O número de consumíveis deve corresponder ao número de valores de consumo específico.")
+                        return
+
+                    self._save_new_unidade(
+                        id_elo, nome, localizacao, periodo,
+                        input_insumo, massa_input, output_insumo, massa_output,
+                        consumiveis, consumo_especifico,
+                        taxacao_fronteira, taxacao_local, modal
+                    )
+
+                except Exception as e:
+                    st.error(f"Erro ao processar os dados: {str(e)}")
+
+    def _save_new_unidade(self, id_elo, nome, localizacao, periodo,
+                        input_insumo, massa_input, output_insumo, massa_output,
+                        consumiveis, consumo_especifico,
+                        taxacao_fronteira, taxacao_local, modal):
+        """Valida, calcula e salva uma nova unidade produtiva"""
         if not id_elo or not nome or not localizacao or not periodo:
             st.error("Preencha todos os campos obrigatórios (*)")
             return
-            
-        nova_unidade = UnidadeProdutiva(
-            id_elo, nome, localizacao, periodo, 
-            input_insumo, output_insumo, emissao, pegada
-        )
-        self.db.add_unidade(nova_unidade)
-        st.session_state.unidades = self.db.get_unidades()
-        st.success("Unidade adicionada com sucesso!")
-        modal.close()
+
+        try:
+            nova_unidade = UnidadeProdutiva(
+                id_elo=id_elo,
+                nome=nome,
+                localizacao=localizacao,
+                periodo=periodo,
+                input_insumo=input_insumo,
+                massa_input=massa_input,
+                output_insumo=output_insumo,
+                massa_output=massa_output,
+                consumiveis=consumiveis,
+                consumo_especifico=consumo_especifico,
+                taxacao_fronteira=taxacao_fronteira,
+                taxacao_local=taxacao_local
+            )
+
+            # Cálculo automático das emissões
+            nova_unidade = self.ec.calcular_emissoes(nova_unidade)
+
+            self.db.add_unidade(nova_unidade)
+            st.session_state.unidades = self.db.get_unidades()
+            # Após adicionar todas as unidades
+            self.ec.propagar_pegada(st.session_state.unidades, self.db.get_edges_for_graph())
+            st.success("Unidade adicionada com sucesso!")
+            modal.close()
+
+        except Exception as e:
+            st.error(f"Erro ao criar unidade produtiva: {str(e)}")
 
     def _render_manage_unidades(self):
-        """Componente para gerenciamento de unidades existentes"""
-        with st.expander("🗑️ Gerenciar Unidades"):
+        """Componente para gerenciamento de unidades e fluxos"""
+        with st.expander("🗑️ Gerenciar Unidades e Fluxos"):
+            # Remover unidade
+            st.subheader("Remover Unidade")
             if st.session_state.unidades:
                 unidade_para_deletar = st.selectbox(
                     "Selecionar unidade para remover",
-                    [u.ID_ELO for u in st.session_state.unidades]
+                    [u.ID_ELO for u in st.session_state.unidades],
+                    key="deletar_unidade"
                 )
                 if st.button("Remover Unidade Selecionada"):
                     self._remove_unidade(unidade_para_deletar)
+
+            # Remover conexão/fluxo
+            st.subheader("Remover Fluxo")
+            if st.session_state.edges:
+                opcoes_fluxo = [
+                    f"{e['source']} → {e['target']}" for e in st.session_state.edges
+                ]
+                fluxo_selecionado = st.selectbox("Selecionar fluxo para remover", opcoes_fluxo, key="deletar_fluxo")
+
+                if st.button("Remover Fluxo Selecionado"):
+                    origem, destino = fluxo_selecionado.split(" → ")
+                    self._remove_fluxo(origem.strip(), destino.strip())
+            else:
+                st.info("Nenhum fluxo disponível para remoção.")
+
+    def _remove_fluxo(self, origem, destino):
+        """Remove um fluxo entre duas unidades"""
+        self.db.remove_edge(origem, destino)
+        st.session_state.edges = self.db.get_edges_for_graph()
+        self.db.propagar_pegada()
+        st.session_state.refresh_canvas = True
+        st.success(f"Fluxo removido: {origem} → {destino}")
 
     def _remove_unidade(self, id_elo):
         """Remove uma unidade e suas conexões relacionadas"""
@@ -165,6 +242,11 @@ class App:
             if self.db.import_from_json(json_str):
                 st.session_state.unidades = self.db.get_unidades()
                 st.session_state.edges = self.db.get_edges_for_graph()
+                # Após adicionar todas as unidades
+                self.ec.propagar_pegada(
+                    st.session_state.unidades,
+                    self.db.get_edges_for_graph()
+                )
                 st.success("Dados importados com sucesso!")
                 st.rerun()
         except Exception as e:
@@ -198,7 +280,10 @@ class App:
         if not st.session_state.canvas_opened_once:
             st.session_state.refresh_canvas = True
             st.session_state.canvas_opened_once = True
-            
+        
+        #Propaga a pegada se necessário
+        
+        self.ec.propagar_pegada(st.session_state.unidades, st.session_state.edges)
         self._render_layout_settings()
         self._render_selection_controls()
         self._render_graph()
@@ -247,7 +332,10 @@ class App:
         """Feedback visual para o usuário sobre o modo atual"""
         if st.session_state.modo_selecao:
             st.warning("""**Modo de seleção ativo**  
-Clique em dois nós no diagrama para criar uma conexão entre eles""")
+                        Clique em dois nós no diagrama para criar uma conexão entre eles""")
+            
+            if len(st.session_state.selected_nodes) == 1:
+                self._render_edicao_unidade(st.session_state.selected_nodes[0])
 
             if len(st.session_state.selected_nodes) == 2:
                 self._render_connection_confirmation()
@@ -255,6 +343,56 @@ Clique em dois nós no diagrama para criar uma conexão entre eles""")
         elif st.session_state.modo_exclusao_fluxo:
             st.warning("""**Modo de exclusão ativo**  
 Selecione o fluxo que deseja excluir no diagrama""")
+
+    def _render_edicao_unidade(self, unidade_id):
+        unidade = self.db.get_unidade_by_id(unidade_id)
+        if not unidade:
+            st.error("Unidade não encontrada.")
+            return
+
+        with st.expander(f"✏️ Editar Unidade: {unidade.ID_ELO}", expanded=False):
+            with st.form(f"form_edicao_{unidade.ID_ELO}"):
+                nome = st.text_input("Nome", value=unidade.Nome)
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    localizacao = st.text_input("Localização", value=unidade.Localizacao)                    
+                    input_insumo = st.text_input("Insumo Entrada", value=unidade.Input)
+                    massa_input = st.number_input("Massa de Entrada (t)", value=unidade.MassaInput)
+                    consumiveis_str = st.text_area("Consumíveis (JSON)", value=json.dumps(unidade.Consumiveis, indent=2))
+                    consumo_especifico_str = st.text_input("Consumo Específico", value=", ".join(str(c) for c in unidade.ConsumoEspecifico))
+
+                with col2:
+                    periodo = st.text_input("Período", value=unidade.Periodo)
+                    output_insumo = st.text_input("Insumo Saída", value=unidade.Output)
+                    massa_output = st.number_input("Massa de Saída (t)", value=unidade.MassaOutput)
+                    tax_fronteira = st.checkbox("Taxação na Fronteira", value=unidade.TaxacaoFronteira)
+                    tax_local = st.checkbox("Taxação Local", value=unidade.TaxacaoLocal)
+
+                if st.form_submit_button("Salvar Alterações"):
+                    try:
+                        unidade.Nome = nome
+                        unidade.Localizacao = localizacao
+                        unidade.Periodo = periodo
+                        unidade.Input = input_insumo
+                        unidade.Output = output_insumo
+                        unidade.MassaInput = massa_input
+                        unidade.MassaOutput = massa_output
+                        unidade.Consumiveis = json.loads(consumiveis_str)
+                        unidade.ConsumoEspecifico = [float(c.strip()) for c in consumo_especifico_str.split(",") if c.strip()]
+                        unidade.TaxacaoFronteira = tax_fronteira
+                        unidade.TaxacaoLocal = tax_local
+
+                        # Recalcula intensidade e propaga pegadas
+                        self.ec.calcular_emissoes(unidade)
+                        self.db.propagar_pegada()
+
+                        st.success("Unidade atualizada com sucesso!")
+                        st.session_state.refresh_canvas = True
+                        st.rerun()
+
+                    except Exception as e:
+                        st.error(f"Erro ao salvar alterações: {e}")
 
     def _render_connection_confirmation(self):
         """Confirmação para criação de nova conexão"""
@@ -283,18 +421,32 @@ Selecione o fluxo que deseja excluir no diagrama""")
 
     def _validate_connection(self, origem, destino):
         """Valida se uma conexão pode ser criada"""
+
         if origem == destino:
             st.error("Não é possível conectar um nó a ele mesmo!")
             return False
-            
+
         if any(e['source'] == origem and e['target'] == destino for e in st.session_state.edges):
             st.error("Esta conexão já existe!")
             return False
-            
+
         if self._creates_cycle(origem, destino, st.session_state.edges):
             st.error("Esta conexão criaria um ciclo no grafo!")
             return False
-            
+
+        # 🔒 Nova validação de proporção de massa
+        destino_unidade = self.db.get_unidade_by_id(destino)
+        pais_ids = [e['source'] for e in st.session_state.edges if e['target'] == destino]
+        pais_ids.append(origem)  # incluir a nova conexão que ainda será criada
+
+        pais = [self.db.get_unidade_by_id(pid) for pid in pais_ids]
+        massa_total = sum(p.MassaOutput for p in pais if p)
+
+        if abs(massa_total - destino_unidade.MassaInput) > 0.001:
+            st.error(f"Conexão inválida: massa de entrada ({destino_unidade.MassaInput:.2f}) "
+                    f"≠ soma das massas de saída dos elos de origem ({massa_total:.2f})")
+            return False
+
         return True
 
     def _confirm_edge_deletion(self, origem_id, destino_id):
@@ -353,7 +505,7 @@ Selecione o fluxo que deseja excluir no diagrama""")
         }
 
         if any(e['source'] == edge_data['source'] and e['target'] == edge_data['target'] 
-               for e in st.session_state.edges):
+                for e in st.session_state.edges):
             st.session_state.selected_edge = edge_data
             st.rerun()
 
@@ -362,8 +514,8 @@ Selecione o fluxo que deseja excluir no diagrama""")
         edges = []
         for e in st.session_state.edges:
             is_selected = (st.session_state.selected_edge and 
-                         e['source'] == st.session_state.selected_edge['source'] and 
-                         e['target'] == st.session_state.selected_edge['target'])
+                            e['source'] == st.session_state.selected_edge['source'] and 
+                            e['target'] == st.session_state.selected_edge['target'])
             
             edges.append(Edge(
                 source=e['source'],
@@ -409,22 +561,27 @@ Selecione o fluxo que deseja excluir no diagrama""")
                 color="#d2f8e1" if is_selected else ("#e6f7ff" if not u.TaxacaoFronteira else "#ffebee"),
                 borderColor="#00cc66" if is_selected else ("#0066cc" if not u.TaxacaoFronteira else "#cc0000"),
                 borderWidth=3 if is_selected else 2,
+                font={"align": "left", "color": "#333333", "size": 12},
                 x=posicoes[u.ID_ELO]["x"],
                 y=posicoes[u.ID_ELO]["y"]
             ))
         return nodes
 
     def _get_node_label(self, unidade):
-        """Gera o label formatado para um nó"""
+        consumos = "\n".join([
+            f"🛢️ {c['nome']}: {e:.2f} t" 
+            for c, e in zip(unidade.Consumiveis, unidade.ConsumoEspecifico)
+        ]) if unidade.Consumiveis and unidade.ConsumoEspecifico else "-"
+        
         return (
-            f"📌 {unidade.ID_ELO}\n"
-            f"🏣 {unidade.Nome}\n"
-            f"📍 {unidade.Localizacao}\n"
-            f"📅 {unidade.Periodo}\n"
-            f"⬆️ {unidade.Input if unidade.Input else '-'}\n"
-            f"⬇️ {unidade.Output if unidade.Output else '-'}\n"
-            f"☁️ {unidade.Emissao:,.2f} CO₂\n"
-            f"👣 {unidade.Pegada}"
+            f"📌 {unidade.ID_ELO}  {unidade.Nome}\n"
+            f"{unidade.Localizacao} | {unidade.Periodo}\n"
+            f"{unidade.Input} ({unidade.MassaInput:.2f} t)\n"
+            f"{unidade.Output} ({unidade.MassaOutput:.2f} t)\n"
+            f"Insumos\n"
+            f"{consumos}\n"
+            f"Int. Emissão: {unidade.IntensidadeEmissao:.2f} tCO₂/t\n"
+            f"Pegada Total: {unidade.Pegada:.2f} tCO₂"
         )
 
     def _handle_node_selection(self, node_id):
