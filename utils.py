@@ -10,6 +10,9 @@ class UtilsUI:
     
     def render_form(self, modal):
         """Formulário para criação de nova unidade produtiva"""
+        if "fatores_emissao" not in st.session_state or not st.session_state.fatores_emissao:
+                    st.warning("Nenhum fator de emissão disponível. Importe antes de criar unidades.")
+                    return
         with st.form("form_unidade"):
             col1, col2 = st.columns(2)
 
@@ -19,11 +22,6 @@ class UtilsUI:
                 nome = st.text_input("Nome*")
                 localizacao = st.text_input("Localização*")
                 periodo = st.text_input("Período*", value="2023")
-                
-                if "fatores_emissao" not in st.session_state or not st.session_state.fatores_emissao:
-                    st.warning("Nenhum fator de emissão disponível. Importe antes de criar unidades.")
-                    return
-
                 fatores = st.session_state.fatores_emissao
                 opcoes_consumiveis = [
                     f'{f["consumivel"]} | {f["fator_emissao"]} kgCO₂e/{f["kgCO2e_unid"]} | {f["escopo"]}' 
@@ -42,10 +40,6 @@ class UtilsUI:
                 output_insumo = st.text_input("Insumo Saída")
                 massa_input = st.number_input("Massa de Entrada (t)", value=0.0)
                 massa_output = st.number_input("Massa de Saída (t)", value=0.0)
-                consumo_especifico_str = st.text_input(
-                    "Consumo Específico (lista separada por vírgula)",
-                    value="0.5"
-                )
                 taxacao_fronteira = st.checkbox("Taxação na Fronteira")
                 taxacao_local = st.checkbox("Taxação Local")
 

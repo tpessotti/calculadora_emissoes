@@ -494,5 +494,13 @@
     "fator_emissao": 0.1012,
     "kgCO2e_unid": "L",
     "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "ETHANOL-E85",
+    "escopo": "3",
+    "fator_emissao": 0.126942,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 13:41:37"
   }
 ]

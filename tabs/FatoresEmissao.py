@@ -14,6 +14,7 @@ class FatoresEmissaoTab:
         self._inicializar_fatores()
         self._render_importacao_planilha()
         self._render_tabela_com_filtros()
+        self._render_adicao_manual()
 
     def _inicializar_fatores(self):
         if "fatores_emissao" not in st.session_state:
@@ -104,3 +105,45 @@ class FatoresEmissaoTab:
                     json.dump(st.session_state.fatores_emissao, f, indent=2, ensure_ascii=False)
 
                 st.success("Fatores de emissão atualizados com sucesso!")
+
+    def _render_adicao_manual(self):
+        with st.expander("Adicionar Fator de Emissão Manualmente"):
+            with st.form("form_manual_fator"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    grupo = st.text_input("Grupo do Consumível*", placeholder="Ex: Combustíveis")
+                    consumivel = st.text_input("Nome do Consumível*", placeholder="Ex: Diesel")
+                    escopo = st.selectbox("Escopo*", ["1", "2", "3"])
+                with col2:
+                    fator_emissao = st.number_input("Fator de Emissão (kgCO₂e)", step=0.001, format="%.6f")
+                    unidade = st.text_input("Unidade de consumo*", placeholder="Ex: litro")
+
+                if st.form_submit_button("Adicionar Fator"):
+                    if not all([grupo, consumivel, escopo, unidade]) or fator_emissao <= 0:
+                        st.error("Preencha todos os campos obrigatórios com valores válidos.")
+                    else:
+                        novo_fator = {
+                            "grupo_consumivel": grupo.strip(),
+                            "consumivel": consumivel.strip(),
+                            "escopo": escopo,
+                            "fator_emissao": fator_emissao,
+                            "kgCO2e_unid": unidade.strip(),
+                            "data_importacao": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+
+                        # Verifica duplicidade
+                        ja_existe = any(
+                            f["grupo_consumivel"] == novo_fator["grupo_consumivel"] and
+                            f["consumivel"] == novo_fator["consumivel"] and
+                            f["escopo"] == novo_fator["escopo"]
+                            for f in st.session_state.fatores_emissao
+                        )
+
+                        if ja_existe:
+                            st.warning("Já existe um fator de emissão com este grupo, consumível e escopo.")
+                        else:
+                            st.session_state.fatores_emissao.append(novo_fator)
+                            with open(self.CAMINHO_JSON, "w", encoding="utf-8") as f:
+                                json.dump(st.session_state.fatores_emissao, f, indent=2, ensure_ascii=False)
+                            st.success("Fator de emissão adicionado com sucesso.")
+                            st.rerun()
