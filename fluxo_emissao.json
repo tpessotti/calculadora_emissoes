@@ -11,24 +11,30 @@
       "MassaOutput": 10.0,
       "Consumiveis": [
         {
-          "nome": "Diesel",
-          "fator": 3.1
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "GASOLINE",
+          "fator": 2.0,
+          "escopo": "SCOPE 1"
         }
       ],
       "ConsumoEspecifico": [
-        0.5
+        0.5,
+        0.2
       ],
-      "IntensidadeEmissao": 1.55,
       "IntensidadeEmissaoEscopo1": 0.0,
       "IntensidadeEmissaoEscopo2": 0.0,
       "IntensidadeEmissaoEscopo3": 0.0,
-      "Pegada": 1.55,
+      "IntensidadeEmissao": 1.575007160316725,
       "PegadaEscopo1": 0.0,
       "PegadaEscopo2": 0.0,
       "PegadaEscopo3": 0.0,
+      "Pegada": 1.575007160316725,
       "TaxacaoFronteira": false,
-      "TaxacaoLocal": false,
-      "ConfigOperacional": "Padrão"
+      "TaxacaoLocal": false
     },
     {
       "ID_ELO": "ELO002",
@@ -41,29 +47,30 @@
       "MassaOutput": 4.0,
       "Consumiveis": [
         {
-          "nome": "Diesel",
-          "fator": 3.1
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
         },
         {
-          "nome": "Estanol",
-          "fator": 6.2
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
         }
       ],
       "ConsumoEspecifico": [
         0.5,
         0.7
       ],
-      "IntensidadeEmissao": 5.89,
       "IntensidadeEmissaoEscopo1": 0.0,
       "IntensidadeEmissaoEscopo2": 0.0,
       "IntensidadeEmissaoEscopo3": 0.0,
-      "Pegada": 7.4399999999999995,
+      "IntensidadeEmissao": 2.82001665,
       "PegadaEscopo1": 0.0,
       "PegadaEscopo2": 0.0,
       "PegadaEscopo3": 0.0,
+      "Pegada": 4.395023810316725,
       "TaxacaoFronteira": false,
-      "TaxacaoLocal": false,
-      "ConfigOperacional": "Padrão"
+      "TaxacaoLocal": false
     },
     {
       "ID_ELO": "ELO003",
@@ -76,24 +83,24 @@
       "MassaOutput": 7.0,
       "Consumiveis": [
         {
-          "nome": "Diesel",
-          "fator": 3.1
+          "nome": "DIESEL-B30",
+          "fator": 2.47596722324146,
+          "escopo": "SCOPE 1"
         }
       ],
       "ConsumoEspecifico": [
         0.5
       ],
-      "IntensidadeEmissao": 1.55,
       "IntensidadeEmissaoEscopo1": 0.0,
       "IntensidadeEmissaoEscopo2": 0.0,
       "IntensidadeEmissaoEscopo3": 0.0,
-      "Pegada": 5.934285714285713,
+      "IntensidadeEmissao": 1.23798361162073,
       "PegadaEscopo1": 0.0,
       "PegadaEscopo2": 0.0,
       "PegadaEscopo3": 0.0,
+      "Pegada": 3.850140688400292,
       "TaxacaoFronteira": false,
-      "TaxacaoLocal": false,
-      "ConfigOperacional": "Padrão"
+      "TaxacaoLocal": false
     },
     {
       "ID_ELO": "ELO005",
@@ -106,41 +113,71 @@
       "MassaOutput": 3.0,
       "Consumiveis": [
         {
-          "nome": "Diesel",
-          "fator": 3.1
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
         }
       ],
       "ConsumoEspecifico": [
         0.1
       ],
-      "IntensidadeEmissao": 0.31000000000000005,
       "IntensidadeEmissaoEscopo1": 0.0,
       "IntensidadeEmissaoEscopo2": 0.0,
       "IntensidadeEmissaoEscopo3": 0.0,
-      "Pegada": 0.31000000000000005,
+      "IntensidadeEmissao": 0.235001432063345,
       "PegadaEscopo1": 0.0,
       "PegadaEscopo2": 0.0,
       "PegadaEscopo3": 0.0,
+      "Pegada": 0.235001432063345,
       "TaxacaoFronteira": false,
-      "TaxacaoLocal": true,
-      "ConfigOperacional": "Padrão"
+      "TaxacaoLocal": true
     }
   ],
-  "conexoes": [
+  "edges": [
     {
-      "origem": "ELO002",
-      "destino": "ELO003",
-      "label": "Fluxo"
+      "source": "ELO001",
+      "target": "ELO002"
     },
     {
-      "origem": "ELO001",
-      "destino": "ELO002",
-      "label": "Fluxo"
+      "source": "ELO002",
+      "target": "ELO003"
     },
     {
-      "origem": "ELO005",
-      "destino": "ELO003",
-      "label": "Fluxo"
+      "source": "ELO005",
+      "target": "ELO003"
+    }
+  ],
+  "tecnologias_alternativas": [
+    {
+      "tecnologia": "E85",
+      "unidades": [
+        {
+          "unidade": "ELO001",
+          "limite_inferior": 0.0,
+          "limite_superior": 1.0
+        },
+        {
+          "unidade": "ELO002",
+          "limite_inferior": 0.0,
+          "limite_superior": 1.0
+        },
+        {
+          "unidade": "ELO003",
+          "limite_inferior": 0.0,
+          "limite_superior": 1.0
+        },
+        {
+          "unidade": "ELO005",
+          "limite_inferior": 0.0,
+          "limite_superior": 1.0
+        }
+      ],
+      "insumos": [
+        {
+          "nome": "ETHANOL-E85",
+          "fator_consumo": 0.25
+        }
+      ]
     }
   ]
 }

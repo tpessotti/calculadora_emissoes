@@ -1,0 +1,498 @@
+[
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "ANFO",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 0.178,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "ANFO",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 4.32026,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "AMMONIUM NITRATE",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 0.178,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "AMMONIUM NITRATE",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 2.42,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL S10 (BRASIL)",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.35001432063345,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL S10 (BRASIL)",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.538637281333333,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL-B10",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.38068707,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL-B10",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.51878264,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL-B12",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.32810445,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL-B12",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.552819168,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL-B13",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.30181579,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL-B13",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.569837432,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "DINAMITE IBEGEL 3X24\"",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 0.3874,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "DINAMITE IBEGEL 3X24\"",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 4.32026,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "ELECTRICITY",
+    "consumivel": "ELECTRICITY",
+    "escopo": "SCOPE 2",
+    "fator_emissao": 0.0,
+    "kgCO2e_unid": "MWH",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "ELECTRICITY",
+    "consumivel": "ELECTRICITY",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 67.78,
+    "kgCO2e_unid": "MWH",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "ELECTRICITY",
+    "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
+    "escopo": "SCOPE 2",
+    "fator_emissao": 60.672,
+    "kgCO2e_unid": "MWH",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "ELECTRICITY",
+    "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
+    "escopo": "SCOPE 2",
+    "fator_emissao": 62.524,
+    "kgCO2e_unid": "MWH",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "FLOCCULANT",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.8835,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "GASOLINE",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.0,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "GASOLINE",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.46004,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "HFC-134A OU R-134A",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 1300.0,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "HFC-134A OU R-134A",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 15.0833,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "IBENITE",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 0.178,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "IBENITE",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 4.32026,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "PUMPED EMULSION",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 0.166,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "EXPLOSIVE",
+    "consumivel": "PUMPED EMULSION",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 4.32026,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "R-404A",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 3921.6,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "R-404A",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 15.0833,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "R-407C",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 1773.85,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "R-407C",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 15.0833,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "R-410A",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2087.5,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "R-410A",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 15.0833,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "SF6",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 23500.0,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "REFRIGERANT FLUIDS",
+    "consumivel": "SF6",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 128.0,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "SUPPRESSION",
+    "consumivel": "SUPPRESSION - SCOPE 3",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 1000.0,
+    "kgCO2e_unid": "TCO2E",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "SUPPRESSION",
+    "consumivel": "SUPPRESSION - SCOPE 1",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 1000.0,
+    "kgCO2e_unid": "TCO2E",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "WASTE AND EFFLUENTS",
+    "consumivel": "WASTE GENERATION - SCOPE 3",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 1000.0,
+    "kgCO2e_unid": "TCO2E",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "WASTE AND EFFLUENTS",
+    "consumivel": "EFFLUENTS",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 1000.0,
+    "kgCO2e_unid": "TCO2E",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "WASTE AND EFFLUENTS",
+    "consumivel": "WASTE GENERATION - SCOPE 1",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 1000.0,
+    "kgCO2e_unid": "TCO2E",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "ANTHRACITE - SÃO LUIS",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.55735545654167,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "ANTHRACITE - SÃO LUIS",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.1292,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "BENTONITE - SÃO LUIS",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.1531,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "CALCITIC LIMESTONE - SÃO LUIS",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 0.439,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "CALCITIC LIMESTONE - SÃO LUIS",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.08202,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "CHARCOAL",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 3.278269176,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "CHARCOAL",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.8306,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "FUEL OIL 1A",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 3.18607472131667,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "FUEL OIL 1A",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.2553,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "NATURAL GAS",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.0349544958159,
+    "kgCO2e_unid": "M³",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "NATURAL GAS",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.2819,
+    "kgCO2e_unid": "M³",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "FOSSIL FUELS IN LAND",
+    "consumivel": "GASOLINE",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.0,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "FOSSIL FUELS IN LAND",
+    "consumivel": "GASOLINE",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.46004,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "GLYCERIN",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 2.97,
+    "kgCO2e_unid": "KG",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "MARINE TRANSPORTATION",
+    "consumivel": "MARINE DIESEL A2/B2",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.38068707,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "MARINE TRANSPORTATION",
+    "consumivel": "MARINE DIESEL A2/B2",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.344736,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "BIOMETHANE",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.7094546250000002,
+    "kgCO2e_unid": "M³",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "INPUTS",
+    "consumivel": "BIOMETHANE",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.2819,
+    "kgCO2e_unid": "M³",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL-B30",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 2.47596722324146,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "DIESEL-B30",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.552819168,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "ETHANOL",
+    "escopo": "SCOPE 1",
+    "fator_emissao": 0.0178,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  },
+  {
+    "grupo_consumivel": "LAND TRANSPORTATION",
+    "consumivel": "ETHANOL",
+    "escopo": "SCOPE 3",
+    "fator_emissao": 0.1012,
+    "kgCO2e_unid": "L",
+    "data_importacao": "2025-06-04 12:57:16"
+  }
+]

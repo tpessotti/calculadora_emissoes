@@ -150,10 +150,11 @@ class DatabaseManager:
         }
 
     # --- Importação / Exportação ---
-    def export_to_json(self) -> str:
+    def export_to_json(self):
         data = {
-            "unidades": [u.to_dict() for u in st.session_state.unidades],
-            "conexoes": [c.to_dict() for c in st.session_state.conexoes]
+            "unidades": [vars(u) for u in st.session_state.unidades],
+            "edges": st.session_state.edges,
+            "tecnologias_alternativas": st.session_state.get("tecnologias_alternativas", [])
         }
         return json.dumps(data, indent=2, ensure_ascii=False)
     
@@ -173,7 +174,7 @@ class DatabaseManager:
                     massa_input=u_data.get("MassaInput", 0.0),
                     output_insumo=u_data["Output"],
                     massa_output=u_data.get("MassaOutput", 0.0),
-                    consumiveis=u_data.get("Consumiveis", []),
+                    consumiveis=u_data.get("Consumiveis", []), #
                     consumo_especifico=u_data.get("ConsumoEspecifico", []),
                     taxacao_fronteira=u_data.get("TaxacaoFronteira", False),
                     taxacao_local=u_data.get("TaxacaoLocal", False)
@@ -193,7 +194,10 @@ class DatabaseManager:
 
             for c_data in data.get("conexoes", []):
                 self.add_edge(c_data["origem"], c_data["destino"])
-
+            
+            # Importa tecnologias alternativas
+            st.session_state.tecnologias_alternativas = data.get("tecnologias_alternativas", [])
+            
             # Propagar a pegada após importar
             self.propagar_pegada()
 

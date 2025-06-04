@@ -1,20 +1,20 @@
-# Configurações visuais e constantes
 CANVAS_CONFIG = {
-    "width": 1200,
-    "height": 700,
+    "width": 1920,  # você pode ajustar conforme necessário
+    "height": 1080,
     "directed": True,
     "node": {
         "labelProperty": "label",
         "shape": "box",
-        "font": {"size": 12},
+        "font": {"size": 12, "align": "left"},
         "margin": 10,
         "borderWidth": 2,
         "color": "#e6f3ff"
     },
     "link": {"renderLabel": True},
     "physics": {"enabled": True},
-    "backgroundColor": "#dcdcdc"  # Cinza bem claro
+    "backgroundColor": "#f0f0f0"  # tom mais neutro
 }
+
 
 COLORS = {
     "primary": "#0066cc",
