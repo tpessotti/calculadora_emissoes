@@ -71,7 +71,7 @@ class FluxoTab:
         self.utils_ui.render_edit_form(
             unidade=unidade,
             fatores_emissao=st.session_state.fatores_emissao,
-            callback_salvar=self.utils_ui._atualizar_unidade
+            callback_salvar=self.utils_ui._salvar_ou_atualizar_unidade
         )
 
     def _render_connection_confirmation(self):

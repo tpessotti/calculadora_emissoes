@@ -2,7 +2,8 @@ import streamlit as st
 import json
 from typing import List, Dict
 import pandas as pd
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
+from typing import List, Dict, Any
 
 @dataclass
 class Conexao:
@@ -14,12 +15,39 @@ class Conexao:
     def to_dict(self):
         return asdict(self)
 
+@dataclass
+class Tecnologia:
+    """Classe que representa uma tecnologia alternativa"""
+    id: str
+    nome: str
+    insumos: List[Dict[str, float]]  # [{"nome": str, "fator_consumo": float}]
+    unidades: List[Dict[str, Any]] = field(default_factory=list)
+    # [{"unidade": str, "limite_inferior": float, "limite_superior": float}]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "insumos": self.insumos,
+            "unidades": self.unidades
+        }
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "Tecnologia":
+        return Tecnologia(
+            id=data.get("id", ""),
+            nome=data.get("nome", ""),
+            insumos=data.get("insumos", []),
+            unidades=data.get("unidades", [])
+        )
+
 class UnidadeProdutiva:
     def __init__(self, id_elo: str, nome: str, localizacao: str, periodo: str, 
                 input_insumo: str, massa_input: float,
                 output_insumo: str, massa_output: float,
                 consumiveis: list[dict], consumo_especifico: list[float],
-                taxacao_fronteira: bool = False, taxacao_local: bool = False):
+                taxacao_fronteira: bool = False, taxacao_local: bool = False,
+                tecnologia=None):  # nova entrada opcional
         
         self.ID_ELO = id_elo
         self.Nome = nome
@@ -34,7 +62,10 @@ class UnidadeProdutiva:
         self.Consumiveis = consumiveis
         self.ConsumoEspecifico = consumo_especifico
 
-        # Valores calculados (inicialmente zerados)
+        self.TaxacaoFronteira = taxacao_fronteira
+        self.TaxacaoLocal = taxacao_local
+
+        # Valores calculados
         self.IntensidadeEmissaoEscopo1 = 0.0
         self.IntensidadeEmissaoEscopo2 = 0.0
         self.IntensidadeEmissaoEscopo3 = 0.0
@@ -45,8 +76,8 @@ class UnidadeProdutiva:
         self.PegadaEscopo3 = 0.0
         self.Pegada = 0.0
 
-        self.TaxacaoFronteira = taxacao_fronteira
-        self.TaxacaoLocal = taxacao_local
+        # Nova propriedade
+        self.Tecnologia = tecnologia
 
     def to_dict(self):
         return {
@@ -70,8 +101,10 @@ class UnidadeProdutiva:
             "PegadaEscopo3": self.PegadaEscopo3,
             "TaxacaoFronteira": self.TaxacaoFronteira,
             "TaxacaoLocal": self.TaxacaoLocal,
+            "Tecnologia": self.Tecnologia,
             "ConfigOperacional": getattr(self, "ConfigOperacional", "Padrão")
         }
+
 
 from typing import List, Dict
 import streamlit as st
@@ -149,15 +182,17 @@ class DatabaseManager:
             "emissao_total": sum(u.IntensidadeEmissao * u.MassaOutput for u in st.session_state.unidades)
         }
 
-    # --- Importação / Exportação ---
     def export_to_json(self):
         data = {
-            "unidades": [vars(u) for u in st.session_state.unidades],
-            "edges": st.session_state.edges,
-            "tecnologias_alternativas": st.session_state.get("tecnologias_alternativas", [])
+            "unidades": [u.to_dict() if hasattr(u, "to_dict") else vars(u) for u in st.session_state.unidades],
+            "conexoes": [c.to_dict() if hasattr(c, "to_dict") else vars(c) for c in st.session_state.get("conexoes", [])],
+            "tecnologias_alternativas": [
+                t.to_dict() if hasattr(t, "to_dict") else t
+                for t in st.session_state.get("tecnologias_alternativas", [])
+            ]
         }
         return json.dumps(data, indent=2, ensure_ascii=False)
-    
+
     def import_from_json(self, json_str: str) -> bool:
         try:
             data = json.loads(json_str)

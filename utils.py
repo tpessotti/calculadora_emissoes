@@ -2,173 +2,199 @@ import streamlit as st
 import database
 from database import UnidadeProdutiva
 import calculations
+from tabs.Tecnologias import TecnologiasTab
 
 class UtilsUI:
     def __init__(self):
         self.db = database.DatabaseManager()
         self.ec = calculations.EmissionCalculator()
-    
+        self.tec = TecnologiasTab()
+
     def render_form(self, modal):
         """Formulário para criação de nova unidade produtiva"""
+
         if "fatores_emissao" not in st.session_state or not st.session_state.fatores_emissao:
-                    st.warning("Nenhum fator de emissão disponível. Importe antes de criar unidades.")
-                    return
-        with st.form("form_unidade"):
-            col1, col2 = st.columns(2)
+            st.warning("Nenhum fator de emissão disponível. Importe antes de criar unidades.")
+            return
 
-            # Coluna 1 - Dados básicos
-            with col1:
-                id_elo = st.text_input("ID ELO*")
-                nome = st.text_input("Nome*")
-                localizacao = st.text_input("Localização*")
-                periodo = st.text_input("Período*", value="2023")
-                fatores = st.session_state.fatores_emissao
-                opcoes_consumiveis = [
-                    f'{f["consumivel"]} | {f["fator_emissao"]} kgCO₂e/{f["kgCO2e_unid"]} | {f["escopo"]}' 
-                    for f in fatores
-                ]
-                selecionados = st.multiselect("Selecionar Insumos", opcoes_consumiveis)
+        col1, col2 = st.columns(2)
 
-                consumo_especifico_str = st.text_input(
-                    "Consumo Específico (um valor por insumo, separado por vírgula)",
-                    value=", ".join(["0.5"] * len(selecionados))
-                )
+        with col1:
+            id_elo = st.text_input("ID ELO*")
+            nome = st.text_input("Nome*")
+            localizacao = st.text_input("Localização*")
+            periodo = st.text_input("Período*", value="2023")
+            taxacao_local = st.checkbox("Taxação Local")
 
-            # Coluna 2 - Dados de fluxo e consumo
-            with col2:
-                input_insumo = st.text_input("Insumo Entrada")
-                output_insumo = st.text_input("Insumo Saída")
-                massa_input = st.number_input("Massa de Entrada (t)", value=0.0)
-                massa_output = st.number_input("Massa de Saída (t)", value=0.0)
-                taxacao_fronteira = st.checkbox("Taxação na Fronteira")
-                taxacao_local = st.checkbox("Taxação Local")
+        with col2:
+            input_insumo = st.text_input("Insumo Entrada")
+            output_insumo = st.text_input("Insumo Saída")
+            massa_input = st.number_input("Massa de Entrada (t)", value=0.0)
+            massa_output = st.number_input("Massa de Saída (t)", value=0.0)
+            taxacao_fronteira = st.checkbox("Taxação na Fronteira")
 
-            if st.form_submit_button("Salvar"):
+        st.divider()
+
+        tecnologias = st.session_state.get("tecnologias_alternativas", [])
+
+        if tecnologias:
+            st.markdown("### Tecnologia Associada")
+
+            tecnologias_dict = {
+                f"{t.id} | {t.nome}": t for t in tecnologias
+            }
+
+            tec_selecionada_str = st.selectbox(
+                "Selecionar Tecnologia", 
+                list(tecnologias_dict.keys()), 
+                key="tec_para_unidade"
+            )
+            tecnologia_escolhida = tecnologias_dict[tec_selecionada_str]
+
+            if st.button("Salvar"):
                 try:
                     consumiveis = []
-                    for item in selecionados:
-                        partes = item.split(" | ")
-                        if len(partes) == 3:
-                            nome, fator_str, escopo = partes
-                            fator = float(fator_str.strip().split(" ")[0])
-                            consumiveis.append({
-                                "nome": nome.strip(),
-                                "fator": fator,
-                                "escopo": escopo.strip()
-                            })
+                    consumo_especifico = []
 
-                    consumo_especifico = [
-                        float(c.strip()) for c in consumo_especifico_str.split(",") if c.strip()
-                    ]
+                    for insumo in tecnologia_escolhida.insumos:
+                        nome_insumo = insumo["nome"]
+                        fator_consumo = insumo["fator_consumo"]
+                        escopo = next(
+                            (f["escopo"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
+                            "1"
+                        )
+                        consumiveis.append({
+                            "nome": nome_insumo,
+                            "fator": fator_consumo,
+                            "escopo": escopo
+                        })
+                        consumo_especifico.append(fator_consumo)
 
-                    if len(consumiveis) != len(consumo_especifico):
-                        st.error("O número de consumíveis deve corresponder ao número de valores de consumo específico.")
-                        return
-
-                    self._save_new_unidade(
-                        id_elo, nome, localizacao, periodo,
-                        input_insumo, massa_input, output_insumo, massa_output,
-                        consumiveis, consumo_especifico,
-                        taxacao_fronteira, taxacao_local, modal
+                    self._salvar_ou_atualizar_unidade(
+                        id_elo=id_elo,
+                        nome=nome,
+                        localizacao=localizacao,
+                        periodo=periodo,
+                        input_insumo=input_insumo,
+                        massa_input=massa_input,
+                        output_insumo=output_insumo,
+                        massa_output=massa_output,
+                        consumiveis=consumiveis,
+                        consumo_especifico=consumo_especifico,
+                        taxacao_fronteira=taxacao_fronteira,
+                        taxacao_local=taxacao_local,
+                        modal=modal,
+                        tecnologia=tecnologia_escolhida
                     )
-
                 except Exception as e:
                     st.error(f"Erro ao processar os dados: {str(e)}")
 
-    def _save_new_unidade(self, id_elo, nome, localizacao, periodo,
-                        input_insumo, massa_input, output_insumo, massa_output,
-                        consumiveis, consumo_especifico,
-                        taxacao_fronteira, taxacao_local, modal):
-        """Valida, calcula e salva uma nova unidade produtiva"""
+        else:
+            st.markdown("### Insumos e Fatores de Consumo")
+            insumos = self.tec._render_adicao_manual_tec(key_prefix="std")
+
+            if st.button("Salvar"):
+                if not insumos:
+                    st.error("Selecione ao menos um insumo.")
+                    return
+
+                try:
+                    consumiveis = []
+                    consumo_especifico = []
+
+                    for insumo in insumos:
+                        nome_insumo = insumo["nome"]
+                        fator_consumo = insumo["fator_consumo"]
+                        escopo = next(
+                            (f["escopo"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
+                            "1"
+                        )
+                        consumiveis.append({
+                            "nome": nome_insumo,
+                            "fator": fator_consumo,
+                            "escopo": escopo
+                        })
+                        consumo_especifico.append(fator_consumo)
+
+                    self._salvar_ou_atualizar_unidade(
+                        id_elo=id_elo,
+                        nome=nome,
+                        localizacao=localizacao,
+                        periodo=periodo,
+                        input_insumo=input_insumo,
+                        massa_input=massa_input,
+                        output_insumo=output_insumo,
+                        massa_output=massa_output,
+                        consumiveis=consumiveis,
+                        consumo_especifico=consumo_especifico,
+                        taxacao_fronteira=taxacao_fronteira,
+                        taxacao_local=taxacao_local,
+                        modal=modal,
+                        tecnologia=None  # tecnologia manual
+                    )
+                except Exception as e:
+                    st.error(f"Erro ao processar os dados: {str(e)}")
+                    
+    def _salvar_ou_atualizar_unidade(self,
+                                    id_elo, nome, localizacao, periodo,
+                                    input_insumo, massa_input, output_insumo, massa_output,
+                                    consumiveis, consumo_especifico,
+                                    taxacao_fronteira, taxacao_local,
+                                    modal=None, tecnologia=None,
+                                    unidade_existente=None):
+        """Cria ou atualiza uma unidade produtiva"""
         if not all([id_elo, nome, localizacao, periodo]):
             st.error("Preencha todos os campos obrigatórios (*)")
             return
 
         try:
-            nova_unidade = UnidadeProdutiva(
-                id_elo=id_elo,
-                nome=nome,
-                localizacao=localizacao,
-                periodo=periodo,
-                input_insumo=input_insumo,
-                massa_input=massa_input,
-                output_insumo=output_insumo,
-                massa_output=massa_output,
-                consumiveis=consumiveis,
-                consumo_especifico=consumo_especifico,
-                taxacao_fronteira=taxacao_fronteira,
-                taxacao_local=taxacao_local
-            )
+            if unidade_existente:
+                unidade = unidade_existente
+                unidade.Nome = nome
+                unidade.Localizacao = localizacao
+                unidade.Periodo = periodo
+                unidade.Input = input_insumo
+                unidade.MassaInput = massa_input
+                unidade.Output = output_insumo
+                unidade.MassaOutput = massa_output
+                unidade.TaxacaoFronteira = taxacao_fronteira
+                unidade.TaxacaoLocal = taxacao_local
+                unidade.Consumiveis = consumiveis
+                unidade.ConsumoEspecifico = consumo_especifico
+                unidade.Tecnologia = tecnologia
+            else:
+                unidade = UnidadeProdutiva(
+                    id_elo=id_elo,
+                    nome=nome,
+                    localizacao=localizacao,
+                    periodo=periodo,
+                    input_insumo=input_insumo,
+                    massa_input=massa_input,
+                    output_insumo=output_insumo,
+                    massa_output=massa_output,
+                    consumiveis=consumiveis,
+                    consumo_especifico=consumo_especifico,
+                    taxacao_fronteira=taxacao_fronteira,
+                    taxacao_local=taxacao_local,
+                    tecnologia=tecnologia
+                )
 
-            tecnologias_aplicaveis = []
-            for tecnologia in st.session_state.get("tecnologias_alternativas", []):
-                for config in tecnologia["unidades"]:
-                    if config["unidade"] == id_elo:
-                        tecnologias_aplicaveis.append(tecnologia)
-                        break
-            nova_unidade.Tecnologias = tecnologias_aplicaveis
+                self.db.add_unidade(unidade)
 
-            nova_unidade = self.ec.calcular_emissoes(nova_unidade)
-            self.db.add_unidade(nova_unidade)
+            self.ec.calcular_emissoes(unidade)
+            self.db.propagar_pegada()
 
-            st.session_state.unidades = self.db.get_unidades()
-            self.ec.propagar_pegada(
-                st.session_state.unidades,
-                self.db.get_edges_for_graph()
-            )
+            acao = "atualizada" if unidade_existente else "adicionada"
+            st.success(f"Unidade {acao} com sucesso!")
 
-            st.success("Unidade adicionada com sucesso!")
-            modal.close()
+            if modal:
+                modal.close()
 
-        except Exception as e:
-            st.error(f"Erro ao criar unidade produtiva: {str(e)}")
-
-    def _atualizar_unidade(self, unidade, nome, localizacao, periodo, input_insumo,
-                            massa_input, output_insumo, massa_output,
-                            selecionados, consumo_especifico_str,
-                            tax_fronteira, tax_local):
-        """Callback para atualizar uma unidade editada"""
-        try:
-            unidade.Nome = nome
-            unidade.Localizacao = localizacao
-            unidade.Periodo = periodo
-            unidade.Input = input_insumo
-            unidade.MassaInput = massa_input
-            unidade.Output = output_insumo
-            unidade.MassaOutput = massa_output
-            unidade.TaxacaoFronteira = tax_fronteira
-            unidade.TaxacaoLocal = tax_local
-
-            consumiveis = []
-            for item in selecionados:
-                partes = item.split(" | ")
-                if len(partes) == 3:
-                    nome_insumo, fator_str, escopo = partes
-                    fator = float(fator_str.strip().split(" ")[0])
-                    consumiveis.append({
-                        "nome": nome_insumo.strip(),
-                        "fator": fator,
-                        "escopo": escopo.strip()
-                    })
-
-            consumo_especifico = [float(c.strip()) for c in consumo_especifico_str.split(",") if c.strip()]
-
-            if len(consumiveis) != len(consumo_especifico):
-                st.error("O número de insumos selecionados deve corresponder ao número de valores de consumo.")
-                return
-
-            unidade.Consumiveis = consumiveis
-            unidade.ConsumoEspecifico = consumo_especifico
-
-            self.utils_ui.ec.calcular_emissoes(unidade)
-            self.utils_ui.db.propagar_pegada()
-
-            st.success("Unidade atualizada com sucesso!")
             st.session_state.refresh_canvas = True
             st.rerun()
 
         except Exception as e:
-            st.error(f"Erro ao salvar alterações: {e}")
+            st.error(f"Erro ao salvar unidade produtiva: {str(e)}")
 
     def render_table(self, unidades, edges, editar_callback=None, remover_callback=None):
         """Renderiza a tabela de unidades com opções de editar e remover"""
@@ -208,7 +234,7 @@ class UtilsUI:
                     remover_callback(u.ID_ELO)
 
     def render_edit_form(self, unidade, fatores_emissao, callback_salvar):
-        """Formulário para edição de uma unidade produtiva"""
+        """Formulário para edição de uma unidade produtiva com tecnologia associada"""
         with st.expander(f"✏️ Editar Unidade: {unidade.ID_ELO}", expanded=False):
             with st.form(f"form_edicao_{unidade.ID_ELO}"):
                 nome = st.text_input("Nome", value=unidade.Nome)
@@ -219,27 +245,6 @@ class UtilsUI:
                     input_insumo = st.text_input("Insumo Entrada", value=unidade.Input)
                     massa_input = st.number_input("Massa de Entrada (t)", value=unidade.MassaInput)
 
-                    opcoes_consumiveis = [
-                        f'{f["consumivel"]} | {f["fator_emissao"]} kgCO₂e/{f["kgCO2e_unid"]} | {f["escopo"]}'
-                        for f in fatores_emissao
-                    ]
-
-                    selecionados = []
-                    for c in unidade.Consumiveis:
-                        match = next(
-                            (f for f in fatores_emissao if f["consumivel"] == c["nome"] and f["escopo"] == c["escopo"]),
-                            None
-                        )
-                        if match:
-                            label = f'{match["consumivel"]} | {match["fator_emissao"]} kgCO₂e/{match["kgCO2e_unid"]} | {match["escopo"]}'
-                            selecionados.append(label)
-
-                    selecionados = st.multiselect("Selecionar Insumos", opcoes_consumiveis, default=selecionados)
-                    consumo_especifico_str = st.text_input(
-                        "Consumo Específico (um valor por insumo)",
-                        value=", ".join(str(c) for c in unidade.ConsumoEspecifico)
-                    )
-
                 with col2:
                     periodo = st.text_input("Período", value=unidade.Periodo)
                     output_insumo = st.text_input("Insumo Saída", value=unidade.Output)
@@ -247,22 +252,58 @@ class UtilsUI:
                     tax_fronteira = st.checkbox("Taxação na Fronteira", value=unidade.TaxacaoFronteira)
                     tax_local = st.checkbox("Taxação Local", value=unidade.TaxacaoLocal)
 
+                st.divider()
+                st.markdown("### Tecnologia Associada")
+
+                tecnologias_dict = {
+                    f"{t.nome}": t for t in st.session_state.tecnologias_alternativas
+                }
+
+                # Define seleção padrão com base no ID_Tecnologia
+                tec_padrao = next(
+                    (f"{t.nome}" for t in st.session_state.tecnologias_alternativas if t.id == getattr(unidade, "ID_Tecnologia", None)),
+                    list(tecnologias_dict.keys())[0]
+                )
+
+                tec_selecionada_str = st.selectbox("Selecionar Tecnologia", list(tecnologias_dict.keys()), index=list(tecnologias_dict.keys()).index(tec_padrao))
+                tecnologia_escolhida = tecnologias_dict[tec_selecionada_str]
+
                 if st.form_submit_button("Salvar Alterações"):
+                    # Deriva consumíveis da tecnologia
+                    consumiveis = []
+                    consumo_especifico = []
+
+                    for insumo in tecnologia_escolhida.insumos:
+                        nome_insumo = insumo["nome"]
+                        fator_consumo = insumo["fator_consumo"]
+                        escopo = next(
+                            (f["escopo"] for f in fatores_emissao if f["consumivel"] == nome_insumo),
+                            "1"
+                        )
+                        consumiveis.append({
+                            "nome": nome_insumo,
+                            "fator": fator_consumo,
+                            "escopo": escopo
+                        })
+                        consumo_especifico.append(fator_consumo)
+
                     callback_salvar(
-                        unidade,
-                        nome,
-                        localizacao,
-                        periodo,
-                        input_insumo,
-                        massa_input,
-                        output_insumo,
-                        massa_output,
-                        selecionados,
-                        consumo_especifico_str,
-                        tax_fronteira,
-                        tax_local
+                        id_elo=unidade.ID_ELO,
+                        nome=nome,
+                        localizacao=localizacao,
+                        periodo=periodo,
+                        input_insumo=input_insumo,
+                        massa_input=massa_input,
+                        output_insumo=output_insumo,
+                        massa_output=massa_output,
+                        consumiveis=consumiveis,
+                        consumo_especifico=consumo_especifico,
+                        taxacao_fronteira=tax_fronteira,
+                        taxacao_local=tax_local,
+                        tecnologia=tecnologia_escolhida,
+                        unidade_existente=unidade
                     )
-    
+
     def render_manage_units(self):
         """Componente para gerenciamento de unidades e fluxos"""
         with st.expander("🗑️ Gerenciar Unidades e Fluxos"):
