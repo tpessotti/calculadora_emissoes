@@ -230,8 +230,10 @@ class DatabaseManager:
             for c_data in data.get("conexoes", []):
                 self.add_edge(c_data["origem"], c_data["destino"])
             
-            # Importa tecnologias alternativas
-            st.session_state.tecnologias_alternativas = data.get("tecnologias_alternativas", [])
+            # Importa tecnologias alternativas como objetos
+            st.session_state.tecnologias_alternativas = [
+                Tecnologia.from_dict(t) for t in data.get("tecnologias_alternativas", [])
+            ]
             
             # Propagar a pegada após importar
             self.propagar_pegada()
