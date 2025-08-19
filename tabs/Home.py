@@ -23,6 +23,9 @@ class HomeTab:
         Use o menu lateral para navegar entre as seções.
         """)
         self._render_importar_fluxo_excel()
+        if st.session_state.get("mostrar_aviso_fatores_emissao", False):
+            st.warning("Nenhum fator de emissão foi encontrado. Importe um arquivo JSON com os fatores para continuar.")
+
     
     def _render_importar_fluxo_excel(self):
         st.subheader("📥 Importar Fluxo a partir de Planilha Excel")
@@ -56,21 +59,20 @@ class HomeTab:
                 st.error(f"Erro ao processar o arquivo: {str(e)}")
     
     def converter_e_importar_fluxo(self, df: pd.DataFrame) -> Dict:
-        """
-        Converte DataFrame da planilha Fluxo Vale em JSON importável
-        com tecnologias, unidades e conexões (edges) configurados corretamente.
-        """
         df["massa_t"] = df["massa_kt"] * 1000
         df["etapa"] = df["etapa"].astype(int)
+
+        fatores_emissao = st.session_state.get("fatores_emissao", [])
+        fatores_disponiveis = {f["consumivel"] for f in fatores_emissao}
+        insumos_faltando = set()
 
         tecnologias_dict = {}
         unidades_list = []
         conexoes = []
 
-        unidade_id_map = {}  # mapa auxiliar para nome_etapa → id
-        unidade_seq = 1       # contador sequencial
+        unidade_id_map = {}
+        unidade_seq = 1
 
-        # Agrupar por unidade e etapa para criar as unidades e tecnologias
         for (unidade_nome, etapa), grupo in df.groupby(["unidade", "etapa"]):
             unidade_nome = unidade_nome.strip()
             etapa = int(etapa)
@@ -84,17 +86,26 @@ class HomeTab:
             tecnologia_nome = grupo["tecnologia"].iloc[0].strip()
             tecnologia_id = f"{tecnologia_nome}_{unidade_nome}".upper()
 
-            insumos = [
-                {"nome": row["consumivel"], "fator_consumo": row["consumo_especifico"]}
-                for _, row in grupo.iterrows()
-            ]
-            consumo_especifico = [i["fator_consumo"] for i in insumos]
+            insumos = []
+            consumo_especifico = []
+            for _, row in grupo.iterrows():
+                nome_insumo = row["consumivel"]
+                fator = row["consumo_especifico"]
 
-            # Criar ou atualizar a tecnologia
+                if nome_insumo not in fatores_disponiveis:
+                    insumos_faltando.add(nome_insumo)
+                    fator = 0.0
+
+                insumos.append({
+                    "nome": nome_insumo,
+                    "fator_consumo": fator
+                })
+                consumo_especifico.append(fator)
+
             if tecnologia_id not in tecnologias_dict:
                 tecnologias_dict[tecnologia_id] = {
                     "id": tecnologia_id,
-                    "nome": tecnologia_nome,
+                    "nome": tecnologia_id,
                     "insumos": insumos,
                     "unidades": []
                 }
@@ -125,13 +136,18 @@ class HomeTab:
             unidades_list.append(unidade)
             unidade_id_map[(unidade_nome, etapa)] = unidade_id
 
-        # Criar conexões entre etapas sequenciais da mesma unidade lógica
         for unidade_nome, etapas in df.groupby("unidade")["etapa"].unique().items():
             etapas = sorted(etapas)
             for i in range(len(etapas) - 1):
                 origem = unidade_id_map[(unidade_nome, etapas[i])]
                 destino = unidade_id_map[(unidade_nome, etapas[i + 1])]
                 conexoes.append({"source": origem, "target": destino})
+
+        if insumos_faltando:
+            st.warning(
+                f"Insumos encontrados na planilha mas sem fator de emissão registrado: "
+                f"{', '.join(sorted(insumos_faltando))}. Eles foram registrados com fator 0.0."
+            )
 
         return {
             "unidades": unidades_list,

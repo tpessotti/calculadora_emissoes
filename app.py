@@ -1,5 +1,6 @@
 import streamlit as st
-
+import json
+import os
 # Importação direta das páginas
 from tabs.Home import HomeTab
 from tabs.Unidades import UnidadesTab
@@ -20,6 +21,7 @@ class App:
         self.init_session_state()
         self.setup_page_config()
 
+
     def init_session_state(self):
         session_defaults = {
             "selected_nodes": [],
@@ -35,9 +37,18 @@ class App:
             if key not in st.session_state:
                 st.session_state[key] = value
 
-        if "fatores_emissao" not in st.session_state:
-            st.session_state.fatores_emissao = []
-
+        # Verifica se existe fatores de emissão salvos na raiz
+        if "fatores_emissao" not in st.session_state or not st.session_state["fatores_emissao"]:
+            if os.path.exists("fatores_emissao.json"):
+                try:
+                    with open("fatores_emissao.json", "r", encoding="utf-8") as f:
+                        st.session_state.fatores_emissao = json.load(f)
+                except Exception as e:
+                    st.warning(f"Erro ao carregar fatores de emissão: {e}")
+                    st.session_state.fatores_emissao = []
+            else:
+                st.session_state.fatores_emissao = []
+                st.session_state["mostrar_aviso_fatores_emissao"] = True
 
     def setup_page_config(self):
         st.set_page_config(layout="wide")

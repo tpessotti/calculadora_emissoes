@@ -2,6 +2,7 @@ import streamlit as st
 import json
 from typing import List, Dict
 import pandas as pd
+#from database import Tecnologia
 from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any
 
@@ -229,11 +230,40 @@ class DatabaseManager:
 
             for c_data in data.get("conexoes", []):
                 self.add_edge(c_data["origem"], c_data["destino"])
-            
-            # Importa tecnologias alternativas como objetos
-            st.session_state.tecnologias_alternativas = [
-                Tecnologia.from_dict(t) for t in data.get("tecnologias_alternativas", [])
-            ]
+
+            fatores_emissao = st.session_state.get("fatores_emissao", [])
+            insumos_disponiveis = {f["consumivel"] for f in fatores_emissao}
+            insumos_faltando = set()
+
+            tecnologias_raw = data.get("tecnologias_alternativas", [])
+            tecnologias_obj = []
+
+            for t in tecnologias_raw:
+                insumos = []
+                for i in t.get("insumos", []):
+                    nome = i["nome"]
+                    if nome not in insumos_disponiveis:
+                        insumos_faltando.add(nome)
+                        insumos.append({"nome": nome, "fator_consumo": 0.0})
+                    else:
+                        insumos.append(i)
+                
+                tecnologia = Tecnologia(
+                    id=t["id"],
+                    nome=t["nome"],
+                    insumos=insumos,
+                    unidades=t.get("unidades", [])
+                )
+                tecnologias_obj.append(tecnologia)
+
+            st.session_state.tecnologias_alternativas = tecnologias_obj
+
+            if insumos_faltando:
+                st.warning(
+                    f"Insumos usados em tecnologias sem fator de emissão registrado: {', '.join(sorted(insumos_faltando))}. "
+                    f"O fator foi considerado como 0.0 para evitar erros."
+                )
+
             
             # Propagar a pegada após importar
             self.propagar_pegada()

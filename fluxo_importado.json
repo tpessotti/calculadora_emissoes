@@ -459,7 +459,7 @@
   "tecnologias_alternativas": [
     {
       "id": "BAU_BENEF_STD",
-      "nome": "BAU",
+      "nome": "BAU_BENEF_STD",
       "insumos": [
         {
           "nome": "EFFLUENTS",
@@ -484,7 +484,7 @@
     },
     {
       "id": "BAU_EMB_STD",
-      "nome": "BAU",
+      "nome": "BAU_EMB_STD",
       "insumos": [
         {
           "nome": "ELECTRICITY",
@@ -501,7 +501,7 @@
     },
     {
       "id": "BAU_FER_STD",
-      "nome": "BAU",
+      "nome": "BAU_FER_STD",
       "insumos": [
         {
           "nome": "DIESEL S10 (BRASIL)",
@@ -550,7 +550,7 @@
     },
     {
       "id": "BAU_MINA_STD",
-      "nome": "BAU",
+      "nome": "BAU_MINA_STD",
       "insumos": [
         {
           "nome": "ANFO",
@@ -635,7 +635,7 @@
     },
     {
       "id": "BAU_PATIO_STD",
-      "nome": "BAU",
+      "nome": "BAU_PATIO_STD",
       "insumos": [
         {
           "nome": "DIESEL S10 (BRASIL)",
@@ -676,7 +676,7 @@
     },
     {
       "id": "BAU_PELOT_STD",
-      "nome": "BAU",
+      "nome": "BAU_PELOT_STD",
       "insumos": [
         {
           "nome": "ANTHRACITE - SÃO LUIS",
@@ -737,7 +737,7 @@
     },
     {
       "id": "BAU_PORTO_STD",
-      "nome": "BAU",
+      "nome": "BAU_PORTO_STD",
       "insumos": [
         {
           "nome": "DIESEL S10 (BRASIL)",
@@ -774,7 +774,7 @@
     },
     {
       "id": "BAU_TRANSP_STD",
-      "nome": "BAU",
+      "nome": "BAU_TRANSP_STD",
       "insumos": [
         {
           "nome": "DIESEL S10 (BRASIL)",
