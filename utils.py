@@ -31,184 +31,220 @@ class UtilsUI:
         insumos_atuais = [i["nome"] for i in tecnologia.insumos] if tecnologia else []
         unidades_atuais = [u["unidade"] for u in tecnologia.unidades] if tecnologia else []
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            tec_id = st.text_input(
-                "ID da Tecnologia*",
-                value=id_padrao,
-                disabled=read_only,
-                key=f"{key_prefix}_id"
-            )
-            
-            st.markdown("**Insumos**")
-            fatores = st.session_state.get("fatores_emissao", [])
-            opcoes_insumos = sorted(set(f["consumivel"] for f in fatores))
-            
+        # Determinar título do expander
+        if tecnologia:
             if read_only:
-                # Modo visualização: mostrar insumos em campos disabled
-                for insumo in tecnologia.insumos if tecnologia else []:
-                    col_insumo1, col_insumo2 = st.columns([2, 1])
-                    with col_insumo1:
-                        st.text_input(
-                            "Insumo",
-                            value=insumo['nome'],
-                            disabled=True,
-                            key=f"{key_prefix}_insumo_nome_{insumo['nome']}"
-                        )
-                    with col_insumo2:
-                        st.number_input(
-                            "Fator",
-                            value=insumo['fator_consumo'],
-                            disabled=True,
-                            key=f"{key_prefix}_insumo_fator_{insumo['nome']}"
-                        )
+                expander_title = f"{tecnologia.nome}"
             else:
-                # Modo edição: multiselect e inputs
-                insumos_selecionados = st.multiselect(
-                    "Selecionar Insumos",
-                    opcoes_insumos,
-                    default=insumos_atuais,
-                    key=f"{key_prefix}_insumos"
+                expander_title = f"{tecnologia.nome}"
+        else:
+            expander_title = "➕ Criar Nova Tecnologia"
+        
+        with st.expander(expander_title, expanded=False):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                tec_id = st.text_input(
+                    "ID da Tecnologia*",
+                    value=id_padrao,
+                    disabled=read_only,
+                    key=f"{key_prefix}_id"
                 )
                 
-                # Inputs de fator de consumo
-                for nome in insumos_selecionados:
-                    valor_atual = 1.0
-                    if tecnologia:
-                        valor_atual = next(
-                            (i["fator_consumo"] for i in tecnologia.insumos if i["nome"] == nome),
-                            1.0
-                        )
-                    st.number_input(
-                        f"Fator de Consumo: {nome}",
-                        min_value=0.0,
-                        value=valor_atual,
-                        step=0.01,
-                        key=f"{key_prefix}_fator_{nome}"
-                    )
-        
-        with col2:
-            tec_nome = st.text_input(
-                "Nome da Tecnologia*",
-                value=nome_padrao,
-                disabled=read_only,
-                key=f"{key_prefix}_nome"
-            )
-            
-            st.markdown("**Unidades e Limites** (Opcional)")
-            todas_unidades = [u.ID_ELO for u in st.session_state.get("unidades", [])]
-            
-            if todas_unidades:
+                st.markdown("**Insumos**")
+                fatores = st.session_state.get("fatores_emissao", [])
+                opcoes_insumos = sorted(set(f["consumivel"] for f in fatores))
+                
                 if read_only:
-                    # Modo visualização: mostrar unidades em campos disabled
-                    if tecnologia and tecnologia.unidades:
-                        for u in tecnologia.unidades:
+                    # Modo visualização: mostrar insumos em campos disabled
+                    for insumo in tecnologia.insumos if tecnologia else []:
+                        col_insumo1, col_insumo2 = st.columns([2, 1])
+                        with col_insumo1:
                             st.text_input(
-                                f"{u['unidade']}",
-                                value=f"Limites: {u['limite_inferior']*100:.0f}% - {u['limite_superior']*100:.0f}%",
+                                "Insumo",
+                                value=insumo['nome'],
                                 disabled=True,
-                                key=f"{key_prefix}_unidade_{u['unidade']}"
+                                key=f"{key_prefix}_insumo_nome_{insumo['nome']}"
                             )
-                    else:
-                        st.info("Nenhuma unidade associada")
+                        with col_insumo2:
+                            st.number_input(
+                                "Fator",
+                                value=insumo['fator_consumo'],
+                                disabled=True,
+                                key=f"{key_prefix}_insumo_fator_{insumo['nome']}"
+                            )
                 else:
-                    # Modo edição: multiselect e inputs de limites
-                    unidades_selecionadas = st.multiselect(
-                        "Selecionar Unidades",
-                        todas_unidades,
-                        default=unidades_atuais,
-                        key=f"{key_prefix}_unidades"
+                    # Modo edição: multiselect e inputs
+                    insumos_selecionados = st.multiselect(
+                        "Selecionar Insumos",
+                        opcoes_insumos,
+                        default=insumos_atuais,
+                        key=f"{key_prefix}_insumos"
                     )
                     
-                    limites_unidades = []
-                    for unidade in unidades_selecionadas:
-                        # Buscar valores atuais
-                        li_atual = 0.0
-                        ls_atual = 100.0
+                    # Inputs de fator de consumo
+                    for nome in insumos_selecionados:
+                        valor_atual = 1.0
                         if tecnologia:
-                            unidade_atual = next(
-                                (u for u in tecnologia.unidades if u["unidade"] == unidade),
-                                None
+                            valor_atual = next(
+                                (i["fator_consumo"] for i in tecnologia.insumos if i["nome"] == nome),
+                                1.0
                             )
-                            if unidade_atual:
-                                li_atual = unidade_atual["limite_inferior"] * 100
-                                ls_atual = unidade_atual["limite_superior"] * 100
-                        
-                        li = st.number_input(
-                            f"{unidade} - Limite Inferior (%)",
+                        st.number_input(
+                            f"Fator de Consumo: {nome}",
                             min_value=0.0,
-                            max_value=100.0,
-                            value=li_atual,
-                            key=f"{key_prefix}_lim_inf_{unidade}"
+                            value=valor_atual,
+                            step=0.01,
+                            key=f"{key_prefix}_fator_{nome}"
                         )
-                        ls = st.number_input(
-                            f"{unidade} - Limite Superior (%)",
-                            min_value=0.0,
-                            max_value=100.0,
-                            value=ls_atual,
-                            key=f"{key_prefix}_lim_sup_{unidade}"
-                        )
-                        limites_unidades.append({
-                            "unidade": unidade,
-                            "limite_inferior": li / 100,
-                            "limite_superior": ls / 100
-                        })
-            else:
-                st.info("Nenhuma unidade cadastrada ainda.")
-                limites_unidades = []
-        
-        # Botões de ação (se habilitados)
-        if show_save_buttons and not read_only:
-            # Preparar insumos
-            insumos_preparados = [
-                {"nome": nome, "fator_consumo": st.session_state.get(f"{key_prefix}_fator_{nome}", 1.0)}
-                for nome in st.session_state.get(f"{key_prefix}_insumos", [])
-            ]
             
-            # Botões de ação
-            if tecnologia:
-                # Modo edição: dois botões
-                col_btn1, col_btn2 = st.columns(2)
+            with col2:
+                tec_nome = st.text_input(
+                    "Nome da Tecnologia*",
+                    value=nome_padrao,
+                    disabled=read_only,
+                    key=f"{key_prefix}_nome"
+                )
                 
-                with col_btn1:
-                    if st.button("Substituir Tecnologia", key=f"{key_prefix}_replace"):
-                        if not tec_id or not tec_nome:
-                            st.error("Preencha o ID e o nome da tecnologia.")
-                        elif not insumos_preparados:
-                            st.error("Selecione pelo menos um insumo.")
+                st.markdown("**Unidades e Limites** (Opcional)")
+                todas_unidades = [u.ID_ELO for u in st.session_state.get("unidades", [])]
+                
+                if todas_unidades:
+                    if read_only:
+                        # Modo visualização: mostrar unidades em campos disabled
+                        if tecnologia and tecnologia.unidades:
+                            for u in tecnologia.unidades:
+                                st.text_input(
+                                    f"{u['unidade']}",
+                                    value=f"Limites: {u['limite_inferior']*100:.0f}% - {u['limite_superior']*100:.0f}%",
+                                    disabled=True,
+                                    key=f"{key_prefix}_unidade_{u['unidade']}"
+                                )
                         else:
-                            try:
-                                # Encontrar e substituir
-                                idx = next(
-                                    (i for i, t in enumerate(st.session_state.tecnologias_alternativas) 
-                                     if t.id == tecnologia.id),
+                            st.info("Nenhuma unidade associada")
+                    else:
+                        # Modo edição: multiselect e inputs de limites
+                        unidades_selecionadas = st.multiselect(
+                            "Selecionar Unidades",
+                            todas_unidades,
+                            default=unidades_atuais,
+                            key=f"{key_prefix}_unidades"
+                        )
+                        
+                        limites_unidades = []
+                        for unidade in unidades_selecionadas:
+                            # Buscar valores atuais
+                            li_atual = 0.0
+                            ls_atual = 100.0
+                            if tecnologia:
+                                unidade_atual = next(
+                                    (u for u in tecnologia.unidades if u["unidade"] == unidade),
                                     None
                                 )
-                                
-                                if idx is not None:
+                                if unidade_atual:
+                                    li_atual = unidade_atual["limite_inferior"] * 100
+                                    ls_atual = unidade_atual["limite_superior"] * 100
+                            
+                            li = st.number_input(
+                                f"{unidade} - Limite Inferior (%)",
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=li_atual,
+                                key=f"{key_prefix}_lim_inf_{unidade}"
+                            )
+                            ls = st.number_input(
+                                f"{unidade} - Limite Superior (%)",
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=ls_atual,
+                                key=f"{key_prefix}_lim_sup_{unidade}"
+                            )
+                            limites_unidades.append({
+                                "unidade": unidade,
+                                "limite_inferior": li / 100,
+                                "limite_superior": ls / 100
+                            })
+                else:
+                    st.info("Nenhuma unidade cadastrada ainda.")
+                    limites_unidades = []
+            
+            # Botões de ação (se habilitados)
+            if show_save_buttons and not read_only:
+                # Preparar insumos
+                insumos_preparados = [
+                    {"nome": nome, "fator_consumo": st.session_state.get(f"{key_prefix}_fator_{nome}", 1.0)}
+                    for nome in st.session_state.get(f"{key_prefix}_insumos", [])
+                ]
+                
+                # Botões de ação
+                if tecnologia:
+                    # Modo edição: dois botões
+                    col_btn1, col_btn2 = st.columns(2)
+                    
+                    with col_btn1:
+                        if st.button("Substituir Tecnologia", key=f"{key_prefix}_replace"):
+                            if not tec_id or not tec_nome:
+                                st.error("Preencha o ID e o nome da tecnologia.")
+                            elif not insumos_preparados:
+                                st.error("Selecione pelo menos um insumo.")
+                            else:
+                                try:
+                                    # Encontrar e substituir
+                                    idx = next(
+                                        (i for i, t in enumerate(st.session_state.tecnologias_alternativas) 
+                                         if t.id == tecnologia.id),
+                                        None
+                                    )
+                                    
+                                    if idx is not None:
+                                        nova_tec = Tecnologia(
+                                            id=tec_id.strip(),
+                                            nome=tec_nome.strip(),
+                                            insumos=insumos_preparados,
+                                            unidades=limites_unidades
+                                        )
+                                        st.session_state.tecnologias_alternativas[idx] = nova_tec
+                                        
+                                        if on_save_callback:
+                                            on_save_callback(nova_tec)
+                                        else:
+                                            st.success(f"Tecnologia '{tec_nome}' atualizada!")
+                                            st.rerun()
+                                        
+                                        return nova_tec
+                                    else:
+                                        st.error("Tecnologia não encontrada.")
+                                except Exception as e:
+                                    st.error(f"Erro ao atualizar: {e}")
+                    
+                    with col_btn2:
+                        if st.button("➕ Salvar Como Nova", key=f"{key_prefix}_save_new"):
+                            if not tec_id or not tec_nome:
+                                st.error("Preencha o ID e o nome da tecnologia.")
+                            elif not insumos_preparados:
+                                st.error("Selecione pelo menos um insumo.")
+                            else:
+                                try:
                                     nova_tec = Tecnologia(
                                         id=tec_id.strip(),
                                         nome=tec_nome.strip(),
                                         insumos=insumos_preparados,
                                         unidades=limites_unidades
                                     )
-                                    st.session_state.tecnologias_alternativas[idx] = nova_tec
+                                    st.session_state.tecnologias_alternativas.append(nova_tec)
                                     
                                     if on_save_callback:
                                         on_save_callback(nova_tec)
                                     else:
-                                        st.success(f"Tecnologia '{tec_nome}' atualizada!")
+                                        st.success(f"Nova tecnologia '{tec_nome}' criada!")
                                         st.rerun()
                                     
                                     return nova_tec
-                                else:
-                                    st.error("Tecnologia não encontrada.")
-                            except Exception as e:
-                                st.error(f"Erro ao atualizar: {e}")
-                
-                with col_btn2:
-                    if st.button("➕ Salvar Como Nova", key=f"{key_prefix}_save_new"):
+                                except Exception as e:
+                                    st.error(f"Erro ao criar: {e}")
+                else:
+                    # Modo criação: um botão
+                    if st.button("Salvar Tecnologia", key=f"{key_prefix}_save"):
                         if not tec_id or not tec_nome:
                             st.error("Preencha o ID e o nome da tecnologia.")
                         elif not insumos_preparados:
@@ -226,38 +262,12 @@ class UtilsUI:
                                 if on_save_callback:
                                     on_save_callback(nova_tec)
                                 else:
-                                    st.success(f"Nova tecnologia '{tec_nome}' criada!")
+                                    st.success(f"Tecnologia '{tec_nome}' criada!")
                                     st.rerun()
                                 
                                 return nova_tec
                             except Exception as e:
                                 st.error(f"Erro ao criar: {e}")
-            else:
-                # Modo criação: um botão
-                if st.button("Salvar Tecnologia", key=f"{key_prefix}_save"):
-                    if not tec_id or not tec_nome:
-                        st.error("Preencha o ID e o nome da tecnologia.")
-                    elif not insumos_preparados:
-                        st.error("Selecione pelo menos um insumo.")
-                    else:
-                        try:
-                            nova_tec = Tecnologia(
-                                id=tec_id.strip(),
-                                nome=tec_nome.strip(),
-                                insumos=insumos_preparados,
-                                unidades=limites_unidades
-                            )
-                            st.session_state.tecnologias_alternativas.append(nova_tec)
-                            
-                            if on_save_callback:
-                                on_save_callback(nova_tec)
-                            else:
-                                st.success(f"Tecnologia '{tec_nome}' criada!")
-                                st.rerun()
-                            
-                            return nova_tec
-                        except Exception as e:
-                            st.error(f"Erro ao criar: {e}")
         
         return None
 
@@ -276,15 +286,15 @@ class UtilsUI:
         
         tecnologias = st.session_state.get("tecnologias_alternativas", [])
         
-        # Tabs: Visualizar/Editar e Gerenciar Tecnologias
+        # Tabs: Visualizar/Editar e Criar Nova
         tab_edit, tab_manage = st.tabs([
-            "Visualizar e Editar",
-            "Gerenciar Tecnologias"
+            "📝 Visualizar e Editar",
+            "➕ Adicionar Nova"
         ])
         
         with tab_edit:
             if not tecnologias:
-                st.info("Nenhuma tecnologia cadastrada. Use a aba 'Gerenciar Tecnologias' para criar.")
+                st.info("Nenhuma tecnologia cadastrada. Use a aba 'Adicionar Nova' para criar.")
                 return None, [], []
             
             tecnologias_dict = {f"{t.id} | {t.nome}": t for t in tecnologias}
@@ -317,7 +327,7 @@ class UtilsUI:
             )
             
             if modo_edicao:
-                st.markdown("#### ✏️ Editando Tecnologia")
+                st.markdown("#### Editar Tecnologia")
                 
                 # Usar o método reutilizável em modo edição
                 self.render_tecnologia_form(
@@ -329,7 +339,7 @@ class UtilsUI:
                 
                 return None, [], []
             else:
-                st.markdown("#### Visualização")
+                st.markdown("#### Visualizar Tecnologia")
                 
                 # Usar o método reutilizável em modo read-only
                 self.render_tecnologia_form(
@@ -364,14 +374,18 @@ class UtilsUI:
                 return tecnologia_escolhida, consumiveis, consumo_especifico
         
         with tab_manage:
-            st.markdown("#### ⚙️ Gerenciar Tecnologias")
-            st.info("📄 Para criar, editar ou excluir tecnologias, acesse a página dedicada.")
+            st.markdown("#### ➕ Adicionar Nova Tecnologia")
             
-            if st.button("🔗 Ir para Página de Tecnologias", key=f"{key_prefix}_goto_tecnologias", use_container_width=True):
-                st.session_state["page"] = "Tecnologias"
-                st.rerun()
-            
-            return None, [], []
+            # Usar o método reutilizável em modo criação
+            self.render_tecnologia_form(
+                tecnologia=None,
+                key_prefix=f"{key_prefix}_new",
+                read_only=False,
+                show_save_buttons=True
+            )
+        
+        # Se chegou aqui, retornar None pois está na aba de criação ou edição
+        return None, [], []
 
     def render_form(self, modal):
         """Formulário para criação de nova unidade produtiva"""
@@ -528,101 +542,63 @@ class UtilsUI:
 
     def render_edit_form(self, unidade, fatores_emissao, callback_salvar):
         """Formulário para edição de uma unidade produtiva com tecnologia associada"""
-        with st.form(f"form_edicao_{unidade.ID_ELO}"):
-            nome = st.text_input("Nome", value=unidade.Nome)
-            col1, col2 = st.columns(2)
+        
+        # Campos de informação da unidade (fora do form para permitir interação com render_tecnologia)
+        st.markdown(f"### Editando Unidade: {unidade.ID_ELO}")
+        
+        col1, col2 = st.columns(2)
 
-            with col1:
-                localizacao = st.text_input("Localização", value=unidade.Localizacao)
-                input_insumo = st.text_input("Insumo Entrada", value=unidade.Input)
-                massa_input = st.number_input("Massa de Entrada (t)", value=unidade.MassaInput)
+        with col1:
+            nome = st.text_input("Nome*", value=unidade.Nome, key=f"edit_{unidade.ID_ELO}_nome")
+            localizacao = st.text_input("Localização*", value=unidade.Localizacao, key=f"edit_{unidade.ID_ELO}_loc")
+            input_insumo = st.text_input("Insumo Entrada", value=unidade.Input, key=f"edit_{unidade.ID_ELO}_input")
+            massa_input = st.number_input("Massa de Entrada (t)", value=unidade.MassaInput, key=f"edit_{unidade.ID_ELO}_massa_in")
+            tax_local = st.checkbox("Taxação Local", value=unidade.TaxacaoLocal, key=f"edit_{unidade.ID_ELO}_tax_local")
 
-            with col2:
-                periodo = st.text_input("Período", value=unidade.Periodo)
-                output_insumo = st.text_input("Insumo Saída", value=unidade.Output)
-                massa_output = st.number_input("Massa de Saída (t)", value=unidade.MassaOutput)
-                tax_fronteira = st.checkbox("Taxação na Fronteira", value=unidade.TaxacaoFronteira)
-                tax_local = st.checkbox("Taxação Local", value=unidade.TaxacaoLocal)
+        with col2:
+            periodo = st.text_input("Período*", value=unidade.Periodo, key=f"edit_{unidade.ID_ELO}_periodo")
+            output_insumo = st.text_input("Insumo Saída", value=unidade.Output, key=f"edit_{unidade.ID_ELO}_output")
+            massa_output = st.number_input("Massa de Saída (t)", value=unidade.MassaOutput, key=f"edit_{unidade.ID_ELO}_massa_out")
+            tax_fronteira = st.checkbox("Taxação na Fronteira", value=unidade.TaxacaoFronteira, key=f"edit_{unidade.ID_ELO}_tax_front")
 
-            st.divider()
+        st.divider()
+        
+        # Usar o componente unificado de tecnologia
+        tecnologia_atual = unidade.Tecnologia if hasattr(unidade, 'Tecnologia') else None
+        
+        tecnologia_escolhida, consumiveis, consumo_especifico = self.render_tecnologia(
+            key_prefix=f"edit_{unidade.ID_ELO}",
+            tecnologia_atual=tecnologia_atual
+        )
+        
+        st.divider()
+        
+        # Botão de salvar (fora do form do render_tecnologia)
+        if st.button("💾 Salvar Alterações", key=f"edit_{unidade.ID_ELO}_save", use_container_width=True, type="primary"):
+            if not tecnologia_escolhida:
+                st.error("Selecione uma tecnologia antes de salvar.")
+                return
             
-            # Usar o componente unificado de tecnologia
-            # Note: dentro de um form, o render_tecnologia não pode ter botões próprios
-            tecnologia_atual = unidade.Tecnologia if hasattr(unidade, 'Tecnologia') else None
-            
-            st.markdown("### 🔧 Tecnologia Associada")
-            tecnologias = st.session_state.get("tecnologias_alternativas", [])
-            
-            if not tecnologias:
-                st.warning("Nenhuma tecnologia cadastrada. Crie uma tecnologia primeiro.")
-                tecnologia_escolhida = None
-                consumiveis = []
-                consumo_especifico = []
-            else:
-                tecnologias_dict = {f"{t.id} | {t.nome}": t for t in tecnologias}
+            if not all([nome, localizacao, periodo]):
+                st.error("Preencha todos os campos obrigatórios (*)")
+                return
                 
-                # Define seleção padrão
-                if tecnologia_atual:
-                    tec_padrao_key = next(
-                        (key for key, t in tecnologias_dict.items() if t.id == tecnologia_atual.id),
-                        list(tecnologias_dict.keys())[0]
-                    )
-                    tec_index = list(tecnologias_dict.keys()).index(tec_padrao_key)
-                else:
-                    tec_index = 0
-                
-                tec_selecionada_str = st.selectbox(
-                    "Selecione a tecnologia:",
-                    list(tecnologias_dict.keys()),
-                    index=tec_index,
-                    key=f"edit_{unidade.ID_ELO}_tec_select"
-                )
-                
-                tecnologia_escolhida = tecnologias_dict[tec_selecionada_str]
-                
-                # Preparar consumíveis
-                consumiveis = []
-                consumo_especifico = []
-                
-                for insumo in tecnologia_escolhida.insumos:
-                    nome_insumo = insumo["nome"]
-                    fator_consumo = insumo["fator_consumo"]
-                    fator_emissao = next(
-                        (f["fator_emissao"] for f in fatores_emissao if f["consumivel"] == nome_insumo),
-                        0.0
-                    )
-                    escopo = next(
-                        (f["escopo"] for f in fatores_emissao if f["consumivel"] == nome_insumo),
-                        "1"
-                    )
-                    consumiveis.append({
-                        "nome": nome_insumo,
-                        "fator": fator_emissao,
-                        "escopo": escopo
-                    })
-                    consumo_especifico.append(fator_consumo)
-
-            if st.form_submit_button("Salvar Alterações"):
-                if not tecnologia_escolhida:
-                    st.error("Selecione uma tecnologia antes de salvar.")
-                    return
-                    
-                callback_salvar(
-                    id_elo=unidade.ID_ELO,
-                    nome=nome,
-                    localizacao=localizacao,
-                    periodo=periodo,
-                    input_insumo=input_insumo,
-                    massa_input=massa_input,
-                    output_insumo=output_insumo,
-                    massa_output=massa_output,
-                    consumiveis=consumiveis,
-                    consumo_especifico=consumo_especifico,
-                    taxacao_fronteira=tax_fronteira,
-                    taxacao_local=tax_local,
-                    tecnologia=tecnologia_escolhida,
-                    unidade_existente=unidade
-                )
+            callback_salvar(
+                id_elo=unidade.ID_ELO,
+                nome=nome,
+                localizacao=localizacao,
+                periodo=periodo,
+                input_insumo=input_insumo,
+                massa_input=massa_input,
+                output_insumo=output_insumo,
+                massa_output=massa_output,
+                consumiveis=consumiveis,
+                consumo_especifico=consumo_especifico,
+                taxacao_fronteira=tax_fronteira,
+                taxacao_local=tax_local,
+                tecnologia=tecnologia_escolhida,
+                unidade_existente=unidade
+            )
 
     def render_manage_units(self):
         """Componente para gerenciamento de unidades e fluxos"""

@@ -12,7 +12,8 @@ CANVAS_CONFIG = {
     },
     "link": {"renderLabel": True},
     "physics": {"enabled": True},
-    "backgroundColor": "#f0f0f0"  # tom mais neutro
+    "backgroundColor": "#ffffff",  # fundo branco
+    "border": "2px solid #333333"  # borda ao redor do canvas
 }
 
 

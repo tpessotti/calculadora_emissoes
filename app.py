@@ -65,7 +65,7 @@ class App:
                     "📊 Tabela de Unidades",
                     "🔗 Diagrama de Fluxo",
                     "🍃 Fatores de Emissão",
-                    "⛽ Tecnologias Alternativas",
+                    "⛽ Tecnologias",
                     # "📈 Sankey"
                 ],
                 index=0
@@ -83,7 +83,7 @@ class App:
             FluxoTab()._render()
         elif aba == "🍃 Fatores de Emissão":
             FatoresEmissaoTab()._render()
-        elif aba == "⛽ Tecnologias Alternativas":
+        elif aba == "⛽ Tecnologias":
             TecnologiasTab()._render()
         # elif aba == "📈 Sankey":
         #     SankeyTab()._render()

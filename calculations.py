@@ -69,19 +69,6 @@ class EmissionCalculator:
                 unidade.Pegada = unidade.IntensidadeEmissao
                 continue
 
-            # Validação da consistência
-            massa_total = sum(c.get("massa", mapa_unidades[c["source"]].MassaOutput) for c in pais_conexoes)
-            if abs(massa_total - unidade.MassaInput) > 0.01:
-                st.warning(
-                    f"[Inconsistência de Massa] A soma das massas conectadas ao elo '{elo_id}' "
-                    f"({massa_total:.2f}) é diferente da MassaInput ({unidade.MassaInput:.2f}). Pegada não atualizada."
-                )
-                unidade.Pegada = float("nan")
-                unidade.PegadaEscopo1 = float("nan")
-                unidade.PegadaEscopo2 = float("nan")
-                unidade.PegadaEscopo3 = float("nan")
-                continue
-
             # Propagar pegada por escopo
             pegada_herdada_escopo1 = 0.0
             pegada_herdada_escopo2 = 0.0

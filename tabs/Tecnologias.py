@@ -1,20 +1,27 @@
 import streamlit as st
 from database import Tecnologia
-from tabs.FatoresEmissao import FatoresEmissaoTab
+from utils import UtilsUI
 
 class TecnologiasTab:
     """Classe para gerenciar a aba de Tecnologias Alternativas no Streamlit."""
+    
+    def __init__(self):
+        self.utils_ui = UtilsUI()
 
     def _render(self):
-
         if "tecnologias_alternativas" not in st.session_state:
             st.session_state.tecnologias_alternativas = []
         if "fatores_emissao" not in st.session_state:
             st.session_state.fatores_emissao = []
 
-        st.subheader("➕ Nova Tecnologia")
-        self._render_adicao_manual_tec()
-        self.render_tabela_tecnologias()
+        # Criar abas
+        tab1, tab2 = st.tabs(["📋 Tecnologias Registradas", "➕ Nova Tecnologia"])
+        
+        with tab1:
+            self._render_lista_tecnologias()
+        
+        with tab2:
+            self._render_criar_tecnologia()
 
     def _render_adicao_manual_tec(self, key_prefix="tec"):
         col1, col2 = st.columns(2)

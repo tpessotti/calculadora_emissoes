@@ -2,6 +2,15 @@ import streamlit as st
 from streamlit_agraph import agraph, Node, Edge, Config
 from config import CANVAS_CONFIG
 from utils import UtilsUI
+import base64
+from io import BytesIO
+try:
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.pdfgen import canvas as pdf_canvas
+    from reportlab.lib.utils import ImageReader
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
 
 class FluxoTab:
     """Classe para gerenciar o diagrama de fluxo de unidades produtivas e suas conexões"""
@@ -14,36 +23,406 @@ class FluxoTab:
             st.session_state.refresh_canvas = True
             st.session_state.canvas_opened_once = True
 
-        # Debug
-        # st.write(f"DEBUG Fluxo - Total de conexões: {len(st.session_state.conexoes)}")
-        # st.write(f"DEBUG Fluxo - Total de edges: {len(st.session_state.edges)}")
-        # if st.session_state.edges:
-        #     st.write("DEBUG Fluxo - Primeiras 5 edges:", st.session_state.edges[:5])
-
         self.utils_ui.ec.propagar_pegada(st.session_state.unidades, st.session_state.edges)
         self._render_layout_settings()
-        self._render_selection_controls()
+        
         self._render_graph()
+        self._render_selection_controls()
 
     def _render_layout_settings(self):
-        with st.sidebar.expander("⚙️ Configurações do Layout"):
-            st.slider("Espaçamento vertical (Y)", 100, 600, 200, step=50, key="esp_y")
-            st.slider("Espaçamento horizontal (X)", 100, 600, 250, step=50, key="esp_x")
+        with st.sidebar:
+            st.markdown("### Diagrama de Fluxo")
+            # Modo Editor de Fluxo
+            if not st.session_state.modo_selecao:
+                if st.button("Ativar Modo Editor", use_container_width=True, type="secondary", key="activate_editor"):
+                    self._set_selection_mode(True, True)
+            else:
+                st.info("**Modo de seleção ativo**\n\nClique em dois nós no diagrama para criar uma conexão entre eles.")
+                if st.button("Desativar Modo Editor", use_container_width=True, type="secondary", key="deactivate_editor"):
+                    self._set_selection_mode(False, False)
+            
+            st.markdown("---")
+            
+            # Controles de exportação
+            with st.expander("📤 Exportar"):
+                st.markdown("#### Exportar Fluxo")
+                
+                # Botão para PDF
+                if st.button("Gerar Relatório PDF", use_container_width=True, type="secondary", key="export_pdf_sidebar"):
+                    if not REPORTLAB_AVAILABLE:
+                        st.error("⚠️ A biblioteca 'reportlab' não está instalada. Execute: pip install reportlab")
+                    else:
+                        self._export_to_pdf()
+
+                st.markdown("#### Exportar Dados")
+                
+                # Botão para JSON
+                if st.button("Gerar JSON", use_container_width=True, type="secondary", key="export_json_sidebar"):
+                    json_data = self.utils_ui.db.export_to_json()
+                    st.download_button(
+                        label="⬇️ Baixar JSON",
+                        data=json_data,
+                        file_name="fluxo_emissao.json",
+                        mime="application/json",
+                        key="download_json_sidebar",
+                        use_container_width=True
+                    )
+
+            # Configurações do Layout
+            with st.expander("⚙️ Configurações"):
+                st.slider("Espaçamento vertical (Y)", 100, 600, 200, step=50, key="esp_y")
+                st.slider("Espaçamento horizontal (X)", 100, 600, 300, step=50, key="esp_x")
+                
+                st.markdown("---")
+                st.markdown("#### Tamanho do Canvas")
+                
+                if "canvas_zoom" not in st.session_state:
+                    st.session_state.canvas_zoom = 1.0
+                
+                zoom_value = st.slider(
+                    "Multiplicador", 
+                    min_value=0.5, 
+                    max_value=2.0, 
+                    value=st.session_state.canvas_zoom,
+                    step=0.1,
+                    key="zoom_slider"
+                )
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("➖", use_container_width=True):
+                        st.session_state.canvas_zoom = max(0.5, st.session_state.canvas_zoom - 0.1)
+                        st.rerun()
+                with col2:
+                    if st.button("🔄", use_container_width=True):
+                        st.session_state.canvas_zoom = 1.0
+                        st.rerun()
+                with col3:
+                    if st.button("➕", use_container_width=True):
+                        st.session_state.canvas_zoom = min(2.0, st.session_state.canvas_zoom + 0.1)
+                        st.rerun()
+                
+                st.session_state.canvas_zoom = zoom_value
+
+
+    def _export_to_pdf(self):
+        """Exporta o diagrama de fluxo para PDF com visualização gráfica"""
+        try:
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.pdfgen import canvas as pdf_canvas
+            from reportlab.lib.units import cm
+            from reportlab.lib import colors
+            from datetime import datetime
+            
+            # Criar buffer para o PDF
+            buffer = BytesIO()
+            
+            # Criar canvas PDF em modo paisagem
+            c = pdf_canvas.Canvas(buffer, pagesize=landscape(A4))
+            width, height = landscape(A4)
+            
+            # ========== PÁGINA 1: DIAGRAMA VISUAL ==========
+            # Título
+            c.setFont("Helvetica-Bold", 18)
+            c.drawString(2*cm, height - 2*cm, "Diagrama de Fluxo de Emissões")
+            
+            # Data
+            c.setFont("Helvetica", 10)
+            c.drawString(2*cm, height - 2.8*cm, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            
+            # Linha separadora
+            c.line(2*cm, height - 3.2*cm, width - 2*cm, height - 3.2*cm)
+            
+            # Desenhar o grafo visualmente
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(2*cm, height - 4*cm, "Visualização do Fluxo:")
+            
+            # Calcular posições dos nós
+            posicoes = self._organize_nodes(
+                st.session_state.unidades,
+                st.session_state.edges,
+                st.session_state.esp_x,
+                st.session_state.esp_y
+            )
+            
+            # Normalizar posições para caber no PDF
+            self._draw_flow_diagram(c, posicoes, width, height)
+            
+            # Nova página para detalhes
+            c.showPage()
+            
+            # ========== PÁGINA 2+: DETALHES DAS UNIDADES ==========
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(2*cm, height - 2*cm, "Detalhes das Unidades Produtivas")
+            
+            c.setFont("Helvetica", 10)
+            c.drawString(2*cm, height - 2.8*cm, f"Total de unidades: {len(st.session_state.unidades)}")
+            c.line(2*cm, height - 3.2*cm, width - 2*cm, height - 3.2*cm)
+            
+            # Informações das unidades
+            y_position = height - 4*cm
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(2*cm, y_position, "Lista de Unidades:")
+            y_position -= 0.8*cm
+            
+            for unidade in st.session_state.unidades:
+                # Calcular altura necessária para a unidade
+                tecnologia = unidade.Tecnologia if hasattr(unidade, 'Tecnologia') and unidade.Tecnologia else None
+                num_insumos = len(tecnologia.insumos) if tecnologia else 0
+                box_height = 3.5*cm + (num_insumos * 0.4*cm)  # altura base + altura dos insumos
+                
+                # Nova página se não houver espaço
+                if y_position < (box_height + 2*cm):
+                    c.showPage()
+                    y_position = height - 2*cm
+                
+                # Box de destaque para cada unidade
+                c.setStrokeColor(colors.HexColor("#0066cc"))
+                c.setLineWidth(0.5)
+                c.rect(2*cm, y_position - box_height, width - 4*cm, box_height, stroke=1, fill=0)
+                
+                # Cabeçalho da unidade
+                c.setFillColor(colors.black)
+                c.setFont("Helvetica-Bold", 10)
+                y_text = y_position - 0.5*cm
+                c.drawString(2.2*cm, y_text, f"📌 {unidade.ID_ELO} - {unidade.Nome}")
+                
+                # Informações básicas
+                c.setFont("Helvetica", 8)
+                y_text -= 0.4*cm
+                c.drawString(2.5*cm, y_text, f"Local: {unidade.Localizacao} | Período: {unidade.Periodo}")
+                
+                y_text -= 0.4*cm
+                c.drawString(2.5*cm, y_text, 
+                            f"Entrada: {unidade.Input} ({unidade.MassaInput:.2f} t) → "
+                            f"Saída: {unidade.Output} ({unidade.MassaOutput:.2f} t)")
+                
+                y_text -= 0.4*cm
+                c.drawString(2.5*cm, y_text, 
+                            f"Intensidade: {unidade.IntensidadeEmissao:.4f} tCO2e/t | "
+                            f"Pegada: {unidade.Pegada:.2f} tCO2e | "
+                            f"Emissao Total: {unidade.IntensidadeEmissao * unidade.MassaOutput:.2f} tCO2e")
+                
+                # Informações de taxação
+                y_text -= 0.4*cm
+                taxacao_info = []
+                if hasattr(unidade, 'TaxacaoFronteira') and unidade.TaxacaoFronteira:
+                    taxacao_info.append("Taxação na Fronteira")
+                if hasattr(unidade, 'TaxacaoLocal') and unidade.TaxacaoLocal:
+                    taxacao_info.append("Taxação Local")
+                if taxacao_info:
+                    c.setFont("Helvetica-Bold", 8)
+                    c.setFillColor(colors.HexColor("#cc0000"))
+                    c.drawString(2.5*cm, y_text, f"⚠ {' | '.join(taxacao_info)}")
+                    c.setFillColor(colors.black)
+                    y_text -= 0.4*cm
+                
+                # Tecnologia
+                y_text -= 0.5*cm
+                c.setFont("Helvetica-Bold", 9)
+                c.setFillColor(colors.HexColor("#0066cc"))
+                if tecnologia:
+                    c.drawString(2.5*cm, y_text, f"🔧 Tecnologia: {tecnologia.nome} (ID: {tecnologia.id})")
+                else:
+                    c.drawString(2.5*cm, y_text, "🔧 Tecnologia: Não especificada")
+                c.setFillColor(colors.black)
+                
+                # Insumos e fatores
+                if tecnologia and tecnologia.insumos:
+                    y_text -= 0.5*cm
+                    c.setFont("Helvetica-Bold", 8)
+                    c.drawString(2.7*cm, y_text, "Insumos e Fatores:")
+                    
+                    c.setFont("Helvetica", 7)
+                    for insumo in tecnologia.insumos:
+                        y_text -= 0.35*cm
+                        nome_insumo = insumo['nome']
+                        fator_consumo = insumo['fator_consumo']
+                        
+                        # Buscar fator de emissão
+                        fator_emissao = 0.0
+                        escopo = "N/A"
+                        if 'fatores_emissao' in st.session_state:
+                            for f in st.session_state.fatores_emissao:
+                                if f.get('consumivel') == nome_insumo:
+                                    fator_emissao = f.get('fator_emissao', 0.0)
+                                    escopo = f.get('escopo', 'N/A')
+                                    break
+                        
+                        # Calcular emissão do insumo
+                        emissao_insumo = fator_consumo * fator_emissao * unidade.MassaOutput
+                        
+                        c.drawString(3*cm, y_text, 
+                                    f"• {nome_insumo}: "
+                                    f"Consumo={fator_consumo:.3f} t/t | "
+                                    f"Fator Emissao={fator_emissao:.4f} tCO2e/t | "
+                                    f"Escopo {escopo} | "
+                                    f"Emissao={emissao_insumo:.2f} tCO2e")
+                
+                y_position -= (box_height + 0.5*cm)
+            
+            # Conexões
+            if y_position < 6*cm:
+                c.showPage()
+                y_position = height - 2*cm
+            
+            y_position -= 1*cm
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(2*cm, y_position, f"Conexões do Fluxo ({len(st.session_state.edges)} conexões):")
+            y_position -= 0.8*cm
+            
+            c.setFont("Helvetica", 9)
+            for i, edge in enumerate(st.session_state.edges, 1):
+                if y_position < 2*cm:
+                    c.showPage()
+                    y_position = height - 2*cm
+                    c.setFont("Helvetica", 9)
+                
+                # Desenhar seta
+                c.setStrokeColor(colors.HexColor("#666666"))
+                c.setLineWidth(1)
+                c.line(2.3*cm, y_position + 0.1*cm, 2.7*cm, y_position + 0.1*cm)
+                # Ponta da seta
+                c.line(2.7*cm, y_position + 0.1*cm, 2.6*cm, y_position + 0.2*cm)
+                c.line(2.7*cm, y_position + 0.1*cm, 2.6*cm, y_position)
+                
+                c.setFillColor(colors.black)
+                c.drawString(3*cm, y_position, f"{i}. {edge['source']} → {edge['target']}")
+                y_position -= 0.5*cm
+            
+            # Finalizar PDF
+            c.save()
+            
+            # Preparar para download
+            buffer.seek(0)
+            pdf_bytes = buffer.getvalue()
+            
+            st.download_button(
+                label="⬇️ Download PDF",
+                data=pdf_bytes,
+                file_name=f"fluxo_emissoes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                mime="application/pdf",
+                key="download_pdf_flow"
+            )
+            
+            st.success("✅ PDF gerado com sucesso! Inclui diagrama visual e detalhes completos.")
+            
+        except Exception as e:
+            st.error(f"Erro ao gerar PDF: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
+    
+    def _draw_flow_diagram(self, c, posicoes, page_width, page_height):
+        """Desenha o diagrama de fluxo no PDF"""
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        
+        # Área disponível para o diagrama (deixando margens)
+        margin = 2*cm
+        diagram_width = page_width - 4*cm
+        diagram_height = page_height - 6*cm  # espaço para título
+        diagram_y_start = 4.5*cm
+        
+        # Encontrar limites das posições
+        if not posicoes:
+            c.drawString(margin, page_height - 5*cm, "Nenhum nó para exibir")
+            return
+        
+        x_coords = [pos["x"] for pos in posicoes.values()]
+        y_coords = [pos["y"] for pos in posicoes.values()]
+        
+        min_x, max_x = min(x_coords), max(x_coords)
+        min_y, max_y = min(y_coords), max(y_coords)
+        
+        # Calcular escala para normalizar
+        x_range = max_x - min_x if max_x != min_x else 1
+        y_range = max_y - min_y if max_y != min_y else 1
+        
+        scale_x = diagram_width / x_range * 0.8  # 80% para deixar margem
+        scale_y = diagram_height / y_range * 0.8
+        scale = min(scale_x, scale_y)  # usar menor escala para manter proporção
+        
+        # Função para normalizar coordenadas
+        def normalize_pos(x, y):
+            norm_x = margin + diagram_width/2 + (x - (min_x + max_x)/2) * scale
+            norm_y = diagram_y_start + diagram_height/2 + (y - (min_y + max_y)/2) * scale
+            return norm_x, norm_y
+        
+        # Desenhar conexões primeiro (para ficarem atrás dos nós)
+        c.setStrokeColor(colors.HexColor("#666666"))
+        c.setLineWidth(1.5)
+        for edge in st.session_state.edges:
+            source_id = edge['source']
+            target_id = edge['target']
+            
+            if source_id in posicoes and target_id in posicoes:
+                x1, y1 = normalize_pos(posicoes[source_id]["x"], posicoes[source_id]["y"])
+                x2, y2 = normalize_pos(posicoes[target_id]["x"], posicoes[target_id]["y"])
+                
+                # Desenhar linha
+                c.line(x1, y1, x2, y2)
+                
+                # Desenhar ponta da seta
+                import math
+                arrow_size = 0.3*cm
+                angle = math.atan2(y2 - y1, x2 - x1)
+                
+                # Pontos da seta
+                p1_x = x2 - arrow_size * math.cos(angle - math.pi/6)
+                p1_y = y2 - arrow_size * math.sin(angle - math.pi/6)
+                p2_x = x2 - arrow_size * math.cos(angle + math.pi/6)
+                p2_y = y2 - arrow_size * math.sin(angle + math.pi/6)
+                
+                c.line(x2, y2, p1_x, p1_y)
+                c.line(x2, y2, p2_x, p2_y)
+        
+        # Desenhar nós
+        node_size = 0.8*cm
+        c.setFont("Helvetica", 7)
+        
+        for unidade in st.session_state.unidades:
+            if unidade.ID_ELO in posicoes:
+                x, y = normalize_pos(posicoes[unidade.ID_ELO]["x"], posicoes[unidade.ID_ELO]["y"])
+                
+                # Cor do nó baseada em taxação
+                if unidade.TaxacaoFronteira:
+                    fill_color = colors.HexColor("#ffebee")
+                    border_color = colors.HexColor("#cc0000")
+                else:
+                    fill_color = colors.HexColor("#e6f7ff")
+                    border_color = colors.HexColor("#0066cc")
+                
+                # Desenhar retângulo do nó
+                c.setFillColor(fill_color)
+                c.setStrokeColor(border_color)
+                c.setLineWidth(1.5)
+                c.rect(x - node_size, y - node_size/2, node_size*2, node_size, stroke=1, fill=1)
+                
+                # Texto do nó (ID)
+                c.setFillColor(colors.black)
+                text_width = c.stringWidth(unidade.ID_ELO, "Helvetica", 7)
+                c.drawString(x - text_width/2, y - 0.15*cm, unidade.ID_ELO)
+        
+        # Legenda
+        legend_y = diagram_y_start - 0.8*cm
+        c.setFont("Helvetica", 8)
+        c.drawString(margin, legend_y, "Legenda:")
+        
+        # Azul - sem taxação
+        c.setFillColor(colors.HexColor("#e6f7ff"))
+        c.setStrokeColor(colors.HexColor("#0066cc"))
+        c.rect(margin + 1.5*cm, legend_y - 0.2*cm, 0.5*cm, 0.3*cm, stroke=1, fill=1)
+        c.setFillColor(colors.black)
+        c.drawString(margin + 2.2*cm, legend_y, "Sem taxação na fronteira")
+        
+        # Vermelho - com taxação
+        c.setFillColor(colors.HexColor("#ffebee"))
+        c.setStrokeColor(colors.HexColor("#cc0000"))
+        c.rect(margin + 6*cm, legend_y - 0.2*cm, 0.5*cm, 0.3*cm, stroke=1, fill=1)
+        c.setFillColor(colors.black)
+        c.drawString(margin + 6.7*cm, legend_y, "Com taxação na fronteira")
 
     def _render_selection_controls(self):
-        col1, col2 = st.columns([4, 1])
-        if not st.session_state.modo_selecao:
-            with col1:
-                if st.button("🔗 Modo Editor de Fluxo", use_container_width=False):
-                    self._set_selection_mode(True, True)
-        else:
-            with col1:
-                st.warning("**Modo de seleção ativo:** Clique em dois nós no diagrama para criar uma conexão entre eles")
-        with col2:
-            if st.session_state.modo_selecao or st.session_state.modo_exclusao_fluxo:
-                if st.button("❌ Sair do Modo Editor", use_container_width=True):
-                    self._set_selection_mode(False, False)
-
         self._render_selection_feedback()
 
         if st.session_state.selected_edge:
@@ -144,10 +523,30 @@ class FluxoTab:
                 st.session_state.esp_x,
                 st.session_state.esp_y
             )
+            
+            # Aplicar configuração com zoom
             config = Config(**CANVAS_CONFIG)
             config.nodeHighlightBehavior = True
             config.linkHighlightBehavior = True
-
+            
+            # Aplicar zoom ao width e height
+            zoom = st.session_state.get("canvas_zoom", 1.0)
+            config.width = int(CANVAS_CONFIG["width"] * zoom)
+            config.height = int(CANVAS_CONFIG["height"] * zoom)
+            
+            # Container com borda estilizada
+            st.markdown("""
+                <style>
+                    div[data-testid="stVerticalBlock"] > div:has(iframe) {
+                        border: 3px solid #EDF0E7;
+                        border-radius: 8px;
+                        padding: 10px;
+                        background-color: #ffffff;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+            
             result = agraph(
                 nodes=self._create_nodes(posicoes),
                 edges=self._create_edges(),
