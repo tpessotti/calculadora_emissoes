@@ -14,6 +14,12 @@ class FluxoTab:
             st.session_state.refresh_canvas = True
             st.session_state.canvas_opened_once = True
 
+        # Debug
+        # st.write(f"DEBUG Fluxo - Total de conexões: {len(st.session_state.conexoes)}")
+        # st.write(f"DEBUG Fluxo - Total de edges: {len(st.session_state.edges)}")
+        # if st.session_state.edges:
+        #     st.write("DEBUG Fluxo - Primeiras 5 edges:", st.session_state.edges[:5])
+
         self.utils_ui.ec.propagar_pegada(st.session_state.unidades, st.session_state.edges)
         self._render_layout_settings()
         self._render_selection_controls()

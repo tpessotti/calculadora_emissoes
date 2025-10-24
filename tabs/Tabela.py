@@ -17,6 +17,12 @@ class TabelaTab:
 
         unidades = self.utils_ui.db.get_unidades()
         edges = self.utils_ui.db.get_edges_for_graph()
+        
+        # Debug
+        # st.write(f"DEBUG Tabela - Total de conexões: {len(st.session_state.conexoes)}")
+        # st.write(f"DEBUG Tabela - Total de edges: {len(edges)}")
+        # if edges:
+        #     st.write("DEBUG Tabela - Edges:", edges)
 
         st.markdown("### 📋 Unidades Produtivas")
 
@@ -34,7 +40,7 @@ class TabelaTab:
                 self.utils_ui.render_edit_form(
                     unidade=unidade,
                     fatores_emissao=st.session_state.fatores_emissao,
-                    callback_salvar=self.utils_ui._atualizar_unidade
+                    callback_salvar=self.utils_ui._salvar_ou_atualizar_unidade
                 )
 
     def _render_metrics(self):

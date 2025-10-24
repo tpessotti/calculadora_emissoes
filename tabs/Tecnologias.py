@@ -25,50 +25,56 @@ class TecnologiasTab:
             st.markdown("#### Insumos")
             fatores = st.session_state.get("fatores_emissao", [])
             opcoes_insumos = sorted(set(f["consumivel"] for f in fatores))
-            insumos_selecionados = st.multiselect("Selecionar Insumos", opcoes_insumos, key="tec_insumos")
+            insumos_selecionados = st.multiselect("Selecionar Insumos", opcoes_insumos, key=f"{key_prefix}_insumos")
             for nome in insumos_selecionados:
-                st.number_input(f"Fator de Consumo de {nome}", min_value=0.0, value=1.0, step=0.01, key=f"tec_fator_{nome}")
+                st.number_input(f"Fator de Consumo de {nome}", min_value=0.0, value=1.0, step=0.01, key=f"{key_prefix}_fator_{nome}")
 
         with col2:
-            tecnologia_nome = st.text_input("Nome da Tecnologia", key="tec_nome")
+            tecnologia_nome = st.text_input("Nome da Tecnologia", key=f"{key_prefix}_nome")
             st.markdown("#### Unidades e Limites")
             todas_unidades = [u.ID_ELO for u in st.session_state.unidades]
-            unidades_selecionadas = st.multiselect("Selecionar Unidades", todas_unidades, key="tec_unidades")
+            unidades_selecionadas = st.multiselect("Selecionar Unidades", todas_unidades, key=f"{key_prefix}_unidades")
 
             limites_unidades = []
             for unidade in unidades_selecionadas:
-                li = st.number_input(f"{unidade} - Limite Inferior (%)", min_value=0.0, max_value=100.0, value=0.0, key=f"lim_inf_{unidade}")
-                ls = st.number_input(f"{unidade} - Limite Superior (%)", min_value=0.0, max_value=100.0, value=100.0, key=f"lim_sup_{unidade}")
+                li = st.number_input(f"{unidade} - Limite Inferior (%)", min_value=0.0, max_value=100.0, value=0.0, key=f"{key_prefix}_lim_inf_{unidade}")
+                ls = st.number_input(f"{unidade} - Limite Superior (%)", min_value=0.0, max_value=100.0, value=100.0, key=f"{key_prefix}_lim_sup_{unidade}")
                 limites_unidades.append({
                     "unidade": unidade,
                     "limite_inferior": li / 100,
                     "limite_superior": ls / 100
                 })
 
-        FatoresEmissaoTab()._render_adicao_manual()
+        # Monta lista de insumos para retornar
+        insumos = [
+            {"nome": nome, "fator_consumo": st.session_state.get(f"{key_prefix}_fator_{nome}", 0.0)}
+            for nome in insumos_selecionados
+        ]
+        
+        # Só mostra o botão de salvar quando key_prefix é "tec" (modo normal, não usado em utils)
+        if key_prefix == "tec":
+            FatoresEmissaoTab()._render_adicao_manual()
 
-        if st.button("💾 Salvar Tecnologia"):
-            if not tecnologia_id or not tecnologia_nome:
-                st.error("Preencha o ID e o nome da tecnologia.")
-            else:
-                try:
-                    insumos = [
-                        {"nome": nome, "fator_consumo": st.session_state[f"tec_fator_{nome}"]}
-                        for nome in insumos_selecionados
-                    ]
-                    nova_tec = Tecnologia(
-                        id=tecnologia_id.strip(),
-                        nome=tecnologia_nome.strip(),
-                        insumos=insumos,
-                        unidades=limites_unidades
-                    )
+            if st.button("💾 Salvar Tecnologia"):
+                if not tecnologia_id or not tecnologia_nome:
+                    st.error("Preencha o ID e o nome da tecnologia.")
+                else:
+                    try:
+                        nova_tec = Tecnologia(
+                            id=tecnologia_id.strip(),
+                            nome=tecnologia_nome.strip(),
+                            insumos=insumos,
+                            unidades=limites_unidades
+                        )
 
-                    st.session_state.tecnologias_alternativas.append(nova_tec)
-                    st.success("Tecnologia registrada com sucesso!")
-                    st.rerun()
+                        st.session_state.tecnologias_alternativas.append(nova_tec)
+                        st.success("Tecnologia registrada com sucesso!")
+                        st.rerun()
 
-                except Exception as e:
-                    st.error(f"Erro ao registrar tecnologia: {e}")
+                    except Exception as e:
+                        st.error(f"Erro ao registrar tecnologia: {e}")
+        
+        return insumos
 
     def render_tabela_tecnologias(self):
             # --- Visualização Tabela ---

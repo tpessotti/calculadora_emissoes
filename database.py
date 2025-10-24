@@ -11,6 +11,7 @@ class Conexao:
     """Classe que representa uma conexão entre unidades produtivas"""
     origem: str
     destino: str
+    massa: float = 0.0  # Massa transferida na conexão
     label: str = "Fluxo"
 
     def to_dict(self):
@@ -48,7 +49,7 @@ class UnidadeProdutiva:
                 output_insumo: str, massa_output: float,
                 consumiveis: list[dict], consumo_especifico: list[float],
                 taxacao_fronteira: bool = False, taxacao_local: bool = False,
-                tecnologia=None):  # nova entrada opcional
+                tecnologia=None, conexao: 'Conexao' = None):  # novo parâmetro
         
         self.ID_ELO = id_elo
         self.Nome = nome
@@ -77,10 +78,27 @@ class UnidadeProdutiva:
         self.PegadaEscopo3 = 0.0
         self.Pegada = 0.0
 
-        # Nova propriedade
+        # Propriedades adicionais
         self.Tecnologia = tecnologia
+        self.Conexao = conexao  # Instância de Conexao que sai desta unidade
 
     def to_dict(self):
+        # Converter Tecnologia para ID se for um objeto
+        tecnologia_valor = None
+        if self.Tecnologia:
+            if isinstance(self.Tecnologia, Tecnologia):
+                tecnologia_valor = self.Tecnologia.id
+            else:
+                tecnologia_valor = self.Tecnologia
+        
+        # Converter Conexao para dict se existir
+        conexao_valor = None
+        if hasattr(self, 'Conexao') and self.Conexao:
+            if isinstance(self.Conexao, Conexao):
+                conexao_valor = self.Conexao.to_dict()
+            else:
+                conexao_valor = self.Conexao
+        
         return {
             "ID_ELO": self.ID_ELO,
             "Nome": self.Nome,
@@ -102,8 +120,9 @@ class UnidadeProdutiva:
             "PegadaEscopo3": self.PegadaEscopo3,
             "TaxacaoFronteira": self.TaxacaoFronteira,
             "TaxacaoLocal": self.TaxacaoLocal,
-            "Tecnologia": self.Tecnologia,
-            "ConfigOperacional": getattr(self, "ConfigOperacional", "Padrão")
+            "Tecnologia": tecnologia_valor,
+            "ConfigOperacional": getattr(self, "ConfigOperacional", "Padrão"),
+            "Conexao": conexao_valor
         }
 
 
@@ -140,9 +159,9 @@ class DatabaseManager:
         return next((u for u in st.session_state.unidades if u.ID_ELO == id_elo), None)
 
     # --- Conexões ---
-    def add_edge(self, origem: str, destino: str) -> None:
+    def add_edge(self, origem: str, destino: str, massa: float = 0.0) -> None:
         if not any(c.origem == origem and c.destino == destino for c in st.session_state.conexoes):
-            st.session_state.conexoes.append(Conexao(origem=origem, destino=destino))
+            st.session_state.conexoes.append(Conexao(origem=origem, destino=destino, massa=massa))
     
     def remove_edge(self, origem: str, destino: str) -> None:
         st.session_state.conexoes = [
@@ -170,7 +189,13 @@ class DatabaseManager:
                 "Output": unidade.Output,
                 "Emissão (CO₂)": f"{unidade.IntensidadeEmissao * unidade.MassaOutput:,.2f}",
                 "Intensidade (tCO₂/t)": f"{unidade.IntensidadeEmissao:.2f}",
+                "Int. Escopo 1": f"{unidade.IntensidadeEmissaoEscopo1:.2f}",
+                "Int. Escopo 2": f"{unidade.IntensidadeEmissaoEscopo2:.2f}",
+                "Int. Escopo 3": f"{unidade.IntensidadeEmissaoEscopo3:.2f}",
                 "Pegada (CO₂/t produto)": f"{unidade.Pegada:.2f}",
+                "Pegada Escopo 1": f"{unidade.PegadaEscopo1:.2f}",
+                "Pegada Escopo 2": f"{unidade.PegadaEscopo2:.2f}",
+                "Pegada Escopo 3": f"{unidade.PegadaEscopo3:.2f}",
                 "Tax. Fronteira": "✅" if unidade.TaxacaoFronteira else "❌",
                 "Tax. Local": "✅" if unidade.TaxacaoLocal else "❌"
             })
@@ -197,46 +222,15 @@ class DatabaseManager:
     def import_from_json(self, json_str: str) -> bool:
         try:
             data = json.loads(json_str)
-            st.session_state.unidades = []
-            st.session_state.conexoes = []
-
-            for u_data in data.get("unidades", []):
-                unidade = UnidadeProdutiva(
-                    id_elo=u_data["ID_ELO"],
-                    nome=u_data["Nome"],
-                    localizacao=u_data["Localizacao"],
-                    periodo=u_data["Periodo"],
-                    input_insumo=u_data["Input"],
-                    massa_input=u_data.get("MassaInput", 0.0),
-                    output_insumo=u_data["Output"],
-                    massa_output=u_data.get("MassaOutput", 0.0),
-                    consumiveis=u_data.get("Consumiveis", []), #
-                    consumo_especifico=u_data.get("ConsumoEspecifico", []),
-                    taxacao_fronteira=u_data.get("TaxacaoFronteira", False),
-                    taxacao_local=u_data.get("TaxacaoLocal", False)
-                )
-
-                # Restaurar atributos calculados, se existirem
-                unidade.IntensidadeEmissao = u_data.get("IntensidadeEmissao", 0.0)
-                unidade.Pegada = u_data.get("Pegada", 0.0)
-                unidade.IntensidadeEmissaoEscopo1 = u_data.get("IntensidadeEmissaoEscopo1", 0.0)
-                unidade.IntensidadeEmissaoEscopo2 = u_data.get("IntensidadeEmissaoEscopo2", 0.0)
-                unidade.IntensidadeEmissaoEscopo3 = u_data.get("IntensidadeEmissaoEscopo3", 0.0)
-                unidade.PegadaEscopo1 = u_data.get("PegadaEscopo1", 0.0)
-                unidade.PegadaEscopo2 = u_data.get("PegadaEscopo2", 0.0)
-                unidade.PegadaEscopo3 = u_data.get("PegadaEscopo3", 0.0)
-
-                st.session_state.unidades.append(unidade)
-
-            for c_data in data.get("conexoes", []):
-                self.add_edge(c_data["origem"], c_data["destino"])
-
+            
+            # Primeiro, processar tecnologias
             fatores_emissao = st.session_state.get("fatores_emissao", [])
             insumos_disponiveis = {f["consumivel"] for f in fatores_emissao}
             insumos_faltando = set()
 
             tecnologias_raw = data.get("tecnologias_alternativas", [])
             tecnologias_obj = []
+            tecnologias_map = {}  # Mapa ID -> objeto Tecnologia
 
             for t in tecnologias_raw:
                 insumos = []
@@ -255,6 +249,7 @@ class DatabaseManager:
                     unidades=t.get("unidades", [])
                 )
                 tecnologias_obj.append(tecnologia)
+                tecnologias_map[t["id"]] = tecnologia
 
             st.session_state.tecnologias_alternativas = tecnologias_obj
 
@@ -263,7 +258,77 @@ class DatabaseManager:
                     f"Insumos usados em tecnologias sem fator de emissão registrado: {', '.join(sorted(insumos_faltando))}. "
                     f"O fator foi considerado como 0.0 para evitar erros."
                 )
+            
+            # Agora processar unidades
+            st.session_state.unidades = []
+            st.session_state.conexoes = []
 
+            for u_data in data.get("unidades", []):
+                # Buscar tecnologia se existir
+                tecnologia_id = u_data.get("Tecnologia")
+                tecnologia = tecnologias_map.get(tecnologia_id) if tecnologia_id else None
+                
+                # Reconstruir conexão se existir
+                conexao = None
+                conexao_data = u_data.get("Conexao")
+                if conexao_data:
+                    conexao = Conexao(
+                        origem=conexao_data.get("origem"),
+                        destino=conexao_data.get("destino"),
+                        massa=conexao_data.get("massa", 0.0),
+                        label=conexao_data.get("label", "Fluxo")
+                    )
+                
+                unidade = UnidadeProdutiva(
+                    id_elo=u_data["ID_ELO"],
+                    nome=u_data["Nome"],
+                    localizacao=u_data["Localizacao"],
+                    periodo=u_data["Periodo"],
+                    input_insumo=u_data["Input"],
+                    massa_input=u_data.get("MassaInput", 0.0),
+                    output_insumo=u_data["Output"],
+                    massa_output=u_data.get("MassaOutput", 0.0),
+                    consumiveis=u_data.get("Consumiveis", []),
+                    consumo_especifico=u_data.get("ConsumoEspecifico", []),
+                    taxacao_fronteira=u_data.get("TaxacaoFronteira", False),
+                    taxacao_local=u_data.get("TaxacaoLocal", False),
+                    tecnologia=tecnologia,
+                    conexao=conexao
+                )
+
+                # Calcular emissões da unidade
+                EmissionCalculator.calcular_emissoes(unidade)
+
+                # Restaurar atributos calculados, se existirem (sobrescreve o cálculo acima se houver valores salvos)
+                if "IntensidadeEmissao" in u_data:
+                    unidade.IntensidadeEmissao = u_data.get("IntensidadeEmissao", 0.0)
+                if "Pegada" in u_data:
+                    unidade.Pegada = u_data.get("Pegada", 0.0)
+                if "IntensidadeEmissaoEscopo1" in u_data:
+                    unidade.IntensidadeEmissaoEscopo1 = u_data.get("IntensidadeEmissaoEscopo1", 0.0)
+                if "IntensidadeEmissaoEscopo2" in u_data:
+                    unidade.IntensidadeEmissaoEscopo2 = u_data.get("IntensidadeEmissaoEscopo2", 0.0)
+                if "IntensidadeEmissaoEscopo3" in u_data:
+                    unidade.IntensidadeEmissaoEscopo3 = u_data.get("IntensidadeEmissaoEscopo3", 0.0)
+                if "PegadaEscopo1" in u_data:
+                    unidade.PegadaEscopo1 = u_data.get("PegadaEscopo1", 0.0)
+                if "PegadaEscopo2" in u_data:
+                    unidade.PegadaEscopo2 = u_data.get("PegadaEscopo2", 0.0)
+                if "PegadaEscopo3" in u_data:
+                    unidade.PegadaEscopo3 = u_data.get("PegadaEscopo3", 0.0)
+
+                st.session_state.unidades.append(unidade)
+                
+                # Se a unidade tem uma conexão, adicionar ao session_state.conexoes
+                if conexao:
+                    self.add_edge(conexao.origem, conexao.destino, massa=conexao.massa)
+
+            print(f"DEBUG import_from_json: Total de conexões a importar: {len(data.get('conexoes', []))}")  # Debug
+            for c_data in data.get("conexoes", []):
+                print(f"DEBUG import_from_json: Importando conexão: {c_data}")  # Debug
+                self.add_edge(c_data["origem"], c_data["destino"], massa=c_data.get("massa", 0.0))
+            
+            print(f"DEBUG import_from_json: Total de conexões em session_state após importação: {len(st.session_state.conexoes)}")  # Debug
             
             # Propagar a pegada após importar
             self.propagar_pegada()
@@ -274,7 +339,7 @@ class DatabaseManager:
             return False
 
     def get_edges_for_graph(self) -> List[Dict]:
-        return [{"source": c.origem, "target": c.destino} for c in st.session_state.conexoes]
+        return [{"source": c.origem, "target": c.destino, "massa": c.massa} for c in st.session_state.conexoes]
 
     # --- Atualização de Pegadas ---
     def propagar_pegada(self):

@@ -5,14 +5,29 @@ import streamlit as st
 class EmissionCalculator:
     @staticmethod
     def calcular_emissoes(unidade: UnidadeProdutiva) -> UnidadeProdutiva:
-        """Calcula a intensidade de emissão (tCO₂/t) e pegada total da unidade"""
-        intensidade = 0.0
+        """Calcula a intensidade de emissão (tCO₂/t) por escopo e total da unidade"""
+        intensidade_escopo1 = 0.0
+        intensidade_escopo2 = 0.0
+        intensidade_escopo3 = 0.0
+        
         for c, e in zip(unidade.Consumiveis, unidade.ConsumoEspecifico):
             fator = c.get("fator", 0.0)
-            intensidade += fator * e
+            escopo = str(c.get("escopo", "1")).upper()
+            emissao = fator * e
+            
+            # Aceita tanto "1", "SCOPE 1", "SCOPE1" etc
+            if "1" in escopo:
+                intensidade_escopo1 += emissao
+            elif "2" in escopo:
+                intensidade_escopo2 += emissao
+            elif "3" in escopo:
+                intensidade_escopo3 += emissao
         
-        unidade.IntensidadeEmissao = intensidade
-        unidade.Pegada = intensidade * unidade.MassaOutput if unidade.MassaOutput else 0.0
+        unidade.IntensidadeEmissaoEscopo1 = intensidade_escopo1
+        unidade.IntensidadeEmissaoEscopo2 = intensidade_escopo2
+        unidade.IntensidadeEmissaoEscopo3 = intensidade_escopo3
+        unidade.IntensidadeEmissao = intensidade_escopo1 + intensidade_escopo2 + intensidade_escopo3
+        unidade.Pegada = unidade.IntensidadeEmissao * unidade.MassaOutput if unidade.MassaOutput else 0.0
         return unidade
     
     @staticmethod
@@ -47,6 +62,10 @@ class EmissionCalculator:
             pais_conexoes = [c for c in conexoes if c["target"] == elo_id]
 
             if not pais_conexoes:
+                # Unidade inicial: pegada = intensidade própria
+                unidade.PegadaEscopo1 = unidade.IntensidadeEmissaoEscopo1
+                unidade.PegadaEscopo2 = unidade.IntensidadeEmissaoEscopo2
+                unidade.PegadaEscopo3 = unidade.IntensidadeEmissaoEscopo3
                 unidade.Pegada = unidade.IntensidadeEmissao
                 continue
 
@@ -58,16 +77,28 @@ class EmissionCalculator:
                     f"({massa_total:.2f}) é diferente da MassaInput ({unidade.MassaInput:.2f}). Pegada não atualizada."
                 )
                 unidade.Pegada = float("nan")
+                unidade.PegadaEscopo1 = float("nan")
+                unidade.PegadaEscopo2 = float("nan")
+                unidade.PegadaEscopo3 = float("nan")
                 continue
 
-            pegada_herdada = 0.0
+            # Propagar pegada por escopo
+            pegada_herdada_escopo1 = 0.0
+            pegada_herdada_escopo2 = 0.0
+            pegada_herdada_escopo3 = 0.0
+            
             for c in pais_conexoes:
                 pai = mapa_unidades[c["source"]]
                 massa_contribuida = c.get("massa", pai.MassaOutput)
                 proporcao = massa_contribuida / unidade.MassaInput
-                pegada_herdada += pai.Pegada * proporcao
+                pegada_herdada_escopo1 += pai.PegadaEscopo1 * proporcao
+                pegada_herdada_escopo2 += pai.PegadaEscopo2 * proporcao
+                pegada_herdada_escopo3 += pai.PegadaEscopo3 * proporcao
 
-            unidade.Pegada = pegada_herdada + unidade.IntensidadeEmissao
+            unidade.PegadaEscopo1 = pegada_herdada_escopo1 + unidade.IntensidadeEmissaoEscopo1
+            unidade.PegadaEscopo2 = pegada_herdada_escopo2 + unidade.IntensidadeEmissaoEscopo2
+            unidade.PegadaEscopo3 = pegada_herdada_escopo3 + unidade.IntensidadeEmissaoEscopo3
+            unidade.Pegada = unidade.PegadaEscopo1 + unidade.PegadaEscopo2 + unidade.PegadaEscopo3
 
         return list(mapa_unidades.values())
 
@@ -81,24 +112,15 @@ class EmissionCalculator:
         for u in unidades:
             if u.Localizacao not in emissoes:
                 emissoes[u.Localizacao] = 0
-            emissoes[u.Localizacao] += u.Emissao
+            emissoes[u.Localizacao] += u.IntensidadeEmissao * u.MassaOutput
         return emissoes
-    
-    @staticmethod
-    def calcular_emissoes(unidade: UnidadeProdutiva) -> UnidadeProdutiva:
-        total = 0.0
-        for c, e in zip(unidade.Consumiveis, unidade.ConsumoEspecifico):
-            total += c.get("fator", 0) * e
-        unidade.IntensidadeEmissao = total
-        unidade.Pegada = total * unidade.MassaOutput if unidade.MassaOutput else 0
-        return unidade
     
     @staticmethod
     def gerar_dados_grafico(unidades: List[UnidadeProdutiva]) -> Dict:
         # Pode ser implementado para gráficos futuros
         return {
             "labels": [u.ID_ELO for u in unidades],
-            "emissoes": [u.Emissao for u in unidades]
+            "emissoes": [u.IntensidadeEmissao * u.MassaOutput for u in unidades]
         }
 
     @staticmethod
