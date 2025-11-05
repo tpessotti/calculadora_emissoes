@@ -2,13 +2,11 @@ import streamlit as st
 import database
 from database import UnidadeProdutiva, Tecnologia
 import calculations
-from tabs.Tecnologias import TecnologiasTab
 
 class UtilsUI:
     def __init__(self):
         self.db = database.DatabaseManager()
         self.ec = calculations.EmissionCalculator()
-        self.tec = TecnologiasTab()
 
     def render_tecnologia_form(self, tecnologia=None, key_prefix="tec_form", read_only=False, 
                                show_save_buttons=True, on_save_callback=None):
