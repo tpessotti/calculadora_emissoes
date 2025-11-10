@@ -8,7 +8,7 @@ from tabs.Tabela import TabelaTab
 from tabs.Fluxo import FluxoTab
 from tabs.FatoresEmissao import FatoresEmissaoTab
 from tabs.Tecnologias import TecnologiasTab
-# from tabs.Sankey import SankeyTab
+from tabs.Sankey import SankeyTab
 
 from database import DatabaseManager
 from calculations import EmissionCalculator
@@ -66,7 +66,7 @@ class App:
                     "🔗 Diagrama de Fluxo",
                     "🍃 Fatores de Emissão",
                     "⛽ Tecnologias",
-                    # "📈 Sankey"
+                    "📈 Análise de Emissões"
                 ],
                 index=0
             )
@@ -85,8 +85,8 @@ class App:
             FatoresEmissaoTab()._render()
         elif aba == "⛽ Tecnologias":
             TecnologiasTab()._render()
-        # elif aba == "📈 Sankey":
-        #     SankeyTab()._render()
+        elif aba == "📈 Análise de Emissões":
+            SankeyTab()._render()
         else:
             st.error("Página não encontrada.")
 
