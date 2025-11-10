@@ -4,7 +4,7 @@ Informações de versão do aplicativo
 
 __version__ = "0.1.0-beta"
 __release_date__ = "Novembro 2025"
-__author__ = "Thiago Pessotti"
+__author__ = "Tiago Pessotti"
 
 VERSION_INFO = {
     "version": __version__,
