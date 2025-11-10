@@ -60,32 +60,32 @@ class App:
             aba = st.radio(
                 "Ir para:",
                 [
-                    "🏠 Início",
-                    "⚙️ Unidades & Fluxos",
-                    "📊 Tabela de Unidades",
-                    "🔗 Diagrama de Fluxo",
-                    "🍃 Fatores de Emissão",
-                    "⛽ Tecnologias",
-                    "📈 Análise de Emissões"
+                    "Início",
+                    "Unidades & Fluxos",
+                    "Tabela de Unidades",
+                    "Diagrama de Fluxo",
+                    "Fatores de Emissão",
+                    "Tecnologias",
+                    "Análise de Emissões"
                 ],
                 index=0
             )
             st.markdown("---")
 
         # Carregamento dinâmico da página
-        if aba == "🏠 Início":
+        if aba == "Início":
             HomeTab()._render()
-        elif aba == "⚙️ Unidades & Fluxos":
+        elif aba == "Unidades & Fluxos":
             UnidadesTab()._render()
-        elif aba == "📊 Tabela de Unidades":
+        elif aba == "Tabela de Unidades":
             TabelaTab()._render()
-        elif aba == "🔗 Diagrama de Fluxo":
+        elif aba == "Diagrama de Fluxo":
             FluxoTab()._render()
-        elif aba == "🍃 Fatores de Emissão":
+        elif aba == "Fatores de Emissão":
             FatoresEmissaoTab()._render()
-        elif aba == "⛽ Tecnologias":
+        elif aba == "Tecnologias":
             TecnologiasTab()._render()
-        elif aba == "📈 Análise de Emissões":
+        elif aba == "Análise de Emissões":
             SankeyTab()._render()
         else:
             st.error("Página não encontrada.")

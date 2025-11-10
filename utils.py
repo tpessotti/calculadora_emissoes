@@ -280,107 +280,89 @@ class UtilsUI:
         Returns:
             tuple: (tecnologia_selecionada, consumiveis, consumo_especifico)
         """
-        st.markdown("### 🔧 Tecnologia Associada")
+        st.markdown("### Tecnologia Associada")
         
         tecnologias = st.session_state.get("tecnologias_alternativas", [])
         
-        # Tabs: Visualizar/Editar e Criar Nova
-        tab_edit, tab_manage = st.tabs([
-            "📝 Visualizar e Editar",
-            "➕ Adicionar Nova"
-        ])
+        if not tecnologias:
+            st.info("Nenhuma tecnologia cadastrada. Use a aba 'Adicionar Nova' para criar.")
+            return None, [], []
         
-        with tab_edit:
-            if not tecnologias:
-                st.info("Nenhuma tecnologia cadastrada. Use a aba 'Adicionar Nova' para criar.")
-                return None, [], []
-            
-            tecnologias_dict = {f"{t.id} | {t.nome}": t for t in tecnologias}
-            
-            # Define seleção padrão
-            if tecnologia_atual:
-                tec_padrao_key = next(
-                    (key for key, t in tecnologias_dict.items() if t.id == tecnologia_atual.id),
-                    list(tecnologias_dict.keys())[0]
-                )
-                tec_index = list(tecnologias_dict.keys()).index(tec_padrao_key)
-            else:
-                tec_index = 0
-            
-            tec_selecionada_str = st.selectbox(
-                "Selecione a tecnologia:",
-                list(tecnologias_dict.keys()),
-                index=tec_index,
-                key=f"{key_prefix}_select"
-            )
-            
-            tecnologia_escolhida = tecnologias_dict[tec_selecionada_str]
-            
-            # Toggle entre visualização e edição
-            modo_edicao = st.toggle(
-                "✏️ Modo de Edição", 
-                value=False, 
-                key=f"{key_prefix}_modo_edicao",
-                help="Ative para editar a tecnologia selecionada"
-            )
-            
-            if modo_edicao:
-                st.markdown("#### Editar Tecnologia")
-                
-                # Usar o método reutilizável em modo edição
-                self.render_tecnologia_form(
-                    tecnologia=tecnologia_escolhida,
-                    key_prefix=f"{key_prefix}_edit",
-                    read_only=False,
-                    show_save_buttons=True
-                )
-                
-                return None, [], []
-            else:
-                st.markdown("#### Visualizar Tecnologia")
-                
-                # Usar o método reutilizável em modo read-only
-                self.render_tecnologia_form(
-                    tecnologia=tecnologia_escolhida,
-                    key_prefix=f"{key_prefix}_view",
-                    read_only=True,
-                    show_save_buttons=False
-                )
-                
-                # Preparar consumíveis para retornar
-                consumiveis = []
-                consumo_especifico = []
-                
-                for insumo in tecnologia_escolhida.insumos:
-                    nome_insumo = insumo["nome"]
-                    fator_consumo = insumo["fator_consumo"]
-                    fator_emissao = next(
-                        (f["fator_emissao"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
-                        0.0
-                    )
-                    escopo = next(
-                        (f["escopo"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
-                        "1"
-                    )
-                    consumiveis.append({
-                        "nome": nome_insumo,
-                        "fator": fator_emissao,
-                        "escopo": escopo
-                    })
-                    consumo_especifico.append(fator_consumo)
-                
-                return tecnologia_escolhida, consumiveis, consumo_especifico
+        tecnologias_dict = {f"{t.id} | {t.nome}": t for t in tecnologias}
         
-        with tab_manage:
-            st.markdown("#### ➕ Adicionar Nova Tecnologia")
+        # Define seleção padrão
+        if tecnologia_atual:
+            tec_padrao_key = next(
+                (key for key, t in tecnologias_dict.items() if t.id == tecnologia_atual.id),
+                list(tecnologias_dict.keys())[0]
+            )
+            tec_index = list(tecnologias_dict.keys()).index(tec_padrao_key)
+        else:
+            tec_index = 0
+        
+        tec_selecionada_str = st.selectbox(
+            "Selecione a tecnologia:",
+            list(tecnologias_dict.keys()),
+            index=tec_index,
+            key=f"{key_prefix}_select"
+        )
+        
+        tecnologia_escolhida = tecnologias_dict[tec_selecionada_str]
+        
+        # Toggle entre visualização e edição
+        modo_edicao = st.toggle(
+            "✏️ Modo de Edição", 
+            value=False, 
+            key=f"{key_prefix}_modo_edicao",
+            help="Ative para editar a tecnologia selecionada"
+        )
+        
+        if modo_edicao:
+            st.markdown("#### Editar Tecnologia")
             
-            # Usar o método reutilizável em modo criação
+            # Usar o método reutilizável em modo edição
             self.render_tecnologia_form(
-                tecnologia=None,
-                key_prefix=f"{key_prefix}_new",
+                tecnologia=tecnologia_escolhida,
+                key_prefix=f"{key_prefix}_edit",
                 read_only=False,
                 show_save_buttons=True
             )
+            
+            return None, [], []
+        else:
+            st.markdown("#### Visualizar Tecnologia")
+            
+            # Usar o método reutilizável em modo read-only
+            self.render_tecnologia_form(
+                tecnologia=tecnologia_escolhida,
+                key_prefix=f"{key_prefix}_view",
+                read_only=True,
+                show_save_buttons=False
+            )
+            
+            # Preparar consumíveis para retornar
+            consumiveis = []
+            consumo_especifico = []
+            
+            for insumo in tecnologia_escolhida.insumos:
+                nome_insumo = insumo["nome"]
+                fator_consumo = insumo["fator_consumo"]
+                fator_emissao = next(
+                    (f["fator_emissao"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
+                    0.0
+                )
+                escopo = next(
+                    (f["escopo"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
+                    "1"
+                )
+                consumiveis.append({
+                    "nome": nome_insumo,
+                    "fator": fator_emissao,
+                    "escopo": escopo
+                })
+                consumo_especifico.append(fator_consumo)
+            
+            return tecnologia_escolhida, consumiveis, consumo_especifico
         
         # Se chegou aqui, retornar None pois está na aba de criação ou edição
         return None, [], []

@@ -10,9 +10,9 @@ class UnidadesTab:
     def _render(self):
         """Renderiza a interface com tabs para organizar as funcionalidades"""
         tab1, tab2, tab3 = st.tabs([
-            "➕ Criar Unidade",
-            "✏️ Editar Unidade",
-            "⚙️ Gerenciar Unidades e Fluxos"
+            "Criar Unidade",
+            "Editar Unidade",
+            "Gerenciar Unidades e Fluxos"
         ])
 
         with tab1:
@@ -26,14 +26,14 @@ class UnidadesTab:
 
     def _render_criar_unidade(self):
         """Tab para criação de novas unidades"""
-        st.markdown("### ➕ Criar Nova Unidade Produtiva")
+        st.markdown("### Criar Nova Unidade Produtiva")
         st.markdown("Preencha os dados abaixo para criar uma nova unidade no sistema.")
         
         self.utils_ui.render_form(modal=None)
 
     def _render_editar_unidade(self):
         """Tab para edição de unidades existentes"""
-        st.markdown("### ✏️ Editar Unidade Existente")
+        st.markdown("### Editar Unidade Existente")
         
         if not st.session_state.unidades:
             st.info("Nenhuma unidade cadastrada. Crie uma unidade primeiro na aba 'Criar Unidade'.")
@@ -55,7 +55,7 @@ class UnidadesTab:
 
     def _render_gerenciar_unidades(self):
         """Tab para gerenciamento, importação, exportação e exclusão"""
-        st.markdown("### ⚙️ Gerenciar Unidades e Fluxos")
+        st.markdown("### Gerenciar Unidades e Fluxos")
         
         # Seção de Importação/Exportação
         st.markdown("#### 📥 Importação e Exportação")

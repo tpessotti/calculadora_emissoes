@@ -15,7 +15,7 @@ class TecnologiasTab:
             st.session_state.fatores_emissao = []
 
         # Criar abas
-        tab1, tab2 = st.tabs(["📋 Tecnologias Registradas", "➕ Nova Tecnologia"])
+        tab1, tab2 = st.tabs(["Tecnologias Registradas", "Nova Tecnologia"])
         
         with tab1:
             self._render_lista_tecnologias()
