@@ -5,6 +5,7 @@ import json
 import database
 from datetime import datetime
 from database import UnidadeProdutiva, Conexao, Tecnologia
+from version import __version__, VERSION_INFO
 
 class HomeTab:
     def __init__(self):
@@ -23,7 +24,8 @@ class HomeTab:
             self._render_home_logado()
     
     def _render_login(self):
-        st.title("🔐 Calculadora de Emissões")
+        st.title("🔐 Calculadora de Emissões - CMP")
+        st.caption(f"Versão {__version__} | {VERSION_INFO['status']}")
         st.markdown("### Bem-vindo!")
         st.markdown("Por favor, identifique-se para continuar.")
         
@@ -38,6 +40,13 @@ class HomeTab:
                     st.rerun()
                 else:
                     st.error("Por favor, digite um nome de usuário válido.")
+        
+        st.divider()
+        st.info("💡 **Dica:** Use 'admin' para acessar recursos administrativos.")
+        
+        # Nota de versão beta
+        st.markdown("---")
+        st.warning("⚠️ **Versão Beta**: Esta aplicação está em desenvolvimento ativo. Feedback e sugestões são bem-vindos!")
     
     def _render_home_logado(self):
         usuario = st.session_state.usuario_logado
@@ -58,7 +67,13 @@ class HomeTab:
                 st.rerun()
 
         st.divider()
-        st.title("Bem-vindo à Calculadora de Emissões - CMP")        
+        
+        # Título com informação de versão
+        col_title, col_version = st.columns([3, 1])
+        with col_title:
+            st.title("Bem-vindo à Calculadora de Emissões - CMP")
+        with col_version:
+            st.markdown(f"<div style='text-align: right; padding-top: 20px;'><span style='color: #888; font-size: 0.9em;'>v{__version__}</span></div>", unsafe_allow_html=True)
         
         # Descrição do aplicativo
         st.markdown("""
