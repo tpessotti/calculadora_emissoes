@@ -9,6 +9,7 @@ from tabs.Fluxo import FluxoTab
 from tabs.FatoresEmissao import FatoresEmissaoTab
 from tabs.Tecnologias import TecnologiasTab
 from tabs.Sankey import SankeyTab
+from tabs.Chatbot import ChatbotTab
 
 from database import DatabaseManager
 from calculations import EmissionCalculator
@@ -51,24 +52,63 @@ class App:
                 st.session_state["mostrar_aviso_fatores_emissao"] = True
 
     def setup_page_config(self):
-        st.set_page_config(layout="wide")
+        st.set_page_config(
+            page_title="CMP - Calculadora de Emissões",
+            page_icon="🌍",
+            layout="wide",
+            initial_sidebar_state="collapsed"
+        )
 
     def run(self):
-        # Menu lateral
+        # Verificar se o usuário está logado
+        usuario_logado = st.session_state.get("usuario_logado", None)
+        
+        # Se não estiver logado, mostrar apenas a landing page
+        if usuario_logado is None:
+            HomeTab()._render()
+            return
+        
+        # Usuário logado - mostrar menu lateral completo
         with st.sidebar:
-            st.header("📂 Navegação")
+            # Logo e cabeçalho
+            st.markdown("""
+            <style>
+            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap');
+            .sidebar-header {
+                font-family: 'Poppins', sans-serif;
+                color: #4c8061;
+                font-size: 1.3rem;
+                font-weight: 600;
+                margin-bottom: 1rem;
+                text-align: center;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Informações do usuário
+            st.markdown(f" 👤 **{usuario_logado}**")
+            
+            # Botão para salvar sessão
+            if st.button("Salvar Sessão", use_container_width=True, help="Salva o progresso atual"):
+                home_tab = HomeTab()
+                if home_tab._save_user_session():
+                    st.toast("Sessão salva com sucesso!", icon="✅")
+            
+            st.markdown("---")
+            
             aba = st.radio(
-                "Ir para:",
+                "Navegação:",
                 [
                     "Início",
-                    "Unidades & Fluxos",
-                    "Tabela de Unidades",
                     "Diagrama de Fluxo",
+                    "Unidades & Fluxos",
                     "Fatores de Emissão",
                     "Tecnologias",
-                    "Análise de Emissões"
+                    "Análise de Emissões",
+                    "Assistente IA"
                 ],
-                index=0
+                index=0,
+                label_visibility="collapsed"
             )
             st.markdown("---")
 
@@ -77,8 +117,6 @@ class App:
             HomeTab()._render()
         elif aba == "Unidades & Fluxos":
             UnidadesTab()._render()
-        elif aba == "Tabela de Unidades":
-            TabelaTab()._render()
         elif aba == "Diagrama de Fluxo":
             FluxoTab()._render()
         elif aba == "Fatores de Emissão":
@@ -87,6 +125,8 @@ class App:
             TecnologiasTab()._render()
         elif aba == "Análise de Emissões":
             SankeyTab()._render()
+        elif aba == "Assistente IA":
+            ChatbotTab()._render()
         else:
             st.error("Página não encontrada.")
 

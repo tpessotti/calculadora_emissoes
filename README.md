@@ -69,6 +69,17 @@ O sistema implementa metodologias de Avaliação de Ciclo de Vida (ACV) simplifi
 - Importação de projetos anteriores
 - Recursos administrativos para gestão de dados
 
+### 7. **🤖 Assistente de IA (Novo!)**
+- Chatbot inteligente integrado com OpenRouter API
+- Conversa sobre processos industriais e emissões
+- Sugestões personalizadas de melhorias e otimizações
+- Análise contextual baseada nos dados do projeto
+- Suporte a múltiplos modelos de IA gratuitos:
+  - Llama 3.3 8B Instruct
+  - Llama 4 Scout
+  - Qwen3 4B
+  - DeepSeek R1 Qwen3 8B
+
 ## 🚀 Instalação e Configuração
 
 ### Pré-requisitos
@@ -127,6 +138,7 @@ O aplicativo estará disponível em `http://localhost:8501`
 - **Tabela**: Visualize métricas calculadas para todas as unidades
 - **Sankey**: Explore fluxos de emissões com diferentes perspectivas
 - **Tecnologias**: Simule cenários alternativos de tecnologia
+- **🤖 Assistente IA**: Converse com o assistente sobre seu processo e receba sugestões
 
 ### 4. Exportação de Dados
 - Exporte sua sessão de trabalho para continuar posteriormente
@@ -152,7 +164,8 @@ calculadora_emissoes/
 │   ├── FatoresEmissao.py       # Gestão de fatores de emissão
 │   ├── Tecnologias.py          # Simulação de tecnologias
 │   ├── Tabela.py               # Visualização tabular
-│   └── Sankey.py               # Diagramas de Sankey
+│   ├── Sankey.py               # Diagramas de Sankey
+│   └── Chatbot.py              # Assistente de IA
 │
 ├── requirements.txt            # Dependências do projeto
 └── README.md                   # Este arquivo
@@ -166,6 +179,7 @@ calculadora_emissoes/
 - **NetworkX**: Análise de grafos
 - **streamlit-agraph**: Visualização de redes
 - **openpyxl**: Importação de dados Excel
+- **requests**: Comunicação com APIs (OpenRouter)
 
 ## 📊 Metodologia de Cálculo
 

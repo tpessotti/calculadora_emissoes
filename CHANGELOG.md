@@ -23,6 +23,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Limpeza automática de sessão ao fazer logout
 - Versionamento da aplicação
 - README completo com documentação acadêmica
+- **🤖 Assistente de IA com OpenRouter API**
+  - Chat inteligente sobre processos industriais
+  - Contexto automático do projeto atual
+  - Suporte a 4 modelos de IA gratuitos
+  - Sugestões personalizadas de melhorias
+  - Histórico de conversas
+  - Configuração de API key via interface
 
 ### Características
 - Interface web responsiva com Streamlit

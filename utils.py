@@ -634,10 +634,10 @@ class UtilsUI:
         
     def render_import_export(self):
         """Componente para importação/exportação de dados"""
-        with st.expander("� Exportar Dados"):
+        with st.expander("Exportar Dados"):
             self._render_export()
         
-        with st.expander("📥 Importar Dados"):
+        with st.expander("Importar Dados"):
             self._render_import()
 
     def _render_export(self):
