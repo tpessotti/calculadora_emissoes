@@ -2,7 +2,7 @@
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io/)
 [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/Version-0.1.0--beta-orange.svg?style=for-the-badge)](https://github.com/tpessotti/calculadora_emissoes)
+[![Version](https://img.shields.io/badge/Version-0.2.0--beta-orange.svg?style=for-the-badge)](https://github.com/tpessotti/calculadora_emissoes)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
 ## 🌐 Acesso Rápido
@@ -11,7 +11,7 @@
 
 O aplicativo está disponível gratuitamente no Streamlit Cloud e pode ser acessado diretamente pelo navegador.
 
-> ⚠️ **Versão Beta (v0.1.0-beta)**: Este aplicativo está em desenvolvimento ativo. Algumas funcionalidades podem estar em fase de testes e melhorias contínuas são realizadas regularmente. Feedback e sugestões são muito bem-vindos!
+> ⚠️ **Versão Beta (v0.2.0-beta)**: Este aplicativo está em desenvolvimento ativo. Algumas funcionalidades podem estar em fase de testes e melhorias contínuas são realizadas regularmente. Feedback e sugestões são muito bem-vindos!
 
 ## 📋 Sobre o Projeto
 
@@ -63,13 +63,21 @@ O sistema implementa metodologias de Avaliação de Ciclo de Vida (ACV) simplifi
 - **Tabelas Interativas**: Exportação de dados para análise externa
 - **Grafos de Rede**: Representação visual da cadeia produtiva
 
-### 6. **Gestão de Sessões e Usuários**
-- Sistema de login simples para identificação de usuários
-- Exportação de sessões de trabalho completas
-- Importação de projetos anteriores
-- Recursos administrativos para gestão de dados
+### 6. **💾 Sistema de Persistência**
+- Auto-save de sessões em arquivo JSON
+- Auto-restore silencioso ao fazer login
+- Botão "Salvar Sessão" na sidebar
+- Armazenamento persistente de configurações do chatbot
+- Base de dados de sessões por usuário
 
-### 7. **🤖 Assistente de IA (Novo!)**
+### 7. **🎨 Interface Profissional**
+- Landing page com identidade visual CMP
+- Modal de login integrado
+- Cards informativos sobre funcionalidades
+- Design responsivo e harmonioso
+- Footer com links úteis e informações de versão
+
+### 8. **🤖 Assistente de IA**
 - Chatbot inteligente integrado com OpenRouter API
 - Conversa sobre processos industriais e emissões
 - Sugestões personalizadas de melhorias e otimizações
@@ -116,37 +124,123 @@ pip install -r requirements.txt
 
 ### Execução
 
-Execute o aplicativo com Streamlit:
+**Método 1 - Script de execução (Recomendado):**
 ```bash
-streamlit run app.py
+python run.py
+```
+
+**Método 2 - Streamlit direto:**
+```bash
+streamlit run src/app.py
 ```
 
 O aplicativo estará disponível em `http://localhost:8501`
 
+## 📁 Estrutura do Projeto
+
+```
+calculadora_emissoes/
+│
+├── src/                        # Código-fonte principal
+│   ├── app.py                  # Aplicação principal Streamlit
+│   ├── database.py             # Gerenciamento de dados e modelos
+│   ├── calculations.py         # Lógica de cálculo de emissões
+│   ├── utils.py                # Utilitários e componentes UI
+│   ├── config.py               # Configurações globais
+│   ├── version.py              # Informações de versão
+│   │
+│   └── tabs/                   # Módulos de interface
+│       ├── Home.py             # Landing page e dashboard
+│       ├── Unidades.py         # Gestão de unidades e fluxos
+│       ├── Fluxo.py            # Visualização de grafos
+│       ├── FatoresEmissao.py   # Gestão de fatores de emissão
+│       ├── Tecnologias.py      # Simulação de tecnologias
+│       ├── Tabela.py           # Visualização tabular (deprecated)
+│       ├── Sankey.py           # Diagramas de Sankey
+│       └── Chatbot.py          # Assistente de IA
+│
+├── data/                       # Arquivos de dados
+│   ├── fatores_emissao.json    # Base de fatores de emissão
+│   ├── config_fatores.json     # Configurações de fatores
+│   ├── user_sessions.json      # Sessões salvas dos usuários
+│   └── *.xlsx                  # Planilhas de importação
+│
+├── docs/                       # Documentação
+│
+├── .streamlit/                 # Configurações do Streamlit
+├── requirements.txt            # Dependências do projeto
+├── run.py                      # Script de execução
+├── README.md                   # Este arquivo
+├── CHANGELOG.md                # Histórico de mudanças
+└── .gitignore                  # Arquivos ignorados pelo Git
+```
+
 ## 📖 Guia de Uso
 
-### 1. Login
-- Acesse a aplicação e identifique-se com um nome de usuário
-- Use `admin` para acessar recursos administrativos
+### 1. Login e Configuração Inicial
+- Acesse a landing page e clique em "Entrar"
+- Identifique-se com um nome de usuário
+- Use `admin` para acessar recursos administrativos extras
+- Sua sessão será automaticamente restaurada nos próximos acessos
 
-### 2. Configuração Inicial
-- **Fatores de Emissão**: Importe ou configure fatores de emissão na aba correspondente
-- **Unidades**: Crie unidades produtivas definindo insumos, produtos e consumos
+### 2. Configuração de Dados Base
+- **Fatores de Emissão**: Configure ou importe fatores na aba correspondente
+- **Unidades Produtivas**: Crie unidades definindo insumos, produtos e consumos
 - **Fluxos**: Conecte unidades para estabelecer a cadeia produtiva
 
-### 3. Análise de Emissões
-- **Tabela**: Visualize métricas calculadas para todas as unidades
-- **Sankey**: Explore fluxos de emissões com diferentes perspectivas
-- **Tecnologias**: Simule cenários alternativos de tecnologia
-- **🤖 Assistente IA**: Converse com o assistente sobre seu processo e receba sugestões
+### 3. Gerenciamento de Unidades e Fluxos
+- **Tab "Unidades Produtivas"**:
+  - Clique em "➕ Criar Nova Unidade" para adicionar unidades
+  - Use botões "Editar" ou "Remover" diretamente na tabela
+  - Visualize métricas resumidas (total de unidades, conexões, emissões)
+  
+- **Tab "Gerenciar Fluxos"**:
+  - Crie arcos entre unidades (massa automática da origem)
+  - Exclua fluxos existentes
+  - Importe/exporte dados em JSON
 
-### 4. Exportação de Dados
-- Exporte sua sessão de trabalho para continuar posteriormente
-- Gere relatórios e dados para análise externa
+### 4. Análise e Visualização
+- **Diagrama de Fluxo**: Visualize o grafo da cadeia produtiva
+- **Análise de Emissões**: Explore diagramas de Sankey com diferentes dimensões
+- **Tecnologias**: Simule cenários alternativos de tecnologia
+- **🤖 Assistente IA**: Converse sobre seu processo e receba sugestões
+
+### 5. Gestão de Sessões
+- **Auto-save**: Suas alterações são salvas automaticamente
+- **Botão "Salvar Sessão"**: Forçar salvamento manual (sidebar)
+- **Exportar/Importar**: Use modais na página inicial para backup/restore
+- **API Key do Chatbot**: Configurada uma vez, salva automaticamente
 
 ## 🏗️ Arquitetura do Sistema
 
-### Estrutura de Diretórios
+### Tecnologias Utilizadas
+
+- **Frontend**: Streamlit 1.50.0 (framework web responsivo)
+- **Visualização**: Plotly (Sankey), NetworkX (grafos), streamlit-agraph
+- **Processamento**: Pandas, NumPy
+- **IA**: OpenRouter API (acesso a múltiplos modelos LLM)
+- **Persistência**: JSON (arquivos locais)
+- **Linguagem**: Python 3.9+
+
+### Componentes Principais
+
+1. **app.py**: Aplicação principal, roteamento e controle de acesso
+2. **database.py**: Modelos de dados (UnidadeProdutiva, Conexao, Tecnologia)
+3. **calculations.py**: Motor de cálculo de emissões
+4. **utils.py**: Componentes de UI e utilitários
+5. **tabs/**: Módulos de interface organizados por funcionalidade
+
+### Fluxo de Dados
+
+```
+Usuário → Streamlit UI → DatabaseManager → Cálculos → Visualizações
+                ↓
+          Session State (temporário)
+                ↓
+          user_sessions.json (persistente)
+```
+
+## 📁 Estrutura do Projeto
 
 ```
 calculadora_emissoes/
@@ -171,15 +265,21 @@ calculadora_emissoes/
 └── README.md                   # Este arquivo
 ```
 
-### Principais Dependências
+### Principais Dependências (11 bibliotecas)
 
-- **Streamlit**: Framework de interface web
+- **Streamlit** (1.50.0): Framework de interface web
 - **Pandas**: Manipulação e análise de dados
+- **NumPy**: Computação numérica
 - **Plotly**: Visualizações interativas (Sankey)
 - **NetworkX**: Análise de grafos
 - **streamlit-agraph**: Visualização de redes
 - **openpyxl**: Importação de dados Excel
 - **requests**: Comunicação com APIs (OpenRouter)
+- **openai-whisper**: Suporte a IA (futuro)
+- **pydub**: Processamento de áudio (futuro)
+- **tqdm**: Barras de progresso
+
+> 📦 **Otimização v0.2.0**: Redução de 90% nas dependências (110 → 11 bibliotecas)
 
 ## 📊 Metodologia de Cálculo
 
@@ -238,24 +338,34 @@ As emissões são propagadas através da cadeia produtiva considerando:
 
 Para um histórico completo de mudanças, consulte o [CHANGELOG.md](CHANGELOG.md).
 
+#### v0.2.0-beta (Novembro 2025)
+- 🎨 Landing page profissional com identidade CMP
+- 💾 Sistema de persistência automática de sessões
+- 📊 Interface consolidada de gerenciamento (Unidades & Fluxos)
+- ➕ Criação/exclusão de fluxos com interface simplificada
+- 🗂️ Reorganização completa da estrutura do projeto
+- 📦 Otimização de dependências (90% de redução)
+- 🐛 Correções de bugs de UI e modais
+
 #### v0.1.0-beta (Novembro 2025)
 - ✅ Sistema de login e gestão de sessões
 - ✅ Cálculo de emissões por escopo (1, 2, 3)
 - ✅ Modelagem de cadeias produtivas
 - ✅ Diagramas de Sankey multi-dimensionais
 - ✅ Simulação de tecnologias alternativas
+- ✅ 🤖 Assistente de IA com OpenRouter
 - ✅ Importação de fluxos via Excel (admin)
 - ✅ Exportação/importação de sessões
 
 ### Próximas Versões
 
-- [ ] **v0.2.0**: Exportação de relatórios em PDF
-- [ ] **v0.3.0**: Análise de incertezas e propagação de erros
-- [ ] **v0.4.0**: Cálculo de custos de carbono (carbon pricing)
-- [ ] **v0.5.0**: Integração com bases de dados públicas de fatores de emissão
-- [ ] **v0.6.0**: API para integração com outros sistemas
-- [ ] **v0.7.0**: Análise de conformidade com CBAM (Carbon Border Adjustment Mechanism)
-- [ ] **v0.8.0**: Suporte multilíngue
+- [ ] **v0.3.0**: Integração com bases públicas de fatores de emissão
+- [ ] **v0.4.0**: Análise de incertezas e propagação de erros
+- [ ] **v0.5.0**: Cálculo de custos de carbono (carbon pricing)
+- [ ] **v0.6.0**: Exportação de relatórios em PDF
+- [ ] **v0.7.0**: API para integração com outros sistemas
+- [ ] **v0.8.0**: Análise de conformidade com CBAM
+- [ ] **v0.9.0**: Suporte multilíngue
 - [ ] **v1.0.0**: Sistema de autenticação avançado com banco de dados
 
 ## 🤝 Contribuições
@@ -283,7 +393,7 @@ Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalh
 
 Para questões, sugestões ou parcerias, entre em contato através das issues do GitHub.
 
-**Feedback sobre a versão Beta**: Como estamos em desenvolvimento ativo, seu feedback é extremamente valioso! Por favor, reporte bugs, sugira melhorias ou compartilhe sua experiência através das [GitHub Issues](https://github.com/tpessotti/calculadora_emissoes/issues).
+**Feedback sobre a v0.2.0**: Reorganizamos completamente a estrutura do projeto para melhor manutenibilidade! Seu feedback é extremamente valioso. Por favor, reporte bugs, sugira melhorias ou compartilhe sua experiência através das [GitHub Issues](https://github.com/tpessotti/calculadora_emissoes/issues).
 
 ## 🙏 Agradecimentos
 

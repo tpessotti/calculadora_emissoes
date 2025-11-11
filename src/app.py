@@ -1,6 +1,11 @@
 import streamlit as st
 import json
 import os
+import sys
+
+# Adicionar diretório src ao path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 # Importação direta das páginas
 from tabs.Home import HomeTab
 from tabs.Unidades import UnidadesTab
@@ -38,11 +43,12 @@ class App:
             if key not in st.session_state:
                 st.session_state[key] = value
 
-        # Verifica se existe fatores de emissão salvos na raiz
+        # Verifica se existe fatores de emissão salvos
         if "fatores_emissao" not in st.session_state or not st.session_state["fatores_emissao"]:
-            if os.path.exists("fatores_emissao.json"):
+            fatores_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "fatores_emissao.json")
+            if os.path.exists(fatores_path):
                 try:
-                    with open("fatores_emissao.json", "r", encoding="utf-8") as f:
+                    with open(fatores_path, "r", encoding="utf-8") as f:
                         st.session_state.fatores_emissao = json.load(f)
                 except Exception as e:
                     st.warning(f"Erro ao carregar fatores de emissão: {e}")

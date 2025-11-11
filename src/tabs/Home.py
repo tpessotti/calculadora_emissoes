@@ -3,6 +3,11 @@ import pandas as pd
 from typing import Dict
 import json
 import os
+import sys
+
+# Garantir que o diretório pai está no path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import database
 from datetime import datetime
 from database import UnidadeProdutiva, Conexao, Tecnologia
@@ -11,7 +16,7 @@ from version import __version__, VERSION_INFO
 class HomeTab:
     def __init__(self):
         self.db = database.DatabaseManager()
-        self.sessions_file = "user_sessions.json"
+        self.sessions_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "user_sessions.json")
         
     def _render(self):
         # Inicializar estado de login se não existir
