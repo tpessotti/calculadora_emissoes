@@ -36,6 +36,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `.gitignore` completo
   - Script `run.py` para facilitar execução
 
+- **🌐 Versão Standalone HTML com Stlite**
+  - Aplicativo roda completamente no navegador (sem servidor)
+  - Script `build_standalone.py` para gerar HTML único
+  - Deploy fácil em GitHub Pages, Netlify, etc.
+  - Funciona offline após primeiro carregamento
+  - Documentação completa em `docs/STLITE_DEPLOYMENT.md`
+
 ### Modificado
 - **🏠 Página Inicial Pós-Login**
   - Layout harmonioso com cards de boas-vindas

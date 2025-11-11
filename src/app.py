@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Importação direta das páginas
 from tabs.Home import HomeTab
 from tabs.Unidades import UnidadesTab
-from tabs.Tabela import TabelaTab
 from tabs.Fluxo import FluxoTab
 from tabs.FatoresEmissao import FatoresEmissaoTab
 from tabs.Tecnologias import TecnologiasTab

@@ -38,6 +38,9 @@ env/
 # Data files (exceto exemplos)
 data/user_sessions.json
 
+# Standalone build
+calculadora_emissoes_standalone.html
+
 # OS
 .DS_Store
 Thumbs.db
