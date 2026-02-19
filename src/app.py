@@ -9,10 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Importação direta das páginas
 from tabs.Home import HomeTab
 from tabs.Unidades import UnidadesTab
-from tabs.Fluxo import FluxoTab
+from tabs.FluxoPlotly import FluxoTab
 from tabs.FatoresEmissao import FatoresEmissaoTab
 from tabs.Tecnologias import TecnologiasTab
-from tabs.Sankey import SankeyTab
+from tabs.Reports import ReportsTab
 from tabs.Chatbot import ChatbotTab
 
 from database import DatabaseManager
@@ -129,7 +129,7 @@ class App:
         elif aba == "Tecnologias":
             TecnologiasTab()._render()
         elif aba == "Análise de Emissões":
-            SankeyTab()._render()
+            ReportsTab()._render()
         elif aba == "Assistente IA":
             ChatbotTab()._render()
         else:

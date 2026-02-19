@@ -92,127 +92,85 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 def read_file_safe(filepath):
     """Lê arquivo e retorna conteúdo ou comentário de erro"""
     try:
+        # Tenta ler como texto utf-8
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
         # Escapar backticks para não quebrar template strings
         content = content.replace('`', '\\`')
         content = content.replace('${', '\\${')
         return content
+    except UnicodeDecodeError:
+        print(f"Aviso: Arquivo binário ou encoding inválido ignorado: {filepath}")
+        return None
     except Exception as e:
-        return f"# Erro ao carregar arquivo: {e}"
+        print(f"Erro ao ler {filepath}: {e}")
+        return None
 
-def generate_standalone_html():
-    """Gera arquivo HTML standalone"""
-    
-    print("🚀 Gerando versão standalone HTML com Stlite...")
-    
-    # Requirements simplificados (apenas compatíveis com Pyodide)
-    requirements = [
-        "pandas",
-        "numpy", 
-        "plotly",
-        "networkx",
-        "streamlit-agraph",
-        "requests"
-        # Removidos: openai-whisper, pydub (incompatíveis)
-    ]
-    
-    # Arquivos Python a incluir
+def get_files_content():
     files = {}
     
-    # Arquivos principais
-    main_files = [
-        "app.py",
-        "database.py",
-        "calculations.py",
-        "utils.py",
-        "config.py",
-        "version.py"
+    # 1. Processar arquivos de src/ (mapeados para a raiz)
+    if SRC_DIR.exists():
+        for path in SRC_DIR.rglob("*"):
+            if path.is_file() and "__pycache__" not in path.parts:
+                # Caminho relativo dentro de src/
+                rel_path = path.relative_to(SRC_DIR)
+                # Converte para string com forward slashes
+                str_path = str(rel_path).replace("\\", "/")
+                
+                content = read_file_safe(path)
+                if content is not None:
+                    files[str_path] = content
+                    print(f"Adicionado: {str_path}")
+
+    # 2. Processar arquivos de data/ (mapeados para data/)
+    if DATA_DIR.exists():
+        for path in DATA_DIR.rglob("*"):
+            if path.is_file() and "__pycache__" not in path.parts:
+                # Caminho relativo a partir da raiz do projeto, mantendo 'data/'
+                rel_path = path  # path já é data/...
+                str_path = str(rel_path).replace("\\", "/")
+                
+                content = read_file_safe(path)
+                if content is not None:
+                    files[str_path] = content
+                    print(f"Adicionado: {str_path}")
+    
+    # Criar user_sessions.json vazio se não existir
+    if "data/user_sessions.json" not in files:
+        files["data/user_sessions.json"] = "{}"
+
+    return files
+
+def main():
+    print("Iniciando build standalone...")
+    
+    # Lista de dependências
+    requirements = [
+        "streamlit",
+        "pandas",
+        "numpy",
+        "plotly",
+        "networkx",
+        "openpyxl",
+        "requests"
     ]
     
-    print("\n📄 Processando arquivos principais...")
-    for filename in main_files:
-        filepath = SRC_DIR / filename
-        if filepath.exists():
-            files[filename] = read_file_safe(filepath)
-            print(f"  ✓ {filename}")
-        else:
-            print(f"  ✗ {filename} (não encontrado)")
+    # Coletar arquivos
+    files = get_files_content()
     
-    # Arquivos de tabs
-    tabs_files = [
-        "Home.py",
-        "Unidades.py",
-        "Fluxo.py",
-        "FatoresEmissao.py",
-        "Tecnologias.py",
-        "Sankey.py",
-        "Chatbot.py" #(usa OpenRouter API, pode não funcionar bem)
-    ]
-    
-    print("\n📑 Processando tabs...")
-    for filename in tabs_files:
-        filepath = SRC_DIR / "tabs" / filename
-        if filepath.exists():
-            files[f"tabs/{filename}"] = read_file_safe(filepath)
-            print(f"  ✓ tabs/{filename}")
-    
-    # Arquivos de dados JSON
-    data_files = [
-        "fatores_emissao.json",
-        "config_fatores.json"
-    ]
-    
-    print("\n📊 Processando dados...")
-    for filename in data_files:
-        filepath = DATA_DIR / filename
-        if filepath.exists():
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                files[f"data/{filename}"] = json.dumps(data, ensure_ascii=False)
-                print(f"  ✓ data/{filename}")
-            except Exception as e:
-                print(f"  ✗ data/{filename} (erro: {e})")
-    
-    # Criar user_sessions.json vazio
-    files["data/user_sessions.json"] = "{}"
-    
-    # Converter files dict para formato JSON
-    files_json = json.dumps(files, ensure_ascii=False, indent=2)
-    requirements_json = json.dumps(requirements)
-    
-    # Gerar HTML final
+    # Gerar HTML
     html_content = HTML_TEMPLATE.format(
-        requirements=requirements_json,
-        files=files_json
+        requirements=json.dumps(requirements),
+        files=json.dumps(files)
     )
     
     # Salvar arquivo
-    print(f"\n💾 Salvando em {OUTPUT_FILE}...")
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(html_content)
-    
-    file_size = os.path.getsize(OUTPUT_FILE) / (1024 * 1024)  # MB
-    print(f"✅ Arquivo gerado com sucesso!")
-    print(f"📏 Tamanho: {file_size:.2f} MB")
-    print(f"📍 Local: {OUTPUT_FILE.absolute()}")
-    
-    print("\n" + "="*60)
-    print("🎉 STANDALONE HTML GERADO!")
-    print("="*60)
-    print("\n📖 Como usar:")
-    print("  1. Abra o arquivo HTML em um navegador moderno")
-    print("  2. Aguarde o carregamento (pode levar 10-30 segundos)")
-    print("  3. O app rodará completamente offline!")
-    print("\n🌐 Para hospedar:")
-    print("  • GitHub Pages: git push para branch gh-pages")
-    print("  • Netlify: arraste e solte o arquivo")
-    print("  • Qualquer servidor estático")
-    print("\n⚠️  Notas:")
-    print("  • Primeira carga baixa ~50-100MB (Pyodide)")
-    print("  • Chatbot removido (incompatível com Stlite)")
-    print("="*60)
+        
+    print(f"\nSucesso! Arquivo gerado em: {OUTPUT_FILE.absolute()}")
+    print(f"Total de arquivos empacotados: {len(files)}")
 
 if __name__ == "__main__":
-    generate_standalone_html()
+    main()
