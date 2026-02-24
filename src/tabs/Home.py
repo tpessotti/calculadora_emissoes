@@ -783,6 +783,7 @@ class HomeTab:
             conexoes = []
             for c_dict in conexoes_dict:
                 conexao = Conexao(
+                    id=c_dict.get("id", ""),
                     origem=c_dict.get("origem"),
                     destino=c_dict.get("destino"),
                     massa=c_dict.get("massa", 0.0),
@@ -798,6 +799,7 @@ class HomeTab:
                 if u_dict.get("Conexao"):
                     cd = u_dict["Conexao"]
                     conexao = Conexao(
+                        id=cd.get("id", ""),
                         origem=cd.get("origem"), destino=cd.get("destino"),
                         massa=cd.get("massa", 0.0), label=cd.get("label", "Fluxo"),
                         periodo=cd.get("periodo", ""),
@@ -839,6 +841,8 @@ class HomeTab:
             st.session_state.fatores_emissao = sessao_data.get("fatores_emissao", [])
             st.session_state.tecnologias_alternativas = tecnologias
             st.session_state.node_counter = sessao_data.get("node_counter", 1)
+            st.session_state.ui_theme_mode = sessao_data.get("ui_theme_mode", st.session_state.get("ui_theme_mode", "light"))
+            st.session_state.auto_save_session = bool(sessao_data.get("auto_save_session", st.session_state.get("auto_save_session", False)))
 
             # Restaurar contexto de ano
             try:

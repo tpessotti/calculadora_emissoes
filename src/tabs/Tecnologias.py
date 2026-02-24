@@ -14,6 +14,10 @@ class TecnologiasTab:
         if "fatores_emissao" not in st.session_state:
             st.session_state.fatores_emissao = []
 
+        feedback_msg = st.session_state.pop("tecnologia_feedback_msg", None)
+        if feedback_msg:
+            st.toast(feedback_msg, icon="✅")
+
         # Criar abas
         tab1, tab2 = st.tabs(["Tecnologias Registradas", "Nova Tecnologia"])
         
@@ -46,7 +50,7 @@ class TecnologiasTab:
                     # Botão de remover ao lado
                     if st.button("🗑️", key=f"remover_tec_{i}", help="Remover tecnologia", use_container_width=True):
                         st.session_state.tecnologias_alternativas.pop(i)
-                        st.success("Tecnologia removida com sucesso.")
+                        st.session_state["tecnologia_feedback_msg"] = "Tecnologia removida com sucesso."
                         st.rerun()
                 
         else:
@@ -76,7 +80,7 @@ class TecnologiasTab:
                 return False
             
             st.session_state.tecnologias_alternativas.append(tecnologia)
-            st.success(f"✅ Tecnologia '{tecnologia.nome}' criada com sucesso!")
+            st.session_state["tecnologia_feedback_msg"] = f"✅ Tecnologia '{tecnologia.nome}' criada com sucesso!"
             st.rerun()
             return True
         return False
@@ -88,13 +92,13 @@ class TecnologiasTab:
             for i, tec in enumerate(st.session_state.tecnologias_alternativas):
                 if tec.id == tecnologia.id:
                     st.session_state.tecnologias_alternativas[i] = tecnologia
-                    st.success(f"✅ Tecnologia '{tecnologia.nome}' atualizada com sucesso!")
+                    st.session_state["tecnologia_feedback_msg"] = f"✅ Tecnologia '{tecnologia.nome}' atualizada com sucesso!"
                     st.rerun()
                     return True
             
             # Se não encontrou, adicionar como nova
             st.session_state.tecnologias_alternativas.append(tecnologia)
-            st.success(f"✅ Nova versão da tecnologia '{tecnologia.nome}' salva com sucesso!")
+            st.session_state["tecnologia_feedback_msg"] = f"✅ Nova versão da tecnologia '{tecnologia.nome}' salva com sucesso!"
             st.rerun()
             return True
         return False

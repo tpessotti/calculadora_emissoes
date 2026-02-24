@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import re
 from typing import List, Dict
 import pandas as pd
 #from database import Tecnologia
@@ -11,6 +12,7 @@ class Conexao:
     """Classe que representa uma conexão entre unidades produtivas"""
     origem: str
     destino: str
+    id: str = ""
     massa: float = 0.0  # Massa transferida na conexão
     label: str = "Fluxo"
     periodo: str = ""   # Período/ano da conexão
@@ -137,6 +139,56 @@ class DatabaseManager:
         if "conexoes" not in st.session_state:
             st.session_state.conexoes = []
 
+    @staticmethod
+    def _next_sequential_id(prefix: str, existing_ids: List[str], width: int = 3) -> str:
+        pattern = re.compile(rf"^{re.escape(prefix)}(\d+)$", re.IGNORECASE)
+        used = set()
+        max_num = -1
+
+        for raw in existing_ids:
+            sid = str(raw or "").strip()
+            if not sid:
+                continue
+            used.add(sid.upper())
+            match = pattern.match(sid)
+            if not match:
+                continue
+            try:
+                num = int(match.group(1))
+                if num > max_num:
+                    max_num = num
+            except ValueError:
+                continue
+
+        next_num = max_num + 1
+        candidate = f"{prefix}{next_num:0{width}d}"
+        while candidate.upper() in used:
+            next_num += 1
+            candidate = f"{prefix}{next_num:0{width}d}"
+        return candidate
+
+    def next_unidade_id(self) -> str:
+        ids = [getattr(u, "ID_ELO", "") for u in st.session_state.get("unidades", [])]
+        return self._next_sequential_id("E", ids)
+
+    def next_tecnologia_id(self) -> str:
+        ids = []
+        for t in st.session_state.get("tecnologias_alternativas", []):
+            if hasattr(t, "id"):
+                ids.append(getattr(t, "id", ""))
+            elif isinstance(t, dict):
+                ids.append(t.get("id", ""))
+        return self._next_sequential_id("T", ids)
+
+    def next_fluxo_id(self) -> str:
+        ids = []
+        for c in st.session_state.get("conexoes", []):
+            if hasattr(c, "id"):
+                ids.append(getattr(c, "id", ""))
+            elif isinstance(c, dict):
+                ids.append(c.get("id", ""))
+        return self._next_sequential_id("F", ids)
+
     # --- Unidades ---
     def add_unidade(self, unidade: UnidadeProdutiva) -> None:
         if not any(u.ID_ELO == unidade.ID_ELO for u in st.session_state.unidades):
@@ -153,9 +205,13 @@ class DatabaseManager:
         return next((u for u in st.session_state.unidades if u.ID_ELO == id_elo), None)
 
     # --- Conexões ---
-    def add_edge(self, origem: str, destino: str, massa: float = 0.0, periodo: str = "") -> None:
+    def add_edge(self, origem: str, destino: str, massa: float = 0.0, periodo: str = "", label: str = "Fluxo", id_fluxo: str = "") -> Conexao | None:
         if not any(c.origem == origem and c.destino == destino and c.periodo == periodo for c in st.session_state.conexoes):
-            st.session_state.conexoes.append(Conexao(origem=origem, destino=destino, massa=massa, periodo=periodo))
+            fluxo_id = str(id_fluxo or "").strip() or self.next_fluxo_id()
+            conexao = Conexao(id=fluxo_id, origem=origem, destino=destino, massa=massa, label=label, periodo=periodo)
+            st.session_state.conexoes.append(conexao)
+            return conexao
+        return None
     
     def remove_edge(self, origem: str, destino: str) -> None:
         st.session_state.conexoes = [
@@ -280,6 +336,7 @@ class DatabaseManager:
                 conexao_data = u_data.get("Conexao")
                 if conexao_data:
                     conexao = Conexao(
+                        id=conexao_data.get("id", ""),
                         origem=conexao_data.get("origem"),
                         destino=conexao_data.get("destino"),
                         massa=conexao_data.get("massa", 0.0),
@@ -329,12 +386,26 @@ class DatabaseManager:
                 
                 # Se a unidade tem uma conexão, adicionar ao session_state.conexoes
                 if conexao:
-                    self.add_edge(conexao.origem, conexao.destino, massa=conexao.massa, periodo=conexao.periodo)
+                    self.add_edge(
+                        conexao.origem,
+                        conexao.destino,
+                        massa=conexao.massa,
+                        periodo=conexao.periodo,
+                        label=conexao.label,
+                        id_fluxo=conexao.id,
+                    )
 
             print(f"DEBUG import_from_json: Total de conexões a importar: {len(data.get('conexoes', []))}")  # Debug
             for c_data in data.get("conexoes", []):
                 print(f"DEBUG import_from_json: Importando conexão: {c_data}")  # Debug
-                self.add_edge(c_data["origem"], c_data["destino"], massa=c_data.get("massa", 0.0), periodo=c_data.get("periodo", ""))
+                self.add_edge(
+                    c_data["origem"],
+                    c_data["destino"],
+                    massa=c_data.get("massa", 0.0),
+                    periodo=c_data.get("periodo", ""),
+                    label=c_data.get("label", "Fluxo"),
+                    id_fluxo=c_data.get("id", ""),
+                )
             
             print(f"DEBUG import_from_json: Total de conexões em session_state após importação: {len(st.session_state.conexoes)}")  # Debug
             
@@ -347,7 +418,17 @@ class DatabaseManager:
             return False
 
     def get_edges_for_graph(self) -> List[Dict]:
-        return [{"source": c.origem, "target": c.destino, "massa": c.massa, "periodo": c.periodo} for c in st.session_state.conexoes]
+        return [
+            {
+                "id": getattr(c, "id", ""),
+                "source": c.origem,
+                "target": c.destino,
+                "massa": c.massa,
+                "label": getattr(c, "label", "Fluxo"),
+                "periodo": c.periodo,
+            }
+            for c in st.session_state.conexoes
+        ]
 
     # --- Atualização de Pegadas ---
     def propagar_pegada(self):

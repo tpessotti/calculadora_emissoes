@@ -2,7 +2,7 @@
 Informações de versão do aplicativo
 """
 
-__version__ = "0.4.0-beta"
+__version__ = "0.3.1-beta"
 __release_date__ = "Fevereiro 2026"
 __author__ = "Tiago Pessotti"
 

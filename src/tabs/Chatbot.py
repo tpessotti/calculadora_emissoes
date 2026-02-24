@@ -1,18 +1,92 @@
 import streamlit as st
 import requests
 import json
+import os
 from typing import List, Dict
 from datetime import datetime
 
 class ChatbotTab:
     def __init__(self):
         self.openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.modelos_disponiveis = [
-            "meta-llama/llama-3.3-8b-instruct:free",
-            "meta-llama/llama-4-scout:free",
-            "qwen/qwen3-4b:free",
-            "deepseek/deepseek-r1-0528-qwen3-8b:free"
+        self.modelos_padrao = [
+            "google/gemma-3n-e2b-it:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-20b:free",
+            "qwen/qwen3-vl-30b-a3b-thinking",
+            "openai/gpt-oss-120b:free"
         ]
+        self.modelos_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "data",
+            "chatbot_models.json",
+        )
+        self.modelos_disponiveis = self._carregar_modelos_disponiveis()
+
+    def _carregar_modelos_disponiveis(self) -> List[str]:
+        """Carrega modelos padrão + customizados do arquivo local."""
+        custom = []
+        try:
+            if os.path.exists(self.modelos_path):
+                with open(self.modelos_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    custom = [str(m).strip() for m in data if str(m).strip()]
+        except Exception:
+            custom = []
+
+        merged = []
+        for m in self.modelos_padrao + custom:
+            if m not in merged:
+                merged.append(m)
+        return merged
+
+    def _salvar_modelos_customizados(self, modelos: List[str]) -> None:
+        """Salva apenas modelos fora da lista padrão."""
+        try:
+            os.makedirs(os.path.dirname(self.modelos_path), exist_ok=True)
+            custom = [m for m in modelos if m not in self.modelos_padrao]
+            with open(self.modelos_path, "w", encoding="utf-8") as f:
+                json.dump(custom, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            st.warning(f"Não foi possível salvar a lista de modelos: {e}")
+
+    def _render_gerenciar_modelos(self, key_prefix: str = "chatbot"):
+        """UI para adicionar/remover modelos dinamicamente."""
+        with st.expander("🧩 Gerenciar modelos", expanded=False):
+            st.caption("Adicione IDs de modelos da OpenRouter para manter a lista sempre atualizada.")
+
+            novo_modelo = st.text_input(
+                "Novo modelo",
+                placeholder="Ex: mistralai/mistral-small-3.1-24b-instruct:free",
+                key=f"{key_prefix}_novo_modelo",
+            )
+
+            if st.button("➕ Adicionar modelo", key=f"{key_prefix}_add_modelo", use_container_width=True):
+                candidato = (novo_modelo or "").strip()
+                if not candidato:
+                    st.warning("Informe um modelo válido antes de adicionar.")
+                elif candidato in self.modelos_disponiveis:
+                    st.info("Esse modelo já está na lista.")
+                else:
+                    self.modelos_disponiveis.append(candidato)
+                    self._salvar_modelos_customizados(self.modelos_disponiveis)
+                    st.success("Modelo adicionado com sucesso.")
+                    st.rerun()
+
+            custom_models = [m for m in self.modelos_disponiveis if m not in self.modelos_padrao]
+            if custom_models:
+                remover = st.selectbox(
+                    "Remover modelo customizado",
+                    options=custom_models,
+                    key=f"{key_prefix}_remover_modelo",
+                )
+                if st.button("🗑️ Remover modelo", key=f"{key_prefix}_del_modelo", use_container_width=True):
+                    self.modelos_disponiveis = [m for m in self.modelos_disponiveis if m != remover]
+                    if st.session_state.get("modelo_selecionado") == remover:
+                        st.session_state.modelo_selecionado = self.modelos_disponiveis[0]
+                    self._salvar_modelos_customizados(self.modelos_disponiveis)
+                    st.success("Modelo removido com sucesso.")
+                    st.rerun()
         
     def _render(self):
         st.title("Assistente de Análise de Emissões")
@@ -33,6 +107,8 @@ class ChatbotTab:
     def _render_configuracao_api(self):
         """Renderiza formulário de configuração da API key"""
         st.info("👋 Para começar, configure sua API key da OpenRouter.")
+
+        self._render_gerenciar_modelos("config")
         
         with st.expander("ℹ️ Como obter uma API key?", expanded=True):
             st.markdown("""
@@ -80,13 +156,17 @@ class ChatbotTab:
         # Sidebar com configurações e contexto
         with st.sidebar:
             st.markdown("### ⚙️ Configurações")
+
+            self._render_gerenciar_modelos("sidebar")
             
             # Trocar modelo
             novo_modelo = st.selectbox(
                 "Modelo de IA",
                 self.modelos_disponiveis,
-                index=self.modelos_disponiveis.index(
-                    st.session_state.get("modelo_selecionado", self.modelos_disponiveis[0])
+                index=(
+                    self.modelos_disponiveis.index(st.session_state.get("modelo_selecionado"))
+                    if st.session_state.get("modelo_selecionado") in self.modelos_disponiveis
+                    else 0
                 )
             )
             if novo_modelo != st.session_state.get("modelo_selecionado"):

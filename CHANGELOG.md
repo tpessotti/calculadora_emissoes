@@ -5,6 +5,21 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [Unreleased]
+
+### Alterado
+- **Standalone build (`build_standalone.py`) revisado para mudanças recentes**
+  - Empacota também `core/` (AppContext, períodos, IO e validações), além de `src/` e `data/`
+  - Inclui `assets/` no bundle HTML quando presente
+  - Filtra melhor arquivos não suportados (`__pycache__`, `.pyc`, `.pyo`)
+  - Garante defaults de runtime para evitar falhas em ambiente limpo:
+    - `data/user_sessions.json`
+    - `data/json_db/database.json` (com `anos_disponiveis`)
+    - `data/fatores_emissao.json`
+
+### Documentação
+- `README.md` atualizado com detalhes do novo algoritmo de build standalone e artefatos mínimos gerados automaticamente.
+
 ## [0.3.0-beta] - 2025-01
 
 ### Adicionado
@@ -166,7 +181,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Pandas para manipulação de dados
 - NetworkX para análise de grafos
 
-## [Unreleased]
+## [Roadmap]
 
 ### Planejado para v0.3.0
 - Integração com bases de dados públicas de fatores de emissão

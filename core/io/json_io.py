@@ -11,12 +11,64 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
 logger = logging.getLogger(__name__)
+
+
+def _to_jsonable(value: Any) -> Any:
+    """Converte objetos arbitrários para tipos serializáveis em JSON."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, dict):
+        return {str(k): _to_jsonable(v) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [_to_jsonable(v) for v in value]
+
+    if hasattr(value, "to_dict"):
+        try:
+            return _to_jsonable(value.to_dict())
+        except Exception:
+            pass
+
+    if hasattr(value, "__dict__"):
+        try:
+            return _to_jsonable(vars(value))
+        except Exception:
+            pass
+
+    return str(value)
+
+
+def _atomic_write_json(filepath: str, payload: Any) -> None:
+    """Escreve JSON de forma atômica para evitar arquivos corrompidos."""
+    directory = os.path.dirname(filepath)
+    os.makedirs(directory, exist_ok=True)
+
+    content = json.dumps(payload, indent=2, ensure_ascii=False)
+
+    fd, tmp_path = tempfile.mkstemp(prefix=".tmp_db_", suffix=".json", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, filepath)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -81,10 +133,9 @@ def save_database(filepath: str, data: Dict[str, Any]) -> bool:
         True se salvou com sucesso.
     """
     try:
-        data["updated_at"] = datetime.now().isoformat()
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        payload = _to_jsonable(dict(data))
+        payload["updated_at"] = datetime.now().isoformat()
+        _atomic_write_json(filepath, payload)
         logger.info("Database salvo em %s", filepath)
         return True
     except Exception as exc:
@@ -103,12 +154,11 @@ def save_fatores_emissao(filepath: str, fatores: List[Dict[str, Any]]) -> bool:
         True se salvou com sucesso.
     """
     try:
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(fatores, f, indent=2, ensure_ascii=False)
+        payload = _to_jsonable(fatores)
+        _atomic_write_json(filepath, payload)
         # Invalidar cache
         load_fatores_emissao.clear()
-        logger.info("Fatores salvos em %s (%d registros)", filepath, len(fatores))
+        logger.info("Fatores salvos em %s (%d registros)", filepath, len(payload))
         return True
     except Exception as exc:
         logger.error("Erro ao salvar fatores: %s", exc)
@@ -138,23 +188,29 @@ def export_session_to_database(ano: Optional[int] = None) -> Dict[str, Any]:
     unidades_dict = []
     for u in unidades:
         if hasattr(u, "to_dict"):
-            unidades_dict.append(u.to_dict())
+            unidades_dict.append(_to_jsonable(u.to_dict()))
         elif isinstance(u, dict):
-            unidades_dict.append(u)
+            unidades_dict.append(_to_jsonable(u))
+        else:
+            unidades_dict.append(_to_jsonable(u))
 
     conexoes_dict = []
     for c in conexoes:
         if hasattr(c, "to_dict"):
-            conexoes_dict.append(c.to_dict())
+            conexoes_dict.append(_to_jsonable(c.to_dict()))
         elif isinstance(c, dict):
-            conexoes_dict.append(c)
+            conexoes_dict.append(_to_jsonable(c))
+        else:
+            conexoes_dict.append(_to_jsonable(c))
 
     tecnologias_dict = []
     for t in tecnologias:
         if hasattr(t, "to_dict"):
-            tecnologias_dict.append(t.to_dict())
+            tecnologias_dict.append(_to_jsonable(t.to_dict()))
         elif isinstance(t, dict):
-            tecnologias_dict.append(t)
+            tecnologias_dict.append(_to_jsonable(t))
+        else:
+            tecnologias_dict.append(_to_jsonable(t))
 
     # Descobrir anos dos registros
     anos = set()
@@ -174,7 +230,7 @@ def export_session_to_database(ano: Optional[int] = None) -> Dict[str, Any]:
         "updated_at": datetime.now().isoformat(),
         "source": "session_export",
         "anos_disponiveis": sorted(anos),
-        "fatores_emissao": fatores,
+        "fatores_emissao": _to_jsonable(fatores),
         "unidades": unidades_dict,
         "conexoes": conexoes_dict,
         "tecnologias": tecnologias_dict,

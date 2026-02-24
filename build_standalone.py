@@ -9,7 +9,9 @@ from pathlib import Path
 
 # Diretórios
 SRC_DIR = Path("src")
+CORE_DIR = Path("core")
 DATA_DIR = Path("data")
+ASSETS_DIR = Path("assets")
 OUTPUT_FILE = Path("calculadora_emissoes_standalone.html")
 
 # Template HTML base
@@ -108,11 +110,20 @@ def read_file_safe(filepath):
 
 def get_files_content():
     files = {}
+
+    def _deve_incluir(path: Path) -> bool:
+        if not path.is_file():
+            return False
+        if "__pycache__" in path.parts:
+            return False
+        if path.suffix in {".pyc", ".pyo"}:
+            return False
+        return True
     
     # 1. Processar arquivos de src/ (mapeados para a raiz)
     if SRC_DIR.exists():
         for path in SRC_DIR.rglob("*"):
-            if path.is_file() and "__pycache__" not in path.parts:
+            if _deve_incluir(path):
                 # Caminho relativo dentro de src/
                 rel_path = path.relative_to(SRC_DIR)
                 # Converte para string com forward slashes
@@ -123,10 +134,21 @@ def get_files_content():
                     files[str_path] = content
                     print(f"Adicionado: {str_path}")
 
+    # 1.1 Processar arquivos de core/ (mapeados para core/)
+    if CORE_DIR.exists():
+        for path in CORE_DIR.rglob("*"):
+            if _deve_incluir(path):
+                str_path = str(path).replace("\\", "/")
+
+                content = read_file_safe(path)
+                if content is not None:
+                    files[str_path] = content
+                    print(f"Adicionado: {str_path}")
+
     # 2. Processar arquivos de data/ (mapeados para data/)
     if DATA_DIR.exists():
         for path in DATA_DIR.rglob("*"):
-            if path.is_file() and "__pycache__" not in path.parts:
+            if _deve_incluir(path):
                 # Caminho relativo a partir da raiz do projeto, mantendo 'data/'
                 rel_path = path  # path já é data/...
                 str_path = str(rel_path).replace("\\", "/")
@@ -135,10 +157,41 @@ def get_files_content():
                 if content is not None:
                     files[str_path] = content
                     print(f"Adicionado: {str_path}")
+
+    # 3. Processar assets/ (mapeados para assets/)
+    if ASSETS_DIR.exists():
+        for path in ASSETS_DIR.rglob("*"):
+            if _deve_incluir(path):
+                str_path = str(path).replace("\\", "/")
+
+                content = read_file_safe(path)
+                if content is not None:
+                    files[str_path] = content
+                    print(f"Adicionado: {str_path}")
     
     # Criar user_sessions.json vazio se não existir
     if "data/user_sessions.json" not in files:
         files["data/user_sessions.json"] = "{}"
+
+    # Garantir database master para descoberta de anos no AppContext
+    if "data/json_db/database.json" not in files:
+        files["data/json_db/database.json"] = json.dumps(
+            {
+                "schema_version": "1.2.0",
+                "source": "standalone_default",
+                "anos_disponiveis": [2025],
+                "fatores_emissao": [],
+                "unidades": [],
+                "conexoes": [],
+                "tecnologias": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    # Garantir base de fatores
+    if "data/fatores_emissao.json" not in files:
+        files["data/fatores_emissao.json"] = "[]"
 
     return files
 

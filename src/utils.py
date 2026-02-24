@@ -1,5 +1,8 @@
 import streamlit as st
 import database
+import os
+import json
+from datetime import datetime
 from database import UnidadeProdutiva, Tecnologia
 import calculations
 from core.calc.fatores import FatorIndex
@@ -30,6 +33,39 @@ class UtilsUI:
         self.db = database.DatabaseManager()
         self.ec = calculations.EmissionCalculator()
 
+    def _ensure_catalog_inputs(self):
+        """Garante catálogos mínimos de localização e produtos no estado da sessão."""
+        unidades = st.session_state.get("unidades", [])
+
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        catalogos_file = os.path.join(data_dir, "catalogos.json")
+        file_localizacoes = []
+        file_produtos = []
+        if os.path.exists(catalogos_file):
+            try:
+                with open(catalogos_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                file_localizacoes = [str(v).strip() for v in data.get("localizacoes", []) if str(v).strip()]
+                file_produtos = [str(v).strip() for v in data.get("produtos", []) if str(v).strip()]
+            except Exception:
+                file_localizacoes = []
+                file_produtos = []
+
+        if "cadastro_localizacoes" not in st.session_state:
+            st.session_state.cadastro_localizacoes = sorted({
+                str(getattr(u, "Localizacao", "") or "").strip()
+                for u in unidades
+                if str(getattr(u, "Localizacao", "") or "").strip()
+            }.union(file_localizacoes))
+
+        if "cadastro_produtos" not in st.session_state:
+            st.session_state.cadastro_produtos = sorted({
+                p.strip()
+                for u in unidades
+                for p in [str(getattr(u, "Input", "") or ""), str(getattr(u, "Output", "") or "")]
+                if p.strip()
+            }.union(file_produtos))
+
     def render_tecnologia_form(self, tecnologia=None, key_prefix="tec_form", read_only=False, 
                                show_save_buttons=True, on_save_callback=None):
         """
@@ -46,7 +82,7 @@ class UtilsUI:
             Tecnologia criada/editada (ou None se não salvou)
         """
         # Valores padrão ou da tecnologia existente
-        id_padrao = tecnologia.id if tecnologia else ""
+        id_padrao = tecnologia.id if tecnologia else self.db.next_tecnologia_id()
         nome_padrao = tecnologia.nome if tecnologia else ""
         insumos_atuais = [i["nome"] for i in tecnologia.insumos] if tecnologia else []
         unidades_atuais = [u["unidade"] for u in tecnologia.unidades] if tecnologia else []
@@ -67,7 +103,7 @@ class UtilsUI:
                 tec_id = st.text_input(
                     "ID da Tecnologia*",
                     value=id_padrao,
-                    disabled=read_only,
+                    disabled=True,
                     key=f"{key_prefix}_id"
                 )
                 
@@ -218,7 +254,7 @@ class UtilsUI:
                                     
                                     if idx is not None:
                                         nova_tec = Tecnologia(
-                                            id=tec_id.strip(),
+                                            id=tecnologia.id,
                                             nome=tec_nome.strip(),
                                             insumos=insumos_preparados,
                                             unidades=limites_unidades
@@ -228,7 +264,7 @@ class UtilsUI:
                                         if on_save_callback:
                                             on_save_callback(nova_tec)
                                         else:
-                                            st.success(f"Tecnologia '{tec_nome}' atualizada!")
+                                            st.session_state["tecnologia_feedback_msg"] = f"Tecnologia '{tec_nome}' atualizada!"
                                             st.rerun()
                                         
                                         return nova_tec
@@ -246,7 +282,7 @@ class UtilsUI:
                             else:
                                 try:
                                     nova_tec = Tecnologia(
-                                        id=tec_id.strip(),
+                                        id=self.db.next_tecnologia_id(),
                                         nome=tec_nome.strip(),
                                         insumos=insumos_preparados,
                                         unidades=limites_unidades
@@ -256,7 +292,7 @@ class UtilsUI:
                                     if on_save_callback:
                                         on_save_callback(nova_tec)
                                     else:
-                                        st.success(f"Nova tecnologia '{tec_nome}' criada!")
+                                        st.session_state["tecnologia_feedback_msg"] = f"Nova tecnologia '{tec_nome}' criada!"
                                         st.rerun()
                                     
                                     return nova_tec
@@ -272,7 +308,7 @@ class UtilsUI:
                         else:
                             try:
                                 nova_tec = Tecnologia(
-                                    id=tec_id.strip(),
+                                    id=self.db.next_tecnologia_id(),
                                     nome=tec_nome.strip(),
                                     insumos=insumos_preparados,
                                     unidades=limites_unidades
@@ -282,7 +318,7 @@ class UtilsUI:
                                 if on_save_callback:
                                     on_save_callback(nova_tec)
                                 else:
-                                    st.success(f"Tecnologia '{tec_nome}' criada!")
+                                    st.session_state["tecnologia_feedback_msg"] = f"Tecnologia '{tec_nome}' criada!"
                                     st.rerun()
                                 
                                 return nova_tec
@@ -303,16 +339,66 @@ class UtilsUI:
             tuple: (tecnologia_selecionada, consumiveis, consumo_especifico)
         """
         st.markdown("### Tecnologia Associada")
-        
+
+        def _montar_consumo(tecnologia_ref):
+            consumiveis_local = []
+            consumo_especifico_local = []
+            for insumo in tecnologia_ref.insumos:
+                nome_insumo = insumo["nome"]
+                fator_consumo = insumo["fator_consumo"]
+                fator_emissao, escopo = _resolver_fator_para_ano(
+                    nome_insumo,
+                    st.session_state.fatores_emissao,
+                    ano_referencia,
+                )
+                consumiveis_local.append({
+                    "nome": nome_insumo,
+                    "fator": fator_emissao,
+                    "escopo": escopo
+                })
+                consumo_especifico_local.append(fator_consumo)
+            return consumiveis_local, consumo_especifico_local
+
         tecnologias = st.session_state.get("tecnologias_alternativas", [])
-        
+
         if not tecnologias:
-            st.info("Nenhuma tecnologia cadastrada. Use a aba 'Adicionar Nova' para criar.")
+            st.info("Nenhuma tecnologia cadastrada. Crie uma nova tecnologia para associar à unidade.")
+            nova_tecnologia = self.render_tecnologia_form(
+                tecnologia=None,
+                key_prefix=f"{key_prefix}_new_empty",
+                read_only=False,
+                show_save_buttons=True,
+                on_save_callback=lambda _t: True,
+            )
+            if nova_tecnologia:
+                consumiveis, consumo_especifico = _montar_consumo(nova_tecnologia)
+                return nova_tecnologia, consumiveis, consumo_especifico
             return None, [], []
-        
+
+        modo_tecnologia = st.radio(
+            "Como deseja associar a tecnologia?",
+            ["Selecionar existente", "Criar nova"],
+            horizontal=True,
+            key=f"{key_prefix}_modo_assoc",
+        )
+
+        if modo_tecnologia == "Criar nova":
+            nova_tecnologia = self.render_tecnologia_form(
+                tecnologia=None,
+                key_prefix=f"{key_prefix}_new",
+                read_only=False,
+                show_save_buttons=True,
+                on_save_callback=lambda _t: True,
+            )
+            if nova_tecnologia:
+                consumiveis, consumo_especifico = _montar_consumo(nova_tecnologia)
+                st.toast("Tecnologia criada e selecionada para esta unidade.", icon="✅")
+                return nova_tecnologia, consumiveis, consumo_especifico
+            st.info("Preencha e salve a nova tecnologia para continuar.")
+            return None, [], []
+
         tecnologias_dict = {f"{t.id} | {t.nome}": t for t in tecnologias}
-        
-        # Define seleção padrão
+
         if tecnologia_atual:
             tec_padrao_key = next(
                 (key for key, t in tecnologias_dict.items() if t.id == tecnologia_atual.id),
@@ -321,90 +407,93 @@ class UtilsUI:
             tec_index = list(tecnologias_dict.keys()).index(tec_padrao_key)
         else:
             tec_index = 0
-        
+
         tec_selecionada_str = st.selectbox(
             "Selecione a tecnologia:",
             list(tecnologias_dict.keys()),
             index=tec_index,
             key=f"{key_prefix}_select"
         )
-        
+
         tecnologia_escolhida = tecnologias_dict[tec_selecionada_str]
-        
-        # Toggle entre visualização e edição
+
         modo_edicao = st.toggle(
-            "✏️ Modo de Edição", 
-            value=False, 
+            "✏️ Modo de Edição",
+            value=False,
             key=f"{key_prefix}_modo_edicao",
             help="Ative para editar a tecnologia selecionada"
         )
-        
+
         if modo_edicao:
             st.markdown("#### Editar Tecnologia")
-            
-            # Usar o método reutilizável em modo edição
             self.render_tecnologia_form(
                 tecnologia=tecnologia_escolhida,
                 key_prefix=f"{key_prefix}_edit",
                 read_only=False,
                 show_save_buttons=True
             )
-            
             return None, [], []
-        else:
-            st.markdown("#### Visualizar Tecnologia")
-            
-            # Usar o método reutilizável em modo read-only
-            self.render_tecnologia_form(
-                tecnologia=tecnologia_escolhida,
-                key_prefix=f"{key_prefix}_view",
-                read_only=True,
-                show_save_buttons=False
-            )
-            
-            # Preparar consumíveis para retornar
-            consumiveis = []
-            consumo_especifico = []
-            
-            for insumo in tecnologia_escolhida.insumos:
-                nome_insumo = insumo["nome"]
-                fator_consumo = insumo["fator_consumo"]
-                fator_emissao, escopo = _resolver_fator_para_ano(
-                    nome_insumo,
-                    st.session_state.fatores_emissao,
-                    ano_referencia,
-                )
-                consumiveis.append({
-                    "nome": nome_insumo,
-                    "fator": fator_emissao,
-                    "escopo": escopo
-                })
-                consumo_especifico.append(fator_consumo)
-            
-            return tecnologia_escolhida, consumiveis, consumo_especifico
+
+        st.markdown("#### Visualizar Tecnologia")
+        self.render_tecnologia_form(
+            tecnologia=tecnologia_escolhida,
+            key_prefix=f"{key_prefix}_view",
+            read_only=True,
+            show_save_buttons=False
+        )
+        consumiveis, consumo_especifico = _montar_consumo(tecnologia_escolhida)
+        return tecnologia_escolhida, consumiveis, consumo_especifico
         
         # Se chegou aqui, retornar None pois está na aba de criação ou edição
         return None, [], []
 
     def render_form(self, modal):
         """Formulário para criação de nova unidade produtiva"""
+        self._ensure_catalog_inputs()
 
         if "fatores_emissao" not in st.session_state or not st.session_state.fatores_emissao:
             st.warning("Nenhum fator de emissão disponível. Importe antes de criar unidades.")
             return
 
+        localizacoes = st.session_state.get("cadastro_localizacoes", [])
+        produtos = st.session_state.get("cadastro_produtos", [])
+        anos_disponiveis = [str(ano) for ano in range(2017, 2100)]
+        ano_corrente = str(datetime.now().year)
+        ano_default = ano_corrente if ano_corrente in anos_disponiveis else anos_disponiveis[0]
+
         col1, col2 = st.columns(2)
 
         with col1:
-            id_elo = st.text_input("ID ELO*")
+            id_elo = self.db.next_unidade_id()
+            st.text_input("ID ELO*", value=id_elo, disabled=True, key="create_id_elo")
             nome = st.text_input("Nome*")
-            localizacao = st.text_input("Localização*")
-            periodo = st.text_input("Período*", value="2023")
+            localizacao = st.selectbox(
+                "Localização*",
+                options=[""] + localizacoes,
+                format_func=lambda v: "Selecione..." if v == "" else v,
+                key="create_localizacao",
+            )
+            periodo = st.selectbox(
+                "Período*",
+                options=anos_disponiveis,
+                index=anos_disponiveis.index(ano_default),
+                key="create_periodo",
+            )
             taxacao_local = st.checkbox("Taxação Local")
 
         with col2:
-            input_insumo = st.text_input("Insumo Entrada")
-            output_insumo = st.text_input("Insumo Saída")
+            input_insumo = st.selectbox(
+                "Insumo Entrada",
+                options=[""] + produtos,
+                format_func=lambda v: "Não informado" if v == "" else v,
+                key="create_input_insumo",
+            )
+            output_insumo = st.selectbox(
+                "Insumo Saída",
+                options=[""] + produtos,
+                format_func=lambda v: "Não informado" if v == "" else v,
+                key="create_output_insumo",
+            )
             massa_input = st.number_input("Massa de Entrada (t)", value=0.0)
             massa_output = st.number_input("Massa de Saída (t)", value=0.0)
             taxacao_fronteira = st.checkbox("Taxação na Fronteira")
@@ -492,7 +581,11 @@ class UtilsUI:
             self.db.propagar_pegada()
 
             acao = "atualizada" if unidade_existente else "adicionada"
-            st.success(f"Unidade {acao} com sucesso!")
+            st.session_state["unidade_feedback_msg"] = f"✅ Unidade {acao} com sucesso!"
+
+            # Sempre retornar para a tabela de unidades após salvar
+            st.session_state.pop("criando_nova_unidade", None)
+            st.session_state.pop("unidade_selecionada_tabela", None)
 
             if modal:
                 modal.close()
@@ -549,6 +642,26 @@ class UtilsUI:
 
     def render_edit_form(self, unidade, fatores_emissao, callback_salvar):
         """Formulário para edição de uma unidade produtiva com tecnologia associada"""
+        self._ensure_catalog_inputs()
+
+        localizacoes = st.session_state.get("cadastro_localizacoes", [])
+        produtos = st.session_state.get("cadastro_produtos", [])
+        localizacao_atual = str(unidade.Localizacao or "").strip()
+        input_atual = str(unidade.Input or "").strip()
+        output_atual = str(unidade.Output or "").strip()
+        anos_disponiveis = [str(ano) for ano in range(2017, 2100)]
+        ano_corrente = str(datetime.now().year)
+        ano_default = ano_corrente if ano_corrente in anos_disponiveis else anos_disponiveis[0]
+        periodo_atual = str(getattr(unidade, "Periodo", "") or "").strip()
+        if periodo_atual and periodo_atual not in anos_disponiveis:
+            anos_disponiveis = sorted(set(anos_disponiveis + [periodo_atual]))
+
+        if localizacao_atual and localizacao_atual not in localizacoes:
+            localizacoes = sorted(localizacoes + [localizacao_atual])
+        if input_atual and input_atual not in produtos:
+            produtos = sorted(produtos + [input_atual])
+        if output_atual and output_atual not in produtos:
+            produtos = sorted(produtos + [output_atual])
         
         # Campos de informação da unidade (fora do form para permitir interação com render_tecnologia)
         st.markdown(f"### Editando Unidade: {unidade.ID_ELO}")
@@ -557,14 +670,37 @@ class UtilsUI:
 
         with col1:
             nome = st.text_input("Nome*", value=unidade.Nome, key=f"edit_{unidade.ID_ELO}_nome")
-            localizacao = st.text_input("Localização*", value=unidade.Localizacao, key=f"edit_{unidade.ID_ELO}_loc")
-            input_insumo = st.text_input("Insumo Entrada", value=unidade.Input, key=f"edit_{unidade.ID_ELO}_input")
+            localizacao = st.selectbox(
+                "Localização*",
+                options=[""] + localizacoes,
+                index=([""] + localizacoes).index(localizacao_atual) if localizacao_atual in ([""] + localizacoes) else 0,
+                format_func=lambda v: "Selecione..." if v == "" else v,
+                key=f"edit_{unidade.ID_ELO}_loc",
+            )
+            input_insumo = st.selectbox(
+                "Insumo Entrada",
+                options=[""] + produtos,
+                index=([""] + produtos).index(input_atual) if input_atual in ([""] + produtos) else 0,
+                format_func=lambda v: "Não informado" if v == "" else v,
+                key=f"edit_{unidade.ID_ELO}_input",
+            )
             massa_input = st.number_input("Massa de Entrada (t)", value=unidade.MassaInput, key=f"edit_{unidade.ID_ELO}_massa_in")
             tax_local = st.checkbox("Taxação Local", value=unidade.TaxacaoLocal, key=f"edit_{unidade.ID_ELO}_tax_local")
 
         with col2:
-            periodo = st.text_input("Período*", value=unidade.Periodo, key=f"edit_{unidade.ID_ELO}_periodo")
-            output_insumo = st.text_input("Insumo Saída", value=unidade.Output, key=f"edit_{unidade.ID_ELO}_output")
+            periodo = st.selectbox(
+                "Período*",
+                options=anos_disponiveis,
+                index=anos_disponiveis.index(periodo_atual) if periodo_atual in anos_disponiveis else anos_disponiveis.index(ano_default),
+                key=f"edit_{unidade.ID_ELO}_periodo",
+            )
+            output_insumo = st.selectbox(
+                "Insumo Saída",
+                options=[""] + produtos,
+                index=([""] + produtos).index(output_atual) if output_atual in ([""] + produtos) else 0,
+                format_func=lambda v: "Não informado" if v == "" else v,
+                key=f"edit_{unidade.ID_ELO}_output",
+            )
             massa_output = st.number_input("Massa de Saída (t)", value=unidade.MassaOutput, key=f"edit_{unidade.ID_ELO}_massa_out")
             tax_fronteira = st.checkbox("Taxação na Fronteira", value=unidade.TaxacaoFronteira, key=f"edit_{unidade.ID_ELO}_tax_front")
 

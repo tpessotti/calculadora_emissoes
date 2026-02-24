@@ -19,16 +19,79 @@ class UnidadesTab:
 
     def _render(self):
         """Renderiza a interface com tabs para organizar as funcionalidades"""
+        with st.sidebar:
+            st.markdown("### 🔍 Filtros")
+            filtros_sidebar = self._render_sidebar_filters()
+            st.markdown("---")
+            st.markdown("### 🔎 Validação Relacional")
+            self._render_relational_validation("sidebar")
+
         tab1, tab2 = st.tabs([
             "Unidades Produtivas",
             "Fluxos"
         ])
 
         with tab1:
-            self._render_tabela_unidades()
+            self._render_tabela_unidades(filtros_sidebar)
 
         with tab2:
             self._render_gerenciar_fluxos()
+
+    def _render_sidebar_filters(self):
+        """Renderiza filtros da página de unidades na sidebar."""
+        unidades = self.utils_ui.db.get_unidades()
+
+        anos_disponiveis = sorted({
+            str(getattr(u, "Periodo", "") or "").strip()
+            for u in unidades
+            if str(getattr(u, "Periodo", "") or "").strip()
+        })
+        localizacoes = sorted({
+            str(getattr(u, "Localizacao", "") or "").strip()
+            for u in unidades
+            if str(getattr(u, "Localizacao", "") or "").strip()
+        })
+        tecnologias = sorted({
+            (
+                getattr(getattr(u, "Tecnologia", None), "nome", "")
+                if getattr(u, "Tecnologia", None)
+                else ""
+            ).strip()
+            for u in unidades
+            if getattr(u, "Tecnologia", None)
+            and (
+                getattr(getattr(u, "Tecnologia", None), "nome", "")
+                if hasattr(getattr(u, "Tecnologia", None), "nome")
+                else ""
+            ).strip()
+        })
+
+        ano = st.selectbox(
+            "Período (ano)",
+            ["Todos"] + anos_disponiveis,
+            key="unidades_sidebar_filtro_ano",
+        )
+        localizacao = st.selectbox(
+            "Localização",
+            ["Todos"] + localizacoes,
+            key="unidades_sidebar_filtro_localizacao",
+        )
+        tecnologia = st.selectbox(
+            "Tecnologia",
+            ["Todos"] + tecnologias,
+            key="unidades_sidebar_filtro_tecnologia",
+        )
+        busca = st.text_input(
+            "Buscar por ID/Nome",
+            key="unidades_sidebar_filtro_busca",
+        )
+
+        return {
+            "ano": ano,
+            "localizacao": localizacao,
+            "tecnologia": tecnologia,
+            "busca": busca,
+        }
 
     def _build_relational_payload(self):
         """Monta payload para validação relacional a partir do estado atual."""
@@ -79,7 +142,6 @@ class UnidadesTab:
     def _render_gerenciar_fluxos(self):
         """Tab para gerenciamento de fluxos (importação/exportação e criação/exclusão)"""
         st.markdown("### Gerenciar Fluxos")
-        self._render_relational_validation("fluxos")
         st.markdown("---")
         
         # Seção de Criação de Conexões
@@ -134,6 +196,13 @@ class UnidadesTab:
                 st.caption(f"Ano de origem: {getattr(origem_unidade, 'Periodo', '') or 'Não informado'}")
             
             with col4:
+                fluxo_id_preview = self.utils_ui.db.next_fluxo_id()
+                st.text_input(
+                    "ID do Fluxo",
+                    value=fluxo_id_preview,
+                    disabled=True,
+                    key="fluxo_id_preview",
+                )
                 label = st.text_input(
                     "Rótulo do Fluxo:",
                     value="Fluxo",
@@ -154,7 +223,7 @@ class UnidadesTab:
         else:
             # Criar lista de fluxos formatada
             fluxos_disponiveis = [
-                f"{c.origem} → {c.destino} ({c.massa} ton) [{c.periodo}]" 
+                f"{getattr(c, 'id', '') or '-'} | {c.origem} → {c.destino} ({c.massa} ton) [{c.periodo}]"
                 for c in st.session_state.conexoes
             ]
             
@@ -169,11 +238,6 @@ class UnidadesTab:
                 self._excluir_fluxo(fluxo_selecionado)
         
         st.markdown("---")
-        
-        # Seção de Importação/Exportação
-        st.markdown("#### Importação e Exportação de Fluxos")
-        st.info("⚠️ Funcionalidade de importação e exportação de fluxos será implementada em breve.")
-        #self.utils_ui.render_import_export()
     
     def _criar_fluxo(self, origem: str, destino: str, massa: float, label: str):
         """Cria um novo fluxo entre duas unidades"""
@@ -205,7 +269,9 @@ class UnidadesTab:
                 return
         
         # Criar nova conexão
+        id_fluxo = self.utils_ui.db.next_fluxo_id()
         nova_conexao = Conexao(
+            id=id_fluxo,
             origem=origem,
             destino=destino,
             massa=massa,
@@ -219,7 +285,7 @@ class UnidadesTab:
         if unidade_origem:
             unidade_origem.Conexao = nova_conexao
         
-        st.success(f"Fluxo criado com sucesso: {origem} → {destino}")
+        st.success(f"Fluxo {id_fluxo} criado com sucesso: {origem} → {destino}")
         st.rerun()
     
     def _excluir_fluxo(self, indice: int):
@@ -237,14 +303,21 @@ class UnidadesTab:
         else:
             st.error("Índice de fluxo inválido.")
     
-    def _render_tabela_unidades(self):
+    def _render_tabela_unidades(self, filtros_sidebar=None):
         """Tab para visualizar, criar e editar unidades"""
+        feedback_msg = st.session_state.pop("unidade_feedback_msg", None)
+        if feedback_msg:
+            st.toast(feedback_msg, icon="✅")
+        tecnologia_feedback = st.session_state.pop("tecnologia_feedback_msg", None)
+        if tecnologia_feedback:
+            st.toast(tecnologia_feedback, icon="✅")
+
         # Se está criando uma nova unidade
         if st.session_state.get("criando_nova_unidade"):
-            st.markdown("### Criar Nova Unidade Produtiva")
+            st.markdown("### Criar Nova Unidade")
             
-            # Botão para cancelar
-            if st.button("⬅️ Cancelar"):
+            # Botão para voltar à tabela
+            if st.button("⬅️ Voltar para Tabela"):
                 del st.session_state.criando_nova_unidade
                 st.rerun()
             
@@ -276,17 +349,15 @@ class UnidadesTab:
 
         # Visualização da tabela (estado padrão)
         st.markdown("### Unidades Produtivas")
-        self._render_relational_validation("unidades")
         st.markdown("---")
 
         unidades = self.utils_ui.db.get_unidades()
-        anos_disponiveis = sorted({str(getattr(u, "Periodo", "") or "") for u in unidades if str(getattr(u, "Periodo", "") or "").strip()})
-        filtro_ano = st.selectbox(
-            "Filtrar por ano",
-            ["Todos"] + anos_disponiveis,
-            key="unidades_filtro_ano",
-            help="Filtra a tabela de unidades e destinos por período/ano.",
-        )
+        filtros_sidebar = filtros_sidebar or {
+            "ano": "Todos",
+            "localizacao": "Todos",
+            "tecnologia": "Todos",
+            "busca": "",
+        }
         
         # Botão para criar nova unidade
         if st.button(" Criar Nova Unidade", type="primary"):
@@ -305,14 +376,31 @@ class UnidadesTab:
         col3.metric("Emissão Total", f"{estatisticas['emissao_total']:,.2f} CO₂")
 
         edges = self.utils_ui.db.get_edges_for_graph()
+        filtro_ano = filtros_sidebar.get("ano", "Todos")
+        filtro_localizacao = filtros_sidebar.get("localizacao", "Todos")
+        filtro_tecnologia = filtros_sidebar.get("tecnologia", "Todos")
+        busca = str(filtros_sidebar.get("busca", "") or "").strip().lower()
+
         if filtro_ano != "Todos":
-            unidades = [u for u in unidades if str(getattr(u, "Periodo", "")) == filtro_ano]
-            ids_filtrados = {u.ID_ELO for u in unidades}
-            edges = [
-                e for e in edges
-                if e.get("source") in ids_filtrados
-                and (e.get("periodo", "") == filtro_ano or not e.get("periodo"))
+            unidades = [u for u in unidades if str(getattr(u, "Periodo", "")).strip() == filtro_ano]
+        if filtro_localizacao != "Todos":
+            unidades = [u for u in unidades if str(getattr(u, "Localizacao", "")).strip() == filtro_localizacao]
+        if filtro_tecnologia != "Todos":
+            unidades = [
+                u for u in unidades
+                if str(getattr(getattr(u, "Tecnologia", None), "nome", "")).strip() == filtro_tecnologia
             ]
+        if busca:
+            unidades = [
+                u for u in unidades
+                if busca in str(getattr(u, "ID_ELO", "")).lower()
+                or busca in str(getattr(u, "Nome", "")).lower()
+            ]
+
+        ids_filtrados = {u.ID_ELO for u in unidades}
+        edges = [e for e in edges if e.get("source") in ids_filtrados]
+        if filtro_ano != "Todos":
+            edges = [e for e in edges if e.get("periodo", "") == filtro_ano or not e.get("periodo")]
 
         unidades_sem_ano = [u.ID_ELO for u in self.utils_ui.db.get_unidades() if not str(getattr(u, "Periodo", "") or "").strip()]
         if unidades_sem_ano:

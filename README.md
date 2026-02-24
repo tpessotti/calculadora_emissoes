@@ -150,6 +150,17 @@ python build_standalone.py
 # Ou hospede em qualquer servidor estático
 ```
 
+O build standalone empacota automaticamente:
+- `src/` (aplicação Streamlit)
+- `core/` (contexto, parser de períodos, IO e validações)
+- `data/` (bases JSON)
+- `assets/` (arquivos de apoio)
+
+Além disso, o script garante defaults mínimos quando ausentes:
+- `data/user_sessions.json`
+- `data/json_db/database.json` (com `anos_disponiveis` padrão)
+- `data/fatores_emissao.json`
+
 O aplicativo estará disponível em `http://localhost:8501` (métodos 1 e 2)
 
 ### Opção 2: Versão Standalone (Deploy sem Servidor)

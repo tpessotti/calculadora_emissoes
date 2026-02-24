@@ -98,6 +98,7 @@ class FatoresEmissaoTab:
                     df_importado["data_importacao"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                     self._processar_importacao(df_importado, acao_duplicado)
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao importar: {e}")
 
