@@ -16,7 +16,7 @@
 
 O aplicativo está disponível gratuitamente no Streamlit Cloud e pode ser acessado diretamente pelo navegador.
 
-> ⚠️ **Versão Beta (v0.2.0-beta)**: Este aplicativo está em desenvolvimento ativo. Algumas funcionalidades podem estar em fase de testes e melhorias contínuas são realizadas regularmente. Feedback e sugestões são muito bem-vindos!
+> ⚠️ **Versão Beta (v0.3.0-beta)**: Este aplicativo está em desenvolvimento ativo. Algumas funcionalidades podem estar em fase de testes e melhorias contínuas são realizadas regularmente. Feedback e sugestões são muito bem-vindos!
 
 ## 📋 Sobre o Projeto
 

@@ -126,13 +126,6 @@ class UnidadeProdutiva:
         }
 
 
-from typing import List, Dict
-import streamlit as st
-import pandas as pd
-import json
-from database import UnidadeProdutiva, Conexao
-from calculations import EmissionCalculator
-
 class DatabaseManager:
     def __init__(self):
         self._init_session_data()
@@ -220,6 +213,7 @@ class DatabaseManager:
         return json.dumps(data, indent=2, ensure_ascii=False)
 
     def import_from_json(self, json_str: str) -> bool:
+        from calculations import EmissionCalculator
         try:
             data = json.loads(json_str)
             
@@ -344,6 +338,7 @@ class DatabaseManager:
     # --- Atualização de Pegadas ---
     def propagar_pegada(self):
         """Atualiza a pegada de todas as unidades com base nas conexões"""
+        from calculations import EmissionCalculator
         EmissionCalculator.propagar_pegada(
             st.session_state.unidades,
             self.get_edges_for_graph()

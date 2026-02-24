@@ -2,13 +2,23 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import sys
 from datetime import datetime
+
+# Ensure core is importable
+_root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _root_dir not in sys.path:
+    sys.path.insert(0, _root_dir)
+
+from core.context import AppContext
+from core.io.json_io import load_fatores_emissao, save_fatores_emissao
 
 class FatoresEmissaoTab:
     """Classe para gerenciar a aba de Fatores de Emissão no Streamlit."""
 
     def __init__(self):
-        self.CAMINHO_JSON = "fatores_emissao.json"
+        ctx = AppContext.get()
+        self.CAMINHO_JSON = ctx.fatores_path()
 
     def _render(self):
         self._inicializar_fatores()
@@ -18,11 +28,8 @@ class FatoresEmissaoTab:
 
     def _inicializar_fatores(self):
         if "fatores_emissao" not in st.session_state:
-            if os.path.exists(self.CAMINHO_JSON):
-                with open(self.CAMINHO_JSON, "r", encoding="utf-8") as f:
-                    st.session_state.fatores_emissao = json.load(f)
-            else:
-                st.session_state.fatores_emissao = []
+            fatores = load_fatores_emissao(self.CAMINHO_JSON)
+            st.session_state.fatores_emissao = fatores
 
     def _render_importacao_planilha(self):
         with st.expander("📥 Importar Fatores de Emissão (.xlsx)"):
@@ -63,8 +70,7 @@ class FatoresEmissaoTab:
 
         st.session_state.fatores_emissao = fatores_existentes.to_dict(orient="records") + novos_fatores
 
-        with open(self.CAMINHO_JSON, "w", encoding="utf-8") as f:
-            json.dump(st.session_state.fatores_emissao, f, indent=2, ensure_ascii=False)
+        save_fatores_emissao(self.CAMINHO_JSON, st.session_state.fatores_emissao)
 
         st.success(f"Importação concluída. {len(novos_fatores)} novos fatores adicionados.")
 
@@ -101,8 +107,7 @@ class FatoresEmissaoTab:
                 for i, row in df_editado.iterrows():
                     st.session_state.fatores_emissao[ids_originais[i]] = row.to_dict()
 
-                with open(self.CAMINHO_JSON, "w", encoding="utf-8") as f:
-                    json.dump(st.session_state.fatores_emissao, f, indent=2, ensure_ascii=False)
+                save_fatores_emissao(self.CAMINHO_JSON, st.session_state.fatores_emissao)
 
                 st.success("Fatores de emissão atualizados com sucesso!")
 
@@ -143,7 +148,6 @@ class FatoresEmissaoTab:
                             st.warning("Já existe um fator de emissão com este grupo, consumível e escopo.")
                         else:
                             st.session_state.fatores_emissao.append(novo_fator)
-                            with open(self.CAMINHO_JSON, "w", encoding="utf-8") as f:
-                                json.dump(st.session_state.fatores_emissao, f, indent=2, ensure_ascii=False)
+                            save_fatores_emissao(self.CAMINHO_JSON, st.session_state.fatores_emissao)
                             st.success("Fator de emissão adicionado com sucesso.")
                             st.rerun()

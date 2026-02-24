@@ -5,6 +5,56 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [0.3.0-beta] - 2025-01
+
+### Adicionado
+- **🏗️ Camada `core/` — nova arquitetura modular**
+  - `core/context.py` — AppContext com ano ativo, paths centralizados e invalidação de cache
+  - `core/io/json_io.py` — Loader/exporter JSON com `st.cache_data`, load/save de database e fatores
+  - `core/io/excel_io.py` — Geração de template Excel com 5 abas (README, Unidades, Conexões, Tecnologias, Fatores), migração Excel → JSON DB
+  - `core/validation/schema.py` — Schema v1.0.0, validação de entidades, integridade referencial, relatórios de erros/avisos
+  - `core/calc/cache.py` — Memoização de cálculos com hash MD5 para evitar recálculos
+  
+- **📅 Sistema Multi-Ano**
+  - Seletor de ano global na sidebar (selectbox)
+  - Descoberta automática de anos a partir do JSON DB e session_state
+  - Invalidação de caches ao trocar de ano
+  - Status bar com ano ativo e estado da base
+  
+- **💾 JSON DB — Persistência estruturada**
+  - Arquivo master `data/json_db/database.json` com schema versionado
+  - Exportação automática do session_state para JSON DB ao salvar sessão
+  - Funções de filtragem por ano (`filtrar_unidades_por_ano`)
+  
+- **📥 Template de Importação Excel**
+  - Botão de download na sidebar com template gerado dinamicamente
+  - Template inclui fatores de emissão pré-preenchidos do sistema
+  - Validação de dados com Data Validation (escopo, booleanos)
+  - Abas com formatação visual (cabeçalhos, linhas de dica, cores)
+  
+- **🧪 Testes unitários**
+  - `tests/test_calculations.py` com 12+ testes
+  - Testes golden-result para propagação de pegada em cadeia linear
+  - Testes de validação de schema e integridade referencial
+  - Testes de geração de template Excel
+  - Testes de JSON I/O (load/save/round-trip)
+
+- **📄 Documentação**
+  - `docs/JSON_SCHEMA.md` — Documentação completa do schema JSON DB
+
+### Alterado
+- **app.py** — Usa `load_fatores_emissao()` com cache em vez de leitura direta; integra contexto de ano e template download
+- **database.py** — Removidas importações circulares (`from database import ...`); imports de `EmissionCalculator` movidos para dentro dos métodos
+- **FatoresEmissao.py** — Usa `AppContext` para caminhos e `save_fatores_emissao()` centralizado
+- **Home.py** — Salva sessão também no JSON DB; refresh de anos disponíveis ao restaurar sessão
+- **Unidades.py**, **Reports.py** — Importam `AppContext` para acesso ao contexto de ano
+- **version.py** — Atualizado para v0.3.0-beta
+
+### Corrigido
+- Importação circular em `database.py` (linha ~130) que importava de si mesmo
+
+---
+
 ## [0.2.0-beta] - 2025-11-11
 
 ### Adicionado

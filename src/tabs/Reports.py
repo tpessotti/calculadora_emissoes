@@ -4,8 +4,17 @@ import plotly.express as px
 import pandas as pd
 import math
 import json
+import sys
+import os
 from datetime import datetime
 from io import BytesIO
+
+# Ensure core is importable
+_root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _root_dir not in sys.path:
+    sys.path.insert(0, _root_dir)
+
+from core.context import AppContext
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -159,6 +168,7 @@ class ReportsTab:
             "📝 Questionário IFRS",
             "📋 Reporte IFRS S1/S2",
             "📑 Análise por Unidade",
+            "🔄 Comparativo Multi-Ano",
         ])
 
         with tabs[0]:
@@ -173,6 +183,8 @@ class ReportsTab:
             self._render_ifrs_report()
         with tabs[5]:
             self._render_analise_por_unidade()
+        with tabs[6]:
+            self._render_comparativo()
 
     # ════════════════════════════════════════════════════════════════
     #  QUESTIONÁRIO IFRS
@@ -1923,6 +1935,214 @@ adequado de todos os consumíveis e fatores de emissão.
         doc.build(story)
         buffer.seek(0)
         return buffer.getvalue()
+
+        doc.build(story)
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    # ════════════════════════════════════════════════════════════════
+    #  COMPARATIVO MULTI-ANO
+    # ════════════════════════════════════════════════════════════════
+    def _render_comparativo(self):
+        """Renderiza aba de análise comparativa entre anos."""
+        from core.context import AppContext
+        from core.calc.comparativo import (
+            pivot_intensidade,
+            calcular_deltas,
+            calcular_variacao_pct,
+            resumo_comparativo,
+            dados_grafico_barras_comparativo,
+            dados_grafico_linha_evolucao,
+        )
+        from core.periodos import format_periodo
+
+        ctx = AppContext.get()
+        unidades = st.session_state.unidades
+
+        st.markdown("### 🔄 Análise Comparativa Multi-Ano")
+
+        if not ctx.modo_comparacao or len(ctx.anos_selecionados) < 2:
+            st.info(
+                "Ative o **Modo comparativo** na barra lateral e selecione 2+ anos "
+                "para visualizar análises comparativas.",
+                icon="ℹ️",
+            )
+            st.markdown(
+                "**Como usar:**\n"
+                "1. Na barra lateral, ative o toggle \"Modo comparativo\"\n"
+                "2. Selecione múltiplos anos ou use uma expressão como `2020-2025`\n"
+                "3. Os gráficos e tabelas comparativas aparecerão aqui"
+            )
+            return
+
+        anos = ctx.anos_selecionados
+        st.caption(f"Comparando: **{format_periodo(anos)}**")
+
+        # --- Resumo geral ---
+        resumo = resumo_comparativo(unidades, anos)
+        if not resumo.get("dados"):
+            st.warning("Nenhum dado encontrado para os anos selecionados.")
+            return
+
+        st.markdown("#### 📊 Resumo por Ano")
+        cols = st.columns(len(anos))
+        for i, ano in enumerate(sorted(anos)):
+            dados_ano = resumo["dados"].get(ano, {})
+            with cols[i]:
+                st.metric(f"Ano {ano}", f"{dados_ano.get('emissao_total', 0):,.4f} tCO₂e")
+                st.caption(
+                    f"Unidades: {dados_ano.get('total_unidades', 0)} · "
+                    f"Massa: {dados_ano.get('massa_total', 0):,.1f} t"
+                )
+
+        # Deltas entre anos consecutivos
+        if resumo.get("deltas"):
+            st.markdown("#### ↕️ Variação entre Períodos")
+            for d in resumo["deltas"]:
+                delta_val = d["delta_emissao"]
+                pct_val = d["variacao_pct"]
+                arrow = "🔺" if delta_val > 0 else "🔻" if delta_val < 0 else "➖"
+                st.markdown(
+                    f"**{d['de']} → {d['para']}**: {arrow} "
+                    f"Δ = {delta_val:+,.4f} tCO₂e ({pct_val:+.2f}%)"
+                )
+
+        st.markdown("---")
+
+        # --- Seletor de métrica ---
+        metrica = st.selectbox(
+            "Métrica para comparação:",
+            options=[
+                "IntensidadeEmissao",
+                "IntensidadeEscopo1",
+                "IntensidadeEscopo2",
+                "IntensidadeEscopo3",
+                "Pegada",
+            ],
+            format_func=lambda x: {
+                "IntensidadeEmissao": "Intensidade Total (tCO₂/t)",
+                "IntensidadeEscopo1": "Intensidade Escopo 1",
+                "IntensidadeEscopo2": "Intensidade Escopo 2",
+                "IntensidadeEscopo3": "Intensidade Escopo 3",
+                "Pegada": "Pegada Acumulada",
+            }.get(x, x),
+            key="_comp_metrica",
+        )
+
+        tab_chart, tab_table = st.tabs(["📊 Gráficos", "📋 Tabelas"])
+
+        with tab_chart:
+            # Gráfico de barras agrupadas
+            st.markdown("##### Barras Comparativas por Unidade")
+            dados_barras = dados_grafico_barras_comparativo(unidades, anos, metrica)
+            if dados_barras["labels"]:
+                fig_bar = go.Figure()
+                colors = px.colors.qualitative.Set2
+                for i, (ano_label, valores) in enumerate(dados_barras["series"].items()):
+                    fig_bar.add_trace(go.Bar(
+                        name=str(ano_label),
+                        x=dados_barras["labels"],
+                        y=valores,
+                        marker_color=colors[i % len(colors)],
+                        text=[f"{v:.4f}" for v in valores],
+                        textposition="outside",
+                    ))
+                fig_bar.update_layout(
+                    barmode="group",
+                    yaxis_title="tCO₂/t",
+                    height=400,
+                    margin=dict(l=20, r=20, t=30, b=40),
+                    plot_bgcolor="white",
+                    legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"),
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.info("Sem dados para gráfico de barras.")
+
+            # Gráfico de linha (evolução)
+            st.markdown("##### Evolução Temporal")
+            dados_linha = dados_grafico_linha_evolucao(unidades, anos, metrica)
+            if dados_linha.get("anos"):
+                fig_line = go.Figure()
+                colors_l = px.colors.qualitative.Plotly
+                for i, (nome, valores) in enumerate(dados_linha["series"].items()):
+                    fig_line.add_trace(go.Scatter(
+                        x=dados_linha["anos"],
+                        y=valores,
+                        mode="lines+markers",
+                        name=nome,
+                        line=dict(color=colors_l[i % len(colors_l)], width=2),
+                        marker=dict(size=8),
+                    ))
+                fig_line.update_layout(
+                    xaxis_title="Ano",
+                    yaxis_title="tCO₂/t",
+                    height=400,
+                    margin=dict(l=20, r=20, t=30, b=40),
+                    plot_bgcolor="white",
+                    legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"),
+                )
+                st.plotly_chart(fig_line, use_container_width=True)
+            else:
+                st.info("Sem dados para gráfico de evolução.")
+
+            # Gráfico de barras por escopo × ano
+            st.markdown("##### Emissões por Escopo × Ano")
+            dados_esc = dados_grafico_barras_comparativo(unidades, anos, por="escopo")
+            if dados_esc["labels"]:
+                fig_esc = go.Figure()
+                esc_colors = {"Escopo 1": _COLORS["scope1"], "Escopo 2": _COLORS["scope2"], "Escopo 3": _COLORS["scope3"]}
+                for escopo, valores in dados_esc["series"].items():
+                    fig_esc.add_trace(go.Bar(
+                        name=escopo,
+                        x=dados_esc["labels"],
+                        y=valores,
+                        marker_color=esc_colors.get(escopo, "#888"),
+                        text=[f"{v:.4f}" for v in valores],
+                        textposition="outside",
+                    ))
+                fig_esc.update_layout(
+                    barmode="group",
+                    yaxis_title="tCO₂e",
+                    height=400,
+                    margin=dict(l=20, r=20, t=30, b=40),
+                    plot_bgcolor="white",
+                    legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"),
+                )
+                st.plotly_chart(fig_esc, use_container_width=True)
+
+        with tab_table:
+            # Pivot table
+            st.markdown("##### Pivot: Unidade × Ano")
+            pivot_df = pivot_intensidade(unidades, anos, metrica)
+            if not pivot_df.empty:
+                st.dataframe(pivot_df.style.format("{:.4f}"), use_container_width=True)
+            else:
+                st.info("Sem dados para pivot table.")
+
+            # Deltas
+            st.markdown("##### Variação Absoluta (Δ)")
+            deltas_df = calcular_deltas(unidades, anos, metrica)
+            if not deltas_df.empty:
+                st.dataframe(
+                    deltas_df.style.format("{:.4f}").applymap(
+                        lambda v: "color: red" if isinstance(v, (int, float)) and v > 0 else "color: green",
+                    ),
+                    use_container_width=True,
+                )
+            else:
+                st.info("Necessário 2+ anos para calcular deltas.")
+
+            # Variação %
+            st.markdown("##### Variação Percentual (%)")
+            pct_df = calcular_variacao_pct(unidades, anos, metrica)
+            if not pct_df.empty:
+                st.dataframe(
+                    pct_df.style.format("{:.2f}%").applymap(
+                        lambda v: "color: red" if isinstance(v, (int, float)) and v > 0 else "color: green",
+                    ),
+                    use_container_width=True,
+                )
 
     # ════════════════════════════════════════════════════════════════
     #  PAINEL GERAL (mantido)

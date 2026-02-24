@@ -138,6 +138,21 @@ class FluxoTab:
                 )
                 st.caption("O layout Sugiyama minimiza cruzamentos de arestas.")
 
+            # ── Detalhamento dos rótulos ──
+            with st.expander("🏷️ Rótulos dos nós"):
+                st.selectbox(
+                    "Nível de detalhe",
+                    ["Compacto", "Médio", "Detalhado"],
+                    index=1,
+                    key="label_mode",
+                    help=(
+                        "**Compacto**: apenas ID. "
+                        "**Médio**: nome + pegada (padrão). "
+                        "**Detalhado**: nome + I/O + escopos."
+                    ),
+                )
+                st.caption("O tooltip (hover) sempre mostra todas as informações.")
+
     # ════════════════════════════════════════════════════════════════
     #  LAYOUT / POSICIONAMENTO
     # ════════════════════════════════════════════════════════════════
@@ -498,13 +513,7 @@ class FluxoTab:
             is_editing = (st.session_state.unidade_editando_fluxo == nid)
             is_sel = nid in sel_nodes
 
-            card_text = (
-                f"<b>{u.Nome}</b><br>"
-                f"<span style='font-size:10px;color:{COLORS['text_secondary']}'>"
-                f"📍 {u.Localizacao}<br>"
-                f"📥 {u.MassaInput:.1f}t → 📤 {u.MassaOutput:.1f}t<br>"
-                f"💨 {u.Pegada:.2f} tCO₂/t</span>"
-            )
+            card_text = self._build_card_text(u)
 
             if is_editing:
                 border_color = COLORS["accent"]
@@ -1205,17 +1214,68 @@ class FluxoTab:
             st.error(f"Erro: {e}")
 
     def _get_node_label(self, unidade):
-        consumos = ", ".join([
-            f"{c['nome']}: {e:.2f} t"
-            for c, e in zip(unidade.Consumiveis, unidade.ConsumoEspecifico)
-        ]) if unidade.Consumiveis and unidade.ConsumoEspecifico else "-"
+        """Retorna o label do nó respeitando o modo selecionado (para painéis externos)."""
+        mode = st.session_state.get("label_mode", "Médio")
+        if mode == "Compacto":
+            return f"<b>{unidade.ID_ELO}</b>"
+        elif mode == "Detalhado":
+            consumos = ", ".join([
+                f"{c['nome']}: {e:.2f} t"
+                for c, e in zip(unidade.Consumiveis, unidade.ConsumoEspecifico)
+            ]) if unidade.Consumiveis and unidade.ConsumoEspecifico else "-"
+            return (
+                f"<b>{unidade.ID_ELO} - {unidade.Nome}</b><br>"
+                f"📍 {unidade.Localizacao} | 📅 {unidade.Periodo}<br>"
+                f"📥 Input: {unidade.Input} ({unidade.MassaInput:.2f} t)<br>"
+                f"📤 Output: {unidade.Output} ({unidade.MassaOutput:.2f} t)<br>"
+                f"🛢️ Insumos: {consumos}<br>"
+                f"💨 Intensidade: {unidade.IntensidadeEmissao:.2f} tCO₂/t<br>"
+                f"  E1: {unidade.IntensidadeEmissaoEscopo1:.4f} | "
+                f"E2: {unidade.IntensidadeEmissaoEscopo2:.4f} | "
+                f"E3: {unidade.IntensidadeEmissaoEscopo3:.4f}<br>"
+                f"📊 Pegada Total: {unidade.Pegada:.2f} tCO₂"
+            )
+        else:  # Médio (default)
+            return (
+                f"<b>{unidade.ID_ELO} - {unidade.Nome}</b><br>"
+                f"📍 {unidade.Localizacao} | 📅 {unidade.Periodo}<br>"
+                f"📥 Input: {unidade.Input} ({unidade.MassaInput:.2f} t)<br>"
+                f"📤 Output: {unidade.Output} ({unidade.MassaOutput:.2f} t)<br>"
+                f"💨 Intensidade: {unidade.IntensidadeEmissao:.2f} tCO₂/t<br>"
+                f"📊 Pegada Total: {unidade.Pegada:.2f} tCO₂"
+            )
 
-        return (
-            f"<b>{unidade.ID_ELO} - {unidade.Nome}</b><br>"
-            f"📍 {unidade.Localizacao} | 📅 {unidade.Periodo}<br>"
-            f"📥 Input: {unidade.Input} ({unidade.MassaInput:.2f} t)<br>"
-            f"📤 Output: {unidade.Output} ({unidade.MassaOutput:.2f} t)<br>"
-            f"🛢️ Insumos: {consumos}<br>"
-            f"💨 Intensidade: {unidade.IntensidadeEmissao:.2f} tCO₂/t<br>"
-            f"📊 Pegada Total: {unidade.Pegada:.2f} tCO₂"
-        )
+    def _build_card_text(self, u):
+        """Gera o texto do card (annotation) abaixo do nó conforme label_mode."""
+        mode = st.session_state.get("label_mode", "Médio")
+        sec_color = COLORS['text_secondary']
+
+        if mode == "Compacto":
+            return (
+                f"<b>{u.Nome}</b><br>"
+                f"<span style='font-size:10px;color:{sec_color}'>"
+                f"💨 {u.Pegada:.2f} tCO₂/t</span>"
+            )
+        elif mode == "Detalhado":
+            esc_line = (
+                f"E1: {u.IntensidadeEmissaoEscopo1:.4f} | "
+                f"E2: {u.IntensidadeEmissaoEscopo2:.4f} | "
+                f"E3: {u.IntensidadeEmissaoEscopo3:.4f}"
+            )
+            return (
+                f"<b>{u.Nome}</b><br>"
+                f"<span style='font-size:10px;color:{sec_color}'>"
+                f"📍 {u.Localizacao} | 📅 {u.Periodo}<br>"
+                f"📥 {u.MassaInput:.1f}t → 📤 {u.MassaOutput:.1f}t<br>"
+                f"💨 Int: {u.IntensidadeEmissao:.4f} tCO₂/t<br>"
+                f"   {esc_line}<br>"
+                f"🌍 Pegada: {u.Pegada:.4f} tCO₂/t</span>"
+            )
+        else:  # Médio
+            return (
+                f"<b>{u.Nome}</b><br>"
+                f"<span style='font-size:10px;color:{sec_color}'>"
+                f"📍 {u.Localizacao}<br>"
+                f"📥 {u.MassaInput:.1f}t → 📤 {u.MassaOutput:.1f}t<br>"
+                f"💨 {u.Pegada:.2f} tCO₂/t</span>"
+            )

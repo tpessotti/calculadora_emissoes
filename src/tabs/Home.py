@@ -5,13 +5,19 @@ import json
 import os
 import sys
 
-# Garantir que o diretório pai está no path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Garantir que o diretório pai e raiz estão no path
+_src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_root_dir = os.path.dirname(_src_dir)
+sys.path.insert(0, _src_dir)
+sys.path.insert(0, _root_dir)
 
 import database
 from datetime import datetime
 from database import UnidadeProdutiva, Conexao, Tecnologia
 from version import __version__, VERSION_INFO
+
+from core.context import AppContext
+from core.io.json_io import export_session_to_database, save_database
 
 class HomeTab:
     def __init__(self):
@@ -1071,6 +1077,14 @@ class HomeTab:
             # Salvar de volta
             self._save_all_sessions(all_sessions)
             
+            # Também salvar no JSON DB
+            try:
+                ctx = AppContext.get()
+                db_data = export_session_to_database(ano=ctx.ano_ativo)
+                save_database(ctx.db_master_path(), db_data)
+            except Exception:
+                pass  # JSON DB save is best-effort
+            
             return True
         except Exception as e:
             st.error(f"Erro ao salvar sessão: {e}")
@@ -1092,6 +1106,13 @@ class HomeTab:
                 
                 # Restaurar a sessão silenciosamente
                 self._importar_sessao(sessao_data)
+                
+                # Atualizar anos disponíveis no contexto
+                try:
+                    ctx = AppContext.get()
+                    ctx.refresh_anos()
+                except Exception:
+                    pass
                 
                 # Mostrar notificação discreta
                 st.toast(f"✅ Sessão anterior restaurada!", icon="🔄")

@@ -1,5 +1,14 @@
 import streamlit as st
+import sys
+import os
+
+# Ensure core is importable
+_root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _root_dir not in sys.path:
+    sys.path.insert(0, _root_dir)
+
 from utils import UtilsUI
+from core.context import AppContext
 
 class UnidadesTab:
     """Classe para gerenciar a aba de Unidades e Fluxos no Streamlit."""

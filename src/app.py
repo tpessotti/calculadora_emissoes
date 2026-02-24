@@ -3,8 +3,11 @@ import json
 import os
 import sys
 
-# Adicionar diretório src ao path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Adicionar diretórios ao path
+_src_dir = os.path.dirname(os.path.abspath(__file__))
+_root_dir = os.path.dirname(_src_dir)
+sys.path.insert(0, _src_dir)
+sys.path.insert(0, _root_dir)
 
 # Importação direta das páginas
 from tabs.Home import HomeTab
@@ -17,6 +20,12 @@ from tabs.Chatbot import ChatbotTab
 
 from database import DatabaseManager
 from calculations import EmissionCalculator
+
+# Core modules
+from core.context import AppContext, render_year_selector
+from core.io.json_io import load_fatores_emissao
+from core.io.excel_io import gerar_template_excel
+from core.validation.schema import validar_database, ValidationReport
 
 
 class App:
@@ -42,16 +51,12 @@ class App:
             if key not in st.session_state:
                 st.session_state[key] = value
 
-        # Verifica se existe fatores de emissão salvos
+        # Carrega fatores de emissão com cache
         if "fatores_emissao" not in st.session_state or not st.session_state["fatores_emissao"]:
-            fatores_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "fatores_emissao.json")
-            if os.path.exists(fatores_path):
-                try:
-                    with open(fatores_path, "r", encoding="utf-8") as f:
-                        st.session_state.fatores_emissao = json.load(f)
-                except Exception as e:
-                    st.warning(f"Erro ao carregar fatores de emissão: {e}")
-                    st.session_state.fatores_emissao = []
+            ctx = AppContext.get()
+            fatores = load_fatores_emissao(ctx.fatores_path())
+            if fatores:
+                st.session_state.fatores_emissao = fatores
             else:
                 st.session_state.fatores_emissao = []
                 st.session_state["mostrar_aviso_fatores_emissao"] = True
@@ -72,6 +77,9 @@ class App:
         if usuario_logado is None:
             HomeTab()._render()
             return
+        
+        # Inicializar contexto de ano
+        ctx = AppContext.get()
         
         # Usuário logado - mostrar menu lateral completo
         with st.sidebar:
@@ -115,6 +123,61 @@ class App:
                 index=0,
                 label_visibility="collapsed"
             )
+
+        # Renderizar seletor de ano na sidebar (abaixo da navegação)
+        render_year_selector()
+        
+        # Template download na sidebar
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown("### 📥 Template de Importação")
+            try:
+                template_bytes = gerar_template_excel(
+                    ano=ctx.ano_ativo,
+                    fatores_emissao=st.session_state.get("fatores_emissao", []),
+                )
+                st.download_button(
+                    label="⬇️ Baixar Template Excel",
+                    data=template_bytes,
+                    file_name=f"template_emissoes_{ctx.ano_ativo}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    help="Template com abas README, Unidades, Conexões, Tecnologias e Fatores de Emissão",
+                )
+            except Exception as e:
+                st.caption(f"⚠️ Template indisponível: {e}")
+            
+            st.markdown("---")
+            
+            # Botão Validar Base
+            st.markdown("### 🔍 Validação da Base")
+            if st.button("Validar Base", use_container_width=True, help="Verifica integridade dos dados carregados"):
+                db_data = {
+                    "unidades": st.session_state.get("unidades", []),
+                    "conexoes": st.session_state.get("edges", []),
+                    "fatores_emissao": st.session_state.get("fatores_emissao", []),
+                }
+                report: ValidationReport = validar_database(db_data)
+                st.session_state["_validation_report"] = report
+
+            _report: ValidationReport | None = st.session_state.get("_validation_report")
+            if _report is not None:
+                if _report.is_valid and not _report.avisos:
+                    st.success(f"✅ Base válida — {_report.registros_validos}/{_report.total_registros} registros OK")
+                elif _report.is_valid:
+                    st.warning(f"⚠️ {_report.registros_validos}/{_report.total_registros} válidos, {len(_report.avisos)} aviso(s)")
+                else:
+                    st.error(f"❌ {len(_report.erros)} erro(s), {len(_report.avisos)} aviso(s)")
+                
+                if _report.erros:
+                    with st.expander(f"❌ Erros ({len(_report.erros)})", expanded=True):
+                        for e in _report.erros:
+                            st.markdown(f"- **{e.entidade}[{e.indice}].{e.campo}**: {e.mensagem}")
+                if _report.avisos:
+                    with st.expander(f"⚠️ Avisos ({len(_report.avisos)})"):
+                        for w in _report.avisos:
+                            st.markdown(f"- **{w.entidade}[{w.indice}].{w.campo}**: {w.mensagem}")
+            
             st.markdown("---")
 
         # Carregamento dinâmico da página
