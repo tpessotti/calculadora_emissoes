@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 #  SCHEMA — estrutura canônica do JSON DB
 # ═══════════════════════════════════════════════════════════════════
 
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 
 # Campos obrigatórios por entidade
 REQUIRED_FIELDS = {
@@ -59,8 +59,10 @@ FIELD_TYPES = {
     "origem": str,
     "destino": str,
     "massa": (int, float),
+    "periodo": str,
     "fator_emissao": (int, float),
     "escopo": str,
+    "ano": int,
 }
 
 
@@ -313,15 +315,15 @@ def _validar_unicidade(data: Dict[str, Any], report: ValidationReport) -> None:
         else:
             fator_keys[key] = idx
 
-    # Conexões duplicadas (origem, destino)
+    # Conexões duplicadas (origem, destino, periodo)
     conn_keys: dict[tuple, int] = {}
     for idx, c in enumerate(data.get("conexoes", [])):
-        key = (c.get("origem", ""), c.get("destino", ""))
+        key = (c.get("origem", ""), c.get("destino", ""), c.get("periodo", ""))
         if key in conn_keys:
             report.avisos.append(ValidationError(
                 entidade="conexao", indice=idx,
-                campo="origem/destino",
-                mensagem=f"Conexão duplicada: {key[0]} → {key[1]}.",
+                campo="origem/destino/periodo",
+                mensagem=f"Conexão duplicada: {key[0]} → {key[1]} ({key[2]}).",
                 severidade="warning",
             ))
         else:
@@ -378,8 +380,8 @@ def get_schema_description() -> Dict[str, Any]:
             "conexoes": {
                 "descricao": "Arcos/fluxos entre unidades produtivas",
                 "campos_obrigatorios": REQUIRED_FIELDS["conexao"],
-                "campos_opcionais": ["massa", "label"],
-                "chave_composta": ["origem", "destino"],
+                "campos_opcionais": ["massa", "label", "periodo"],
+                "chave_composta": ["origem", "destino", "periodo"],
             },
             "tecnologias": {
                 "descricao": "Tecnologias alternativas com perfis de insumos",

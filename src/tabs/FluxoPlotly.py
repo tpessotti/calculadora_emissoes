@@ -4,6 +4,8 @@ import networkx as nx
 import math
 from config import CANVAS_CONFIG
 from utils import UtilsUI
+from core.io.excel_io import exportar_sessao_excel
+from core.context import AppContext
 import base64
 from io import BytesIO
 
@@ -74,7 +76,25 @@ class FluxoTab:
             if k not in st.session_state:
                 st.session_state[k] = v
 
-        self.utils_ui.ec.propagar_pegada(st.session_state.unidades, st.session_state.edges)
+        # Filtrar unidades e edges pelo ano ativo
+        ctx = AppContext.get()
+        ano_str = str(ctx.ano_ativo)
+        todas_unidades = st.session_state.unidades
+        todos_edges = st.session_state.edges
+
+        unidades_filtradas = [u for u in todas_unidades if str(u.Periodo) == ano_str]
+        ids_filtrados = {u.ID_ELO for u in unidades_filtradas}
+        edges_filtrados = [
+            e for e in todos_edges
+            if e.get("periodo", "") == ano_str
+            or (not e.get("periodo") and e["source"] in ids_filtrados and e["target"] in ids_filtrados)
+        ]
+
+        # Guardar listas filtradas para uso nos renders
+        st.session_state["_fluxo_unidades"] = unidades_filtradas
+        st.session_state["_fluxo_edges"] = edges_filtrados
+
+        self.utils_ui.ec.propagar_pegada(todas_unidades, todos_edges)
         self._render_sidebar()
 
         # ── Layout principal: grafo à esquerda, painel à direita ──
@@ -102,6 +122,24 @@ class FluxoTab:
         with st.sidebar:
             st.markdown("### 📊 Diagrama de Fluxo")
 
+            # ── Filtro de ano ──
+            ctx = AppContext.get()
+            ctx.refresh_anos()
+            anos = ctx.anos_disponiveis
+
+            ano_filtro = st.selectbox(
+                "📅 Ano",
+                options=anos,
+                index=anos.index(ctx.ano_ativo) if ctx.ano_ativo in anos else 0,
+                key="_fluxo_ano_filtro",
+                help="O diagrama exibe apenas unidades do ano selecionado.",
+            )
+            if ano_filtro and ano_filtro != ctx.ano_ativo:
+                ctx.set_ano(ano_filtro)
+                st.rerun()
+
+            st.markdown("---")
+
             # ── Status de seleção ──
             n_sel = len(st.session_state.selected_nodes)
             if n_sel:
@@ -126,6 +164,28 @@ class FluxoTab:
                         mime="application/json", key="dl_json",
                         use_container_width=True,
                     )
+
+                st.markdown("---")
+
+                ctx = AppContext.get()
+                if st.button("Gerar Excel", use_container_width=True, key="exp_xlsx"):
+                    try:
+                        xlsx_data = exportar_sessao_excel(
+                            unidades=list(st.session_state.get("unidades", [])),
+                            conexoes=list(st.session_state.get("conexoes", [])),
+                            tecnologias=list(st.session_state.get("tecnologias_alternativas", [])),
+                            fatores_emissao=list(st.session_state.get("fatores_emissao", [])),
+                            ano=ctx.ano_ativo,
+                        )
+                        st.download_button(
+                            "⬇️ Baixar Excel", data=xlsx_data,
+                            file_name=f"sessao_emissoes_{ctx.ano_ativo}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_xlsx",
+                            use_container_width=True,
+                        )
+                    except Exception as e:
+                        st.error(f"Erro ao gerar Excel: {e}")
 
             # ── Layout ──
             with st.expander("⚙️ Layout"):
@@ -157,11 +217,13 @@ class FluxoTab:
     #  LAYOUT / POSICIONAMENTO
     # ════════════════════════════════════════════════════════════════
     def _build_nx_graph(self):
-        """Constrói o grafo NetworkX a partir do estado."""
+        """Constrói o grafo NetworkX a partir do estado (filtrado por ano)."""
         G = nx.DiGraph()
-        for u in st.session_state.unidades:
+        unidades = st.session_state.get("_fluxo_unidades", st.session_state.unidades)
+        edges = st.session_state.get("_fluxo_edges", st.session_state.edges)
+        for u in unidades:
             G.add_node(u.ID_ELO)
-        for e in st.session_state.edges:
+        for e in edges:
             G.add_edge(e["source"], e["target"], massa=e.get("massa", 0))
         return G
 
@@ -366,13 +428,18 @@ class FluxoTab:
     #  CRIAÇÃO DO GRÁFICO PLOTLY
     # ════════════════════════════════════════════════════════════════
     def _render_graph(self):
-        if not st.session_state.unidades:
-            st.info("➕ Adicione unidades na aba **Unidades** para visualizar o diagrama.")
+        unidades = st.session_state.get("_fluxo_unidades", st.session_state.unidades)
+        edges = st.session_state.get("_fluxo_edges", st.session_state.edges)
+
+        if not unidades:
+            ctx = AppContext.get()
+            st.info(f"Nenhuma unidade encontrada para o ano **{ctx.ano_ativo}**. "
+                    "Adicione unidades ou selecione outro ano.")
             return
 
         posicoes = self._organize_nodes(
-            st.session_state.unidades,
-            st.session_state.edges,
+            unidades,
+            edges,
             st.session_state.get("esp_x", 350),
             st.session_state.get("esp_y", 200),
         )
@@ -827,11 +894,15 @@ class FluxoTab:
             if current_nodes and len(current_nodes) == 1 and not selected_edge_candidate:
                 nid = current_nodes[0]
                 # Abrir sempre o form de edição
-                st.session_state.unidade_editando_fluxo = nid
+                if st.session_state.unidade_editando_fluxo != nid:
+                    st.session_state.unidade_editando_fluxo = nid
+                    changed = True
 
             # Seleção múltipla não abre edição
             if len(current_nodes) != 1:
-                st.session_state.unidade_editando_fluxo = None
+                if st.session_state.unidade_editando_fluxo is not None:
+                    st.session_state.unidade_editando_fluxo = None
+                    changed = True
 
             if changed:
                 st.rerun()
@@ -1153,7 +1224,8 @@ class FluxoTab:
             return
         try:
             u_src = self.utils_ui.db.get_unidade_by_id(origem_id)
-            self.utils_ui.db.add_edge(origem_id, destino_id, u_src.MassaOutput)
+            periodo = str(u_src.Periodo) if u_src else ""
+            self.utils_ui.db.add_edge(origem_id, destino_id, u_src.MassaOutput, periodo=periodo)
             st.session_state.edges = self.utils_ui.db.get_edges_for_graph()
             st.success(f"✅ Conexão criada: {origem_id} → {destino_id}")
             self._clear_selection()

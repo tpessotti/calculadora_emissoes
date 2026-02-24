@@ -17,7 +17,11 @@ from database import UnidadeProdutiva, Conexao, Tecnologia
 from version import __version__, VERSION_INFO
 
 from core.context import AppContext
-from core.io.json_io import export_session_to_database, save_database
+from core.io.json_io import export_session_to_database, save_database, save_fatores_emissao
+from core.io.excel_io import gerar_template_excel, exportar_sessao_excel, excel_to_json_db
+from core.validation.schema import validar_database, ValidationReport
+from core.validation.relational import validar_integridade_relacional, formatar_relatorio_markdown
+from core.periodos import parse_periodo, PeriodoError
 
 class HomeTab:
     def __init__(self):
@@ -398,12 +402,12 @@ class HomeTab:
     def _render_home_logado(self):
         usuario = st.session_state.usuario_logado
         is_admin = usuario.lower() == "admin"
-        
-        # CSS personalizado para a página logada
+
+        # CSS personalizado para a welcome page
         st.markdown("""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
-        
+
         .user-header {
             background: linear-gradient(135deg, #4c8061 0%, #3d6650 100%);
             padding: 2rem;
@@ -412,633 +416,347 @@ class HomeTab:
             margin-bottom: 2rem;
             box-shadow: 0 4px 12px rgba(76, 128, 97, 0.2);
         }
-        
         .user-info {
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 0.3rem;
+            font-family: 'Poppins', sans-serif; font-size: 1.5rem;
+            font-weight: 600; margin-bottom: 0.3rem;
         }
-        
         .user-role {
-            font-family: 'Poppins', sans-serif;
-            font-size: 0.95rem;
-            opacity: 0.9;
-            font-weight: 300;
+            font-family: 'Poppins', sans-serif; font-size: 0.95rem;
+            opacity: 0.9; font-weight: 300;
         }
-        
         .welcome-card {
-            background: white;
-            border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 12px rgba(76, 128, 97, 0.1);
+            background: white; border-radius: 16px; padding: 2rem;
+            margin-bottom: 2rem; box-shadow: 0 4px 12px rgba(76,128,97,0.1);
             border-left: 4px solid #4c8061;
         }
-        
         .welcome-title {
-            font-family: 'Poppins', sans-serif;
-            font-size: 2rem;
-            font-weight: 700;
-            color: #4c8061;
-            margin-bottom: 1rem;
+            font-family: 'Poppins', sans-serif; font-size: 2rem;
+            font-weight: 700; color: #4c8061; margin-bottom: 1rem;
         }
-        
         .welcome-text {
-            font-family: 'Poppins', sans-serif;
-            font-weight: 300;
-            color: #555;
-            line-height: 1.8;
-            margin-bottom: 1.5rem;
+            font-family: 'Poppins', sans-serif; font-weight: 300;
+            color: #555; line-height: 1.8; margin-bottom: 1.5rem;
         }
-        
-        .feature-list {
-            font-family: 'Poppins', sans-serif;
-            font-weight: 400;
-            color: #333;
-            line-height: 2;
+        .nav-card {
+            background: white; border-radius: 14px; padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(76,128,97,0.08);
+            border-left: 4px solid #4c8061;
+            transition: all 0.25s ease;
+            height: 100%;
         }
-        
-        .feature-list li {
-            margin-bottom: 0.5rem;
-        }
-        
-        .action-card {
-            background: white;
-            border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 12px rgba(76, 128, 97, 0.1);
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-        }
-        
-        .action-card:hover {
-            box-shadow: 0 8px 24px rgba(76, 128, 97, 0.2);
-            border-color: #4c8061;
+        .nav-card:hover {
+            box-shadow: 0 6px 18px rgba(76,128,97,0.18);
             transform: translateY(-2px);
         }
-        
-        .action-title {
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.3rem;
-            font-weight: 600;
-            color: #4c8061;
-            margin-bottom: 0.5rem;
+        .nav-card-title {
+            font-family: 'Poppins', sans-serif; font-size: 1.1rem;
+            font-weight: 600; color: #4c8061; margin-bottom: 0.5rem;
         }
-        
-        .action-description {
-            font-family: 'Poppins', sans-serif;
-            font-weight: 300;
-            color: #666;
-            font-size: 0.95rem;
-            line-height: 1.6;
+        .nav-card-text {
+            font-family: 'Poppins', sans-serif; font-weight: 300;
+            color: #666; font-size: 0.9rem; line-height: 1.6;
+        }
+        .section-heading {
+            font-family: 'Poppins', sans-serif; font-size: 1.3rem;
+            font-weight: 600; color: #4c8061; margin-bottom: 1rem;
+        }
+        .step-number {
+            display: inline-block; background: #4c8061; color: white;
+            width: 28px; height: 28px; border-radius: 50%; text-align: center;
+            line-height: 28px; font-weight: 700; font-size: 0.85rem;
+            margin-right: 0.5rem;
         }
         </style>
         """, unsafe_allow_html=True)
-        
-        # Cabeçalho do usuário
-        col1, col2 = st.columns([5, 1])
-        with col1:
-            st.markdown(f"""
-            <div class="user-header">
-                <div class="user-info">👤 {usuario}</div>
-                <div class="user-role">{"Administrador do Sistema" if is_admin else "Usuário da Plataforma"} | Logado em {st.session_state.get('data_login', 'agora')}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            st.write("")  # Espaçamento
-            st.write("")
-            if st.button("❌ Sair", width='stretch', type="secondary"):
-                self._limpar_sessao()
-                st.session_state.usuario_logado = None
-                st.rerun()
 
-        # Card de boas-vindas
+        # ── Cabeçalho do usuário ──────────────────────────────────
         st.markdown(f"""
+        <div class="user-header">
+            <div class="user-info">👤 {usuario}</div>
+            <div class="user-role">{"Administrador do Sistema" if is_admin else "Usuário da Plataforma"} · Logado em {st.session_state.get('data_login', 'agora')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ── Card de boas-vindas ───────────────────────────────────
+        st.markdown("""
         <div class="welcome-card">
             <div class="welcome-title">Bem-vindo à Calculadora de Emissões CMP</div>
             <div class="welcome-text">
-                Esta plataforma foi desenvolvida para facilitar a análise de emissões de carbono 
-                em cadeias produtivas, oferecendo ferramentas intuitivas e poderosas para quantificação 
-                e gestão de gases de efeito estufa.
-            </div>
-            <div class="feature-list">
-                <strong>Recursos disponíveis:</strong>
-                <ul>
-                    <li>✓ Modelagem de unidades produtivas com insumos e saídas</li>
-                    <li>✓ Criação de fluxos entre processos produtivos</li>
-                    <li>✓ Gestão de fatores de emissão personalizados</li>
-                    <li>✓ Simulação de tecnologias alternativas</li>
-                    <li>✓ Visualizações avançadas (Sankey, grafos, tabelas)</li>
-                    <li>✓ Assistente de IA para análise inteligente</li>
-                </ul>
+                A <strong>Calculadora de Emissões CMP</strong> permite modelar cadeias produtivas,
+                calcular emissões de gases de efeito estufa por escopo e simular cenários com
+                tecnologias alternativas. Use o menu lateral para navegar entre as funcionalidades.
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
-        # Cards de ação
-        st.markdown("### Ações Rápidas")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            <div class="action-card">
-                <div class="action-title">💾 Gerenciar Sessão</div>
-                <div class="action-description">
-                    Salve seu trabalho ou restaure uma sessão anterior com todos os dados e configurações.
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("📤 Exportar Sessão Atual", use_container_width=True, type="secondary"):
-                st.session_state.show_export_modal = True
-            
-            if st.button("📥 Importar Sessão Salva", use_container_width=True):
-                st.session_state.show_import_modal = True
-        
-        with col2:
-            st.markdown("""
-            <div class="action-card">
-                <div class="action-title">📊 Status da Sessão</div>
-                <div class="action-description">
-                    Visualize informações sobre os dados carregados na sessão atual.
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            unidades = st.session_state.get("unidades", [])
-            conexoes = st.session_state.get("conexoes", [])
-            fatores = st.session_state.get("fatores_emissao", [])
-            tecnologias = st.session_state.get("tecnologias_alternativas", [])
-            
-            st.metric("Unidades Produtivas", len(unidades))
-            st.metric("Conexões de Fluxo", len(conexoes))
-            st.metric("Fatores de Emissão", len(fatores))
-            st.metric("Tecnologias Alternativas", len(tecnologias))
-        
-        # Modal de exportação
-        if st.session_state.get("show_export_modal", False):
-            self._render_export_modal()
-        
-        # Modal de importação
-        if st.session_state.get("show_import_modal", False):
-            self._render_import_modal()
-        
-        # Funcionalidades administrativas (apenas para admin)
-        if is_admin:
-            st.divider()
-            st.markdown("### 🔧 Funcionalidades Administrativas")
-            self._render_importar_fluxo_excel()
-        
-        # Avisos
-        if st.session_state.get("mostrar_aviso_fatores_emissao", False):
-            st.warning("⚠️ Nenhum fator de emissão foi encontrado. Importe um arquivo JSON com os fatores para continuar.")
-        
-        # Footer com links úteis e versão
-        st.divider()
-        
-        # Links úteis
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown("""
-            <div style='text-align: center; margin-bottom: 1rem;'>
-                <strong style='color: #4c8061;'>Links Úteis</strong>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.markdown("[![CMP](https://img.shields.io/badge/cmp.eco-4c8061?style=flat-square)](https://cmp.eco)")
-            with col_b:
-                st.markdown("[![LinkedIn](https://img.shields.io/badge/LinkedIn-4c8061?style=flat-square)](https://linkedin.com/company/carbonmetricsproject)")
-        
-        # Versão
-        st.markdown(f"<div style='text-align: center; color: #888; font-size: 0.85em; margin-top: 1rem;'>CMP Calculadora de Emissões v{__version__} | {VERSION_INFO['status']}</div>", unsafe_allow_html=True)
-    
-    def _render_export_modal(self):
-        """Modal para exportação de sessão com estatísticas"""
-        @st.dialog("Exportar Sessão de Trabalho", width="large")
-        def export_dialog():
-            sessao_data = self._exportar_sessao()
-            
-            # Informações da sessão
-            st.markdown(f"""
-            <style>
-            .export-info {{
-                background: #f8f9fa;
-                padding: 1.5rem;
-                border-radius: 12px;
-                margin-bottom: 1.5rem;
-                border-left: 4px solid #4c8061;
-            }}
-            .export-label {{
-                font-weight: 600;
-                color: #4c8061;
-                margin-bottom: 0.3rem;
-            }}
-            .export-value {{
-                font-size: 1.1rem;
-                color: #333;
-                margin-bottom: 1rem;
-            }}
-            .stats-grid {{
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
-                margin-top: 1rem;
-            }}
-            .stat-box {{
-                background: white;
-                padding: 1rem;
-                border-radius: 8px;
-                border: 1px solid #e0e0e0;
-                text-align: center;
-            }}
-            .stat-number {{
-                font-size: 2rem;
-                font-weight: 700;
-                color: #4c8061;
-            }}
-            .stat-label {{
-                font-size: 0.9rem;
-                color: #666;
-                margin-top: 0.3rem;
-            }}
-            </style>
-            """, unsafe_allow_html=True)
-            
-            st.markdown(f"""
-            <div class="export-info">
-                <div class="export-label">Usuário</div>
-                <div class="export-value">👤 {sessao_data['usuario']}</div>
-                
-                <div class="export-label">Data e Hora</div>
-                <div class="export-value">📅 {sessao_data['data_exportacao']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("#### 📊 Conteúdo da Sessão")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-number">{len(sessao_data.get('unidades', []))}</div>
-                    <div class="stat-label">Unidades Produtivas</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-number">{len(sessao_data.get('fatores_emissao', []))}</div>
-                    <div class="stat-label">Fatores de Emissão</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-number">{len(sessao_data.get('conexoes', []))}</div>
-                    <div class="stat-label">Conexões de Fluxo</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-number">{len(sessao_data.get('tecnologias_alternativas', []))}</div>
-                    <div class="stat-label">Tecnologias Alternativas</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            # Nome do arquivo
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            usuario = st.session_state.usuario_logado
-            nome_arquivo = f"sessao_{usuario}_{timestamp}.json"
-            
-            # Botões de ação
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.download_button(
-                    label="💾 Confirmar e Baixar Sessão",
-                    data=json.dumps(sessao_data, indent=2, ensure_ascii=False),
-                    file_name=nome_arquivo,
-                    mime="application/json",
-                    use_container_width=True,
-                    type="primary"
-                )
-            with col2:
-                if st.button("Cancelar", use_container_width=True):
-                    st.session_state.show_export_modal = False
-                    st.rerun()
-            
-            st.info("💡 O arquivo será salvo no formato JSON e pode ser importado posteriormente para restaurar esta sessão.")
-        
-        export_dialog()
-    
-    def _render_import_modal(self):
-        """Modal para importação de sessão"""
-        @st.dialog("Importar Sessão de Trabalho", width="large")
-        def import_dialog():
-            st.markdown("""
-            <style>
-            .import-header {
-                background: #f8f9fa;
-                padding: 1.5rem;
-                border-radius: 12px;
-                margin-bottom: 1.5rem;
-                border-left: 4px solid #4c8061;
-            }
-            .import-instructions {
-                font-family: 'Poppins', sans-serif;
-                color: #666;
-                line-height: 1.6;
-                margin-bottom: 1rem;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("""
-            <div class="import-header">
-                <div class="import-instructions">
-                    � Selecione um arquivo de sessão exportado anteriormente para restaurar 
-                    todas as unidades produtivas, conexões, fatores de emissão e tecnologias.
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            uploaded_file = st.file_uploader(
-                "Arquivo de Sessão (.json)",
-                type=["json"],
-                key="upload_sessao_modal",
-                help="Escolha um arquivo .json exportado pela plataforma"
-            )
-            
-            if uploaded_file:
-                try:
-                    sessao_data = json.load(uploaded_file)
-                    
-                    # Validar estrutura básica
-                    if "usuario" in sessao_data and "data_exportacao" in sessao_data:
-                        st.success("✅ Arquivo de sessão válido!")
-                        
-                        # Informações da sessão em estilo similar ao export
-                        st.markdown("#### 📋 Informações da Sessão")
-                        
-                        st.markdown(f"""
-                        <div class="export-info">
-                            <div class="export-label">Usuário Original</div>
-                            <div class="export-value">👤 {sessao_data.get('usuario', 'Desconhecido')}</div>
-                            
-                            <div class="export-label">Data de Exportação</div>
-                            <div class="export-value">📅 {sessao_data.get('data_exportacao', 'Desconhecida')}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        st.markdown("#### 📊 Conteúdo a Ser Importado")
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"""
-                            <div class="stat-box">
-                                <div class="stat-number">{len(sessao_data.get('unidades', []))}</div>
-                                <div class="stat-label">Unidades Produtivas</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            st.markdown(f"""
-                            <div class="stat-box">
-                                <div class="stat-number">{len(sessao_data.get('fatores_emissao', []))}</div>
-                                <div class="stat-label">Fatores de Emissão</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        
-                        with col2:
-                            st.markdown(f"""
-                            <div class="stat-box">
-                                <div class="stat-number">{len(sessao_data.get('conexoes', []))}</div>
-                                <div class="stat-label">Conexões de Fluxo</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            st.markdown(f"""
-                            <div class="stat-box">
-                                <div class="stat-number">{len(sessao_data.get('tecnologias_alternativas', []))}</div>
-                                <div class="stat-label">Tecnologias Alternativas</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        
-                        st.warning("⚠️ **Atenção:** Esta ação substituirá todos os dados atuais da sessão. Certifique-se de exportar sua sessão atual antes de continuar.")
-                        
-                        # Botões de ação
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            if st.button("🔄 Confirmar e Restaurar Sessão", use_container_width=True, type="primary"):
-                                with st.spinner("Importando sessão..."):
-                                    try:
-                                        self._importar_sessao(sessao_data)
-                                        st.session_state.show_import_modal = False
-                                        st.success("✅ Sessão restaurada com sucesso!")
-                                        st.balloons()
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao importar: {str(e)}")
-                        with col2:
-                            if st.button("Cancelar", use_container_width=True):
-                                st.session_state.show_import_modal = False
-                                st.rerun()
-                    else:
-                        st.error("❌ Arquivo inválido. O arquivo não contém uma estrutura de sessão válida.")
-                        if st.button("Fechar", use_container_width=True):
-                            st.session_state.show_import_modal = False
-                            st.rerun()
-                except json.JSONDecodeError:
-                    st.error("❌ Erro ao ler o arquivo. Certifique-se de que é um arquivo JSON válido.")
-                    if st.button("Fechar", use_container_width=True):
-                        st.session_state.show_import_modal = False
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao processar arquivo: {str(e)}")
-                    if st.button("Fechar", use_container_width=True):
-                        st.session_state.show_import_modal = False
-                        st.rerun()
-            else:
-                st.info("� Aguardando seleção do arquivo...")
-                if st.button("Cancelar", use_container_width=True):
-                    st.session_state.show_import_modal = False
-                    st.rerun()
-        
-        import_dialog()
-    
-    
-    def _exportar_sessao(self) -> Dict:
-        """Exporta o estado atual da sessão para um dicionário"""
-        # Converter UnidadeProdutiva objects para dicts
+
+        # ── Resumo da sessão ──────────────────────────────────────
         unidades = st.session_state.get("unidades", [])
-        unidades_dict = []
-        for u in unidades:
-            if hasattr(u, 'to_dict'):
-                unidades_dict.append(u.to_dict())
-            else:
-                unidades_dict.append(u)
-        
-        # Converter Conexao objects para dicts
         conexoes = st.session_state.get("conexoes", [])
-        conexoes_dict = []
-        for c in conexoes:
-            if hasattr(c, 'to_dict'):
-                conexoes_dict.append(c.to_dict())
-            else:
-                conexoes_dict.append(c)
-        
-        # Converter Tecnologia objects para dicts
+        fatores = st.session_state.get("fatores_emissao", [])
         tecnologias = st.session_state.get("tecnologias_alternativas", [])
-        tecnologias_dict = []
-        for t in tecnologias:
-            if hasattr(t, 'to_dict'):
-                tecnologias_dict.append(t.to_dict())
-            else:
-                tecnologias_dict.append(t)
-        
-        return {
-            "usuario": st.session_state.usuario_logado,
-            "data_exportacao": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "unidades": unidades_dict,
-            "conexoes": conexoes_dict,
-            "edges": st.session_state.get("edges", []),
-            "fatores_emissao": st.session_state.get("fatores_emissao", []),
-            "tecnologias_alternativas": tecnologias_dict,
-            "node_counter": st.session_state.get("node_counter", 1),
-            "openrouter_api_key": st.session_state.get("openrouter_api_key", ""),
-        }
-    
-    def _importar_sessao(self, sessao_data: Dict):
-        """Importa dados de sessão para o session_state"""
-        try:
-            # Primeiro, restaurar tecnologias (converter dicts para objetos Tecnologia)
-            tecnologias_dict = sessao_data.get("tecnologias_alternativas", [])
-            tecnologias = []
-            tecnologias_map = {}  # Mapa ID -> objeto Tecnologia
-            for t_dict in tecnologias_dict:
-                tecnologia = Tecnologia.from_dict(t_dict)
-                tecnologias.append(tecnologia)
-                tecnologias_map[tecnologia.id] = tecnologia
-            
-            # Restaurar conexões (converter dicts para objetos Conexao)
-            conexoes_dict = sessao_data.get("conexoes", [])
-            conexoes = []
-            for c_dict in conexoes_dict:
-                conexao = Conexao(
-                    origem=c_dict.get("origem"),
-                    destino=c_dict.get("destino"),
-                    massa=c_dict.get("massa", 0.0),
-                    label=c_dict.get("label", "Fluxo")
-                )
-                conexoes.append(conexao)
-            
-            # Restaurar unidades (converter dicts para objetos UnidadeProdutiva)
-            unidades_dict = sessao_data.get("unidades", [])
-            unidades = []
-            for u_dict in unidades_dict:
-                # Reconstruir objeto Conexao se existir
-                conexao = None
-                if u_dict.get("Conexao"):
-                    c_dict = u_dict["Conexao"]
-                    conexao = Conexao(
-                        origem=c_dict.get("origem"),
-                        destino=c_dict.get("destino"),
-                        massa=c_dict.get("massa", 0.0),
-                        label=c_dict.get("label", "Fluxo")
-                    )
-                
-                # Resolver tecnologia: se for string (ID), buscar objeto; se None, deixar None
-                tecnologia_valor = u_dict.get("Tecnologia")
-                tecnologia_obj = None
-                if tecnologia_valor:
-                    if isinstance(tecnologia_valor, str):
-                        # É um ID, buscar o objeto
-                        tecnologia_obj = tecnologias_map.get(tecnologia_valor)
-                    else:
-                        # Já é um dict, criar objeto
-                        tecnologia_obj = Tecnologia.from_dict(tecnologia_valor)
-                
-                # Criar objeto UnidadeProdutiva
-                unidade = UnidadeProdutiva(
-                    id_elo=u_dict["ID_ELO"],
-                    nome=u_dict["Nome"],
-                    localizacao=u_dict["Localizacao"],
-                    periodo=u_dict["Periodo"],
-                    input_insumo=u_dict["Input"],
-                    massa_input=u_dict["MassaInput"],
-                    output_insumo=u_dict["Output"],
-                    massa_output=u_dict["MassaOutput"],
-                    consumiveis=u_dict["Consumiveis"],
-                    consumo_especifico=u_dict["ConsumoEspecifico"],
-                    taxacao_fronteira=u_dict.get("TaxacaoFronteira", False),
-                    taxacao_local=u_dict.get("TaxacaoLocal", False),
-                    tecnologia=tecnologia_obj,  # Passar objeto Tecnologia, não string
-                    conexao=conexao
-                )
-                
-                # Restaurar valores calculados
-                unidade.IntensidadeEmissao = u_dict.get("IntensidadeEmissao", 0.0)
-                unidade.IntensidadeEmissaoEscopo1 = u_dict.get("IntensidadeEmissaoEscopo1", 0.0)
-                unidade.IntensidadeEmissaoEscopo2 = u_dict.get("IntensidadeEmissaoEscopo2", 0.0)
-                unidade.IntensidadeEmissaoEscopo3 = u_dict.get("IntensidadeEmissaoEscopo3", 0.0)
-                unidade.Pegada = u_dict.get("Pegada", 0.0)
-                unidade.PegadaEscopo1 = u_dict.get("PegadaEscopo1", 0.0)
-                unidade.PegadaEscopo2 = u_dict.get("PegadaEscopo2", 0.0)
-                unidade.PegadaEscopo3 = u_dict.get("PegadaEscopo3", 0.0)
-                unidade.ConfigOperacional = u_dict.get("ConfigOperacional", "Padrão")
-                
-                unidades.append(unidade)
-            
-            # Atualizar session_state
-            st.session_state.unidades = unidades
-            st.session_state.conexoes = conexoes
-            st.session_state.edges = sessao_data.get("edges", [])
-            st.session_state.fatores_emissao = sessao_data.get("fatores_emissao", [])
-            st.session_state.tecnologias_alternativas = tecnologias
-            st.session_state.node_counter = sessao_data.get("node_counter", 1)
-            
-            # Restaurar API key se disponível
-            if "openrouter_api_key" in sessao_data:
-                st.session_state.openrouter_api_key = sessao_data.get("openrouter_api_key", "")
-            
-            # Marcar para refresh do canvas
-            st.session_state.refresh_canvas = True
-            
-        except Exception as e:
-            st.error(f"Erro ao importar sessão: {str(e)}")
-            raise
-    
-    def _limpar_sessao(self):
-        """Limpa todos os dados da sessão ao fazer logout"""
-        # Limpar dados principais
-        keys_to_clear = [
-            "unidades",
-            "conexoes",
-            "edges",
-            "fatores_emissao",
-            "tecnologias_alternativas",
-            "node_counter",
-            "data_login",
-            "refresh_canvas",
-            "selected_node",
-            "mostrar_aviso_fatores_emissao",
-            "openrouter_api_key",
-            "sessao_restaurada"
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Unidades", len(unidades))
+        c2.metric("Conexões", len(conexoes))
+        c3.metric("Fatores", len(fatores))
+        c4.metric("Tecnologias", len(tecnologias))
+
+        st.markdown("")
+
+        # ── Como usar a ferramenta ────────────────────────────────
+        st.markdown('<div class="section-heading">🗺️ Como usar a ferramenta</div>', unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="font-family:'Poppins',sans-serif; color:#444; line-height:1.9; margin-bottom:1.5rem;">
+            <span class="step-number">1</span> <strong>Cadastre unidades produtivas</strong> em <em>Unidades & Fluxos</em> — defina insumos, massas e consumíveis.<br>
+            <span class="step-number">2</span> <strong>Conecte as unidades</strong> no <em>Diagrama de Fluxo</em> para representar a cadeia (filtre por ano).<br>
+            <span class="step-number">3</span> <strong>Configure fatores de emissão</strong> em <em>Fatores de Emissão</em> para calcular intensidades.<br>
+            <span class="step-number">4</span> <strong>Simule tecnologias alternativas</strong> em <em>Tecnologias</em> e compare cenários.<br>
+            <span class="step-number">5</span> <strong>Analise resultados</strong> em <em>Análise de Emissões</em> com gráficos e tabelas detalhadas.<br>
+            <span class="step-number">6</span> <strong>Salve e exporte</strong> sua sessão em <em>Sessões</em> para retomar depois.
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ── Navegação rápida ──────────────────────────────────────
+        st.markdown('<div class="section-heading">🚀 Navegação rápida</div>', unsafe_allow_html=True)
+
+        nav_items = [
+            ("📐 Unidades & Fluxos", "Cadastre e gerencie as unidades produtivas da cadeia.", "Unidades & Fluxos"),
+            ("🔀 Diagrama de Fluxo", "Visualize e edite o grafo interativo das conexões.", "Diagrama de Fluxo"),
+            ("⚡ Fatores de Emissão", "Gerencie os fatores de conversão por consumível.", "Fatores de Emissão"),
+            ("🔬 Tecnologias", "Simule o impacto de tecnologias alternativas.", "Tecnologias"),
+            ("📊 Análise de Emissões", "Relatórios, gráficos e comparações detalhadas.", "Análise de Emissões"),
+            ("💬 Assistente IA", "Converse com a IA para insights sobre seus dados.", "Assistente IA"),
         ]
-        
-        for key in keys_to_clear:
-            if key in st.session_state:
-                del st.session_state[key]
-    
+
+        cols = st.columns(3)
+        for idx, (title, desc, target) in enumerate(nav_items):
+            with cols[idx % 3]:
+                st.markdown(f"""
+                <div class="nav-card">
+                    <div class="nav-card-title">{title}</div>
+                    <div class="nav-card-text">{desc}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"Ir para {title.split(' ', 1)[1]}", key=f"_nav_{idx}", use_container_width=True):
+                    st.session_state["_nav_target"] = target
+                    st.rerun()
+
+        st.markdown("")
+
+        # ── Importar / Exportar Dados ─────────────────────────────
+        st.markdown('<div class="section-heading">📥 Importar & Exportar Dados</div>', unsafe_allow_html=True)
+
+        ctx = AppContext.get()
+        t1, t2 = st.columns(2)
+
+        with t1:
+            st.markdown("##### ⬇️ Baixar Template Excel")
+            has_data = len(unidades) > 0
+
+            if has_data:
+                st.caption("Sessão com dados — o arquivo Excel sairá preenchido.")
+                try:
+                    xlsx_bytes = exportar_sessao_excel(
+                        unidades=list(unidades),
+                        conexoes=list(conexoes),
+                        tecnologias=list(tecnologias),
+                        fatores_emissao=list(fatores),
+                        ano=ctx.ano_ativo,
+                    )
+                    st.download_button(
+                        label="⬇️ Baixar Excel (preenchido)",
+                        data=xlsx_bytes,
+                        file_name=f"sessao_emissoes_{ctx.ano_ativo}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
+                except Exception as e:
+                    st.caption(f"⚠️ Erro ao gerar Excel: {e}")
+            else:
+                st.caption("Sessão vazia — o arquivo Excel sairá como template em branco.")
+                try:
+                    template_bytes = gerar_template_excel(
+                        ano=ctx.ano_ativo,
+                        fatores_emissao=list(fatores),
+                    )
+                    st.download_button(
+                        label="⬇️ Baixar Template Excel (vazio)",
+                        data=template_bytes,
+                        file_name=f"template_emissoes_{ctx.ano_ativo}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
+                except Exception as e:
+                    st.caption(f"⚠️ Template indisponível: {e}")
+
+        with t2:
+            st.markdown("##### ⬆️ Importar a partir de Excel")
+            st.caption("Envie um arquivo .xlsx no formato do template para carregar dados na sessão.")
+            uploaded = st.file_uploader(
+                "Selecione o arquivo Excel",
+                type=["xlsx"],
+                key="_home_excel_upload",
+                label_visibility="collapsed",
+            )
+            if uploaded is not None:
+                try:
+                    db_data = excel_to_json_db(uploaded)
+                    fatores_excel = db_data.get("fatores_emissao", [])
+
+                    if fatores_excel:
+                        st.info(f"Planilha contém {len(fatores_excel)} fator(es) de emissão na aba Fatores_Emissao.")
+                        acao_duplicado = st.radio(
+                            "Se fator já existir na base atual:",
+                            ["Substituir", "Descartar"],
+                            horizontal=True,
+                            key="_home_import_fatores_acao",
+                        )
+                    else:
+                        acao_duplicado = "Descartar"
+
+                    # ── Validação relacional antes de importar ──
+                    rel_report = validar_integridade_relacional(db_data)
+                    md = formatar_relatorio_markdown(rel_report)
+                    with st.expander(
+                        "📋 Relatório de Validação"
+                        + (" ✅" if rel_report.is_valid else " ❌"),
+                        expanded=not rel_report.is_valid,
+                    ):
+                        st.markdown(md)
+
+                    if not rel_report.is_valid:
+                        st.error(
+                            f"Importação bloqueada: {len(rel_report.errors)} erro(s) "
+                            f"de integridade encontrado(s). Corrija o arquivo e tente novamente."
+                        )
+                    else:
+                        if rel_report.has_warnings:
+                            st.warning(
+                                f"{len(rel_report.warnings)} aviso(s) encontrado(s). "
+                                "A importação pode prosseguir, mas revise os avisos acima."
+                            )
+
+                        if st.button("📥 Confirmar importação do template", use_container_width=True, key="_home_import_excel_confirm"):
+                            fatores_mesclados, resumo_fatores = self._mesclar_fatores_template(
+                                st.session_state.get("fatores_emissao", []),
+                                fatores_excel,
+                                acao_duplicado,
+                            )
+                            st.session_state.fatores_emissao = fatores_mesclados
+                            try:
+                                ctx_local = AppContext.get()
+                                save_fatores_emissao(ctx_local.fatores_path(), fatores_mesclados)
+                            except Exception:
+                                pass
+
+                            if resumo_fatores["ignorados_periodo"]:
+                                st.warning(
+                                    f"{resumo_fatores['ignorados_periodo']} fator(es) ignorado(s) por período inválido."
+                                )
+                            if resumo_fatores["substituidos"]:
+                                st.info(f"{resumo_fatores['substituidos']} fator(es) substituído(s).")
+                            if resumo_fatores["descartados"]:
+                                st.info(f"{resumo_fatores['descartados']} fator(es) duplicado(s) descartado(s).")
+
+                            json_str = json.dumps(db_data, ensure_ascii=False)
+                            db_manager = database.DatabaseManager()
+                            sucesso = db_manager.import_from_json(json_str)
+                            if sucesso:
+                                st.session_state.edges = db_manager.get_edges_for_graph()
+                                st.session_state.refresh_canvas = True
+                                try:
+                                    ctx.refresh_anos()
+                                except Exception:
+                                    pass
+                                st.success("✅ Dados importados com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error("Falha ao importar dados. Verifique o formato do arquivo.")
+                except Exception as e:
+                    st.error(f"Erro ao processar arquivo: {e}")
+
+    def _normalizar_ano_fator(self, val):
+        if val is None or str(val).strip() == "" or str(val).strip().lower() in ("nan", "none"):
+            return None
+        try:
+            return int(float(val))
+        except (ValueError, TypeError):
+            return None
+
+    def _explodir_anos_fator(self, ano_val, periodo_val):
+        ano_norm = self._normalizar_ano_fator(ano_val)
+        if ano_norm is not None:
+            return [ano_norm]
+
+        periodo_txt = "" if periodo_val is None else str(periodo_val).strip()
+        if not periodo_txt or periodo_txt.lower() in ("nan", "none"):
+            return [None]
+
+        try:
+            return [int(a) for a in parse_periodo(periodo_txt)]
+        except PeriodoError:
+            return []
+
+    def _mesclar_fatores_template(self, fatores_existentes, fatores_template, acao_duplicado):
+        existentes = [dict(f) for f in (fatores_existentes or [])]
+        resumo = {"adicionados": 0, "substituidos": 0, "descartados": 0, "ignorados_periodo": 0}
+
+        def _chave(f):
+            ano = self._normalizar_ano_fator(f.get("ano"))
+            return (
+                str(f.get("grupo_consumivel", "")).strip(),
+                str(f.get("consumivel", "")).strip(),
+                str(f.get("escopo", "")).strip(),
+                ano,
+            )
+
+        idx_existentes = {_chave(f): i for i, f in enumerate(existentes)}
+
+        for ft in (fatores_template or []):
+            anos = self._explodir_anos_fator(ft.get("ano"), ft.get("periodo"))
+            if not anos:
+                resumo["ignorados_periodo"] += 1
+                continue
+
+            for ano_item in anos:
+                novo = {
+                    "grupo_consumivel": ft.get("grupo_consumivel", ""),
+                    "consumivel": ft.get("consumivel", ""),
+                    "escopo": ft.get("escopo", ""),
+                    "fator_emissao": ft.get("fator_emissao", 0.0),
+                    "kgCO2e_unid": ft.get("kgCO2e_unid", ""),
+                    "data_importacao": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                if ano_item is not None:
+                    novo["ano"] = int(ano_item)
+
+                k = _chave(novo)
+                if k in idx_existentes:
+                    if acao_duplicado == "Substituir":
+                        existentes[idx_existentes[k]] = novo
+                        resumo["substituidos"] += 1
+                    else:
+                        resumo["descartados"] += 1
+                    continue
+
+                idx_existentes[k] = len(existentes)
+                existentes.append(novo)
+                resumo["adicionados"] += 1
+
+        return existentes, resumo
+
+        # ── Footer ────────────────────────────────────────────────
+        st.divider()
+        st.markdown(
+            f"<div style='text-align:center;color:#888;font-size:0.85em;'>"
+            f"CMP Calculadora de Emissões v{__version__} | {VERSION_INFO['status']}</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ══════════════════════════════════════════════════════════════
+    #  Métodos auxiliares mantidos para auto-restore no login
+    # ══════════════════════════════════════════════════════════════
     def _load_all_sessions(self) -> Dict:
         """Carrega todas as sessões do arquivo JSON"""
         if os.path.exists(self.sessions_file):
@@ -1049,289 +767,121 @@ class HomeTab:
                 st.warning(f"Erro ao carregar sessões: {e}")
                 return {}
         return {}
-    
-    def _save_all_sessions(self, sessions: Dict):
-        """Salva todas as sessões no arquivo JSON"""
+
+    def _importar_sessao(self, sessao_data: Dict):
+        """Importa dados de sessão para o session_state"""
         try:
-            with open(self.sessions_file, 'w', encoding='utf-8') as f:
-                json.dump(sessions, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            st.error(f"Erro ao salvar sessões: {e}")
-    
-    def _save_user_session(self):
-        """Salva a sessão atual do usuário no banco de dados"""
-        usuario = st.session_state.get("usuario_logado")
-        if not usuario:
-            return
-        
-        try:
-            # Exportar dados da sessão atual
-            sessao_data = self._exportar_sessao()
-            
-            # Carregar todas as sessões
-            all_sessions = self._load_all_sessions()
-            
-            # Atualizar a sessão deste usuário
-            all_sessions[usuario] = sessao_data
-            
-            # Salvar de volta
-            self._save_all_sessions(all_sessions)
-            
-            # Também salvar no JSON DB
+            tecnologias_dict = sessao_data.get("tecnologias_alternativas", [])
+            tecnologias = []
+            tecnologias_map = {}
+            for t_dict in tecnologias_dict:
+                tecnologia = Tecnologia.from_dict(t_dict)
+                tecnologias.append(tecnologia)
+                tecnologias_map[tecnologia.id] = tecnologia
+
+            conexoes_dict = sessao_data.get("conexoes", [])
+            conexoes = []
+            for c_dict in conexoes_dict:
+                conexao = Conexao(
+                    origem=c_dict.get("origem"),
+                    destino=c_dict.get("destino"),
+                    massa=c_dict.get("massa", 0.0),
+                    label=c_dict.get("label", "Fluxo"),
+                    periodo=c_dict.get("periodo", ""),
+                )
+                conexoes.append(conexao)
+
+            unidades_dict = sessao_data.get("unidades", [])
+            unidades = []
+            for u_dict in unidades_dict:
+                conexao = None
+                if u_dict.get("Conexao"):
+                    cd = u_dict["Conexao"]
+                    conexao = Conexao(
+                        origem=cd.get("origem"), destino=cd.get("destino"),
+                        massa=cd.get("massa", 0.0), label=cd.get("label", "Fluxo"),
+                        periodo=cd.get("periodo", ""),
+                    )
+
+                tecnologia_valor = u_dict.get("Tecnologia")
+                tecnologia_obj = None
+                if tecnologia_valor:
+                    if isinstance(tecnologia_valor, str):
+                        tecnologia_obj = tecnologias_map.get(tecnologia_valor)
+                    else:
+                        tecnologia_obj = Tecnologia.from_dict(tecnologia_valor)
+
+                unidade = UnidadeProdutiva(
+                    id_elo=u_dict["ID_ELO"], nome=u_dict["Nome"],
+                    localizacao=u_dict["Localizacao"], periodo=u_dict["Periodo"],
+                    input_insumo=u_dict["Input"], massa_input=u_dict["MassaInput"],
+                    output_insumo=u_dict["Output"], massa_output=u_dict["MassaOutput"],
+                    consumiveis=u_dict["Consumiveis"],
+                    consumo_especifico=u_dict["ConsumoEspecifico"],
+                    taxacao_fronteira=u_dict.get("TaxacaoFronteira", False),
+                    taxacao_local=u_dict.get("TaxacaoLocal", False),
+                    tecnologia=tecnologia_obj, conexao=conexao,
+                )
+                unidade.IntensidadeEmissao = u_dict.get("IntensidadeEmissao", 0.0)
+                unidade.IntensidadeEmissaoEscopo1 = u_dict.get("IntensidadeEmissaoEscopo1", 0.0)
+                unidade.IntensidadeEmissaoEscopo2 = u_dict.get("IntensidadeEmissaoEscopo2", 0.0)
+                unidade.IntensidadeEmissaoEscopo3 = u_dict.get("IntensidadeEmissaoEscopo3", 0.0)
+                unidade.Pegada = u_dict.get("Pegada", 0.0)
+                unidade.PegadaEscopo1 = u_dict.get("PegadaEscopo1", 0.0)
+                unidade.PegadaEscopo2 = u_dict.get("PegadaEscopo2", 0.0)
+                unidade.PegadaEscopo3 = u_dict.get("PegadaEscopo3", 0.0)
+                unidade.ConfigOperacional = u_dict.get("ConfigOperacional", "Padrão")
+                unidades.append(unidade)
+
+            st.session_state.unidades = unidades
+            st.session_state.conexoes = conexoes
+            st.session_state.edges = sessao_data.get("edges", [])
+            st.session_state.fatores_emissao = sessao_data.get("fatores_emissao", [])
+            st.session_state.tecnologias_alternativas = tecnologias
+            st.session_state.node_counter = sessao_data.get("node_counter", 1)
+
+            # Restaurar contexto de ano
             try:
                 ctx = AppContext.get()
-                db_data = export_session_to_database(ano=ctx.ano_ativo)
-                save_database(ctx.db_master_path(), db_data)
+                ctx.refresh_anos()
+                ano_salvo = sessao_data.get("ano_ativo")
+                anos_sel_salvos = sessao_data.get("anos_selecionados", [])
+                modo_comp_salvo = bool(sessao_data.get("modo_comparacao", False))
+
+                if isinstance(ano_salvo, int) and ano_salvo in ctx.anos_disponiveis:
+                    ctx.set_ano(ano_salvo)
+                else:
+                    ctx.set_ano(ctx.anos_disponiveis[0])
+
+                if modo_comp_salvo and isinstance(anos_sel_salvos, list):
+                    anos_validos = [a for a in anos_sel_salvos if isinstance(a, int) and a in ctx.anos_disponiveis]
+                    if anos_validos:
+                        ctx.set_anos_selecionados(anos_validos)
             except Exception:
-                pass  # JSON DB save is best-effort
-            
-            return True
+                pass
+
+            if "openrouter_api_key" in sessao_data:
+                st.session_state.openrouter_api_key = sessao_data.get("openrouter_api_key", "")
+            st.session_state.refresh_canvas = True
         except Exception as e:
-            st.error(f"Erro ao salvar sessão: {e}")
-            return False
-    
+            st.error(f"Erro ao importar sessão: {e}")
+            raise
+
     def _auto_restore_session(self):
         """Restaura automaticamente a última sessão do usuário ao fazer login"""
         usuario = st.session_state.get("usuario_logado")
         if not usuario:
             return
-        
         try:
-            # Carregar todas as sessões
             all_sessions = self._load_all_sessions()
-            
-            # Verificar se existe sessão salva para este usuário
             if usuario in all_sessions:
                 sessao_data = all_sessions[usuario]
-                
-                # Restaurar a sessão silenciosamente
                 self._importar_sessao(sessao_data)
-                
-                # Atualizar anos disponíveis no contexto
                 try:
                     ctx = AppContext.get()
                     ctx.refresh_anos()
                 except Exception:
                     pass
-                
-                # Mostrar notificação discreta
-                st.toast(f"✅ Sessão anterior restaurada!", icon="🔄")
-        except Exception as e:
-            # Falha silenciosa - não interrompe o login
-            pass
-    
-    def _render_importar_fluxo_excel(self):
-        st.subheader("Importar Fluxo a partir de Planilha Excel")
-
-        uploaded_file = st.file_uploader("Selecionar arquivo Excel (.xlsx)", type=["xlsx"])
-        
-        if uploaded_file:
-            try:
-                df = pd.read_excel(uploaded_file)
-
-                # Exibe preview
-                st.write("Pré-visualização dos dados:", df.head())
-
-                if st.button("📄 Converter e Importar"):
-                    resultado = self.converter_e_importar_fluxo(df)
-
-                    st.write("DEBUG - Resultado da conversão:")
-                    st.write(f"  - Unidades: {len(resultado.get('unidades', []))}")
-                    st.write(f"  - Conexões: {len(resultado.get('conexoes', []))}")
-                    st.write(f"  - Tecnologias: {len(resultado.get('tecnologias_alternativas', []))}")
-
-                    # Opcional: salvar localmente
-                    with open("fluxo_importado.json", "w", encoding="utf-8") as f:
-                        json.dump(resultado, f, indent=2, ensure_ascii=False)
-
-                    # Usar método existente de importação (supondo que seja o db do app)
-                    json_str = json.dumps(resultado, ensure_ascii=False)
-                    sucesso = self.db.import_from_json(json_str)
-
-                    if sucesso:
-                        # Atualizar st.session_state.edges após importação
-                        st.session_state.edges = self.db.get_edges_for_graph()
-                        st.write(f"DEBUG - Edges após importação: {len(st.session_state.edges)}")
-                        st.write(f"DEBUG - Conexoes após importação: {len(st.session_state.conexoes)}")
-                        st.session_state.refresh_canvas = True
-                        st.success("Fluxo importado com sucesso!")
-                        st.rerun()
-                    else:
-                        st.error("Falha ao importar dados para o sistema.")
-            except Exception as e:
-                st.error(f"Erro ao processar o arquivo: {str(e)}")
-    
-    def converter_e_importar_fluxo(self, df: pd.DataFrame) -> Dict:
-        # Normalizações
-        df["massa_t"] = df["massa_kt"] * 1000.0
-        df["etapa"] = df["etapa"].astype(int)
-        
-        # Debug: Mostrar estrutura do DataFrame
-        st.write("DEBUG - Colunas do DataFrame:", df.columns.tolist())
-        st.write("DEBUG - Primeiras linhas:", df.head())
-        st.write("DEBUG - Unidades únicas:", df["unidade"].unique())
-        st.write("DEBUG - Etapas por unidade:")
-        for unidade in df["unidade"].unique():
-            etapas = sorted(df[df["unidade"] == unidade]["etapa"].unique())
-            st.write(f"  - {unidade}: etapas {etapas}")
-
-        fatores_emissao = st.session_state.get("fatores_emissao", [])
-        fatores_disponiveis = {f["consumivel"] for f in fatores_emissao}
-        insumos_faltando = set()
-
-        tecnologias_dict = {}
-        unidades_list = []
-        conexoes = []
-
-        unidade_id_map = {}   # (unidade, etapa) -> ID
-        unidade_massa_map = {}# ID -> massa_t
-        unidade_seq = 1
-
-        # 1) Criar unidades (uma por par unidade/etapa) e mapear por etapa global
-        etapas_globais = {}  # etapa -> lista de unidades nessa etapa
-        
-        for (unidade_nome, etapa), grupo in df.groupby(["unidade", "etapa"]):
-            unidade_nome = str(unidade_nome).strip()
-            etapa = int(etapa)
-
-            unidade_id = f"U{unidade_seq:03d}"
-            unidade_seq += 1
-
-            nome_unidade = f"{unidade_nome} Etapa {etapa}"
-            # assumimos mesma massa para todas as linhas do grupo (primeira linha serve)
-            massa = float(grupo["massa_t"].iloc[0])
-
-            tecnologia_nome = str(grupo["tecnologia"].iloc[0]).strip()
-            tecnologia_id = f"{tecnologia_nome}_{unidade_nome}".upper()
-
-            insumos = []
-            consumo_especifico = []
-            insumos_tecnologia = []
-            for _, row in grupo.iterrows():
-                nome_insumo = str(row["consumivel"]).strip()
-                consumo_esp = float(row["consumo_especifico"])
-
-                # Buscar o fator de emissão correspondente
-                fator_emissao = 0.0
-                escopo = "1"
-                for f in fatores_emissao:
-                    if f["consumivel"] == nome_insumo:
-                        fator_emissao = f["fator_emissao"]
-                        escopo = f.get("escopo", "1")
-                        break
-                
-                if nome_insumo not in fatores_disponiveis:
-                    insumos_faltando.add(nome_insumo)
-
-                # Insumos para a unidade (formato esperado pelo calculations)
-                insumos.append({
-                    "nome": nome_insumo, 
-                    "fator": fator_emissao,
-                    "escopo": escopo
-                })
-                consumo_especifico.append(consumo_esp)
-                
-                # Insumos para a tecnologia (formato diferente)
-                insumos_tecnologia.append({"nome": nome_insumo, "fator_consumo": consumo_esp})
-
-            if tecnologia_id not in tecnologias_dict:
-                tecnologias_dict[tecnologia_id] = {
-                    "id": tecnologia_id,
-                    "nome": tecnologia_id,
-                    "insumos": insumos_tecnologia,
-                    "unidades": []
-                }
-
-            tecnologias_dict[tecnologia_id]["unidades"].append({
-                "unidade": unidade_id,
-                "limite_inferior": 0.0,
-                "limite_superior": 1.0
-            })
-
-            unidade = {
-                "ID_ELO": unidade_id,
-                "Nome": nome_unidade,
-                "Localizacao": "Desconhecida",
-                "Periodo": "2023",
-                "Input": "AF70",
-                "MassaInput": massa,
-                "Output": "AF70",
-                "MassaOutput": massa,
-                "Consumiveis": insumos,             # atenção: aqui são da tecnologia (fator_consumo)
-                "ConsumoEspecifico": consumo_especifico,
-                "TaxacaoFronteira": False,
-                "TaxacaoLocal": False,
-                # mantenho o ID aqui; se quiser já associar o objeto depois, faça isso no import_from_json
-                "Tecnologia": tecnologia_id,
-                "ConfigOperacional": "Importado"
-            }
-
-            unidades_list.append(unidade)
-            unidade_id_map[(unidade_nome, etapa)] = unidade_id
-            unidade_massa_map[unidade_id] = massa
-            
-            # Adicionar ao mapeamento de etapas globais
-            if etapa not in etapas_globais:
-                etapas_globais[etapa] = []
-            etapas_globais[etapa].append(unidade_id)
-
-        # 2) Criar conexões entre etapas: cada unidade da etapa N conecta com cada unidade da etapa N+1
-        st.write("DEBUG - Criando conexões entre etapas...")
-        etapas_ordenadas = sorted(etapas_globais.keys())
-        st.write(f"DEBUG - Etapas encontradas: {etapas_ordenadas}")
-        
-        for i in range(len(etapas_ordenadas) - 1):
-            etapa_atual = etapas_ordenadas[i]
-            etapa_proxima = etapas_ordenadas[i + 1]
-            
-            unidades_origem = etapas_globais[etapa_atual]
-            unidades_destino = etapas_globais[etapa_proxima]
-            
-            st.write(f"DEBUG - Conectando etapa {etapa_atual} ({len(unidades_origem)} unidades) → etapa {etapa_proxima} ({len(unidades_destino)} unidades)")
-            
-            # Conectar cada unidade de origem com cada unidade de destino
-            for origem_id in unidades_origem:
-                for destino_id in unidades_destino:
-                    massa = unidade_massa_map.get(origem_id, 0.0)
-                    
-                    # Criar conexão
-                    conexao_dict = {
-                        "origem": origem_id,
-                        "destino": destino_id,
-                        "massa": massa,
-                        "label": "Fluxo"
-                    }
-                    conexoes.append(conexao_dict)
-                    
-                    # Associar conexão à unidade de origem
-                    for unidade in unidades_list:
-                        if unidade["ID_ELO"] == origem_id:
-                            # Se já existe uma conexão, criar lista
-                            if "Conexao" not in unidade or unidade["Conexao"] is None:
-                                unidade["Conexao"] = conexao_dict
-                            break
-                    
-                    st.write(f"  ✓ Conexão: {origem_id} → {destino_id} (massa: {massa})")
-
-        if insumos_faltando:
-            st.warning(
-                "Insumos encontrados na planilha mas sem fator de emissão registrado: "
-                + ", ".join(sorted(insumos_faltando))
-                + ". Eles foram registrados com fator 0.0."
-            )
-
-        st.write(f"DEBUG - Total de unidades criadas: {len(unidades_list)}")
-        st.write(f"DEBUG - Total de conexões criadas: {len(conexoes)}")
-        if conexoes:
-            st.write("DEBUG - Lista de conexões:")
-            for c in conexoes:
-                st.write(f"  - {c}")
-        else:
-            st.error("AVISO: Nenhuma conexão foi criada!")
-        
-        return {
-            "unidades": unidades_list,
-            "conexoes": conexoes,
-            "tecnologias_alternativas": list(tecnologias_dict.values())
-        }
-
+                st.toast("✅ Sessão anterior restaurada!", icon="🔄")
+        except Exception:
+            pass  # Falha silenciosa

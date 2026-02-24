@@ -13,6 +13,7 @@ class Conexao:
     destino: str
     massa: float = 0.0  # Massa transferida na conexão
     label: str = "Fluxo"
+    periodo: str = ""   # Período/ano da conexão
 
     def to_dict(self):
         return asdict(self)
@@ -152,9 +153,9 @@ class DatabaseManager:
         return next((u for u in st.session_state.unidades if u.ID_ELO == id_elo), None)
 
     # --- Conexões ---
-    def add_edge(self, origem: str, destino: str, massa: float = 0.0) -> None:
-        if not any(c.origem == origem and c.destino == destino for c in st.session_state.conexoes):
-            st.session_state.conexoes.append(Conexao(origem=origem, destino=destino, massa=massa))
+    def add_edge(self, origem: str, destino: str, massa: float = 0.0, periodo: str = "") -> None:
+        if not any(c.origem == origem and c.destino == destino and c.periodo == periodo for c in st.session_state.conexoes):
+            st.session_state.conexoes.append(Conexao(origem=origem, destino=destino, massa=massa, periodo=periodo))
     
     def remove_edge(self, origem: str, destino: str) -> None:
         st.session_state.conexoes = [
@@ -222,28 +223,40 @@ class DatabaseManager:
             insumos_disponiveis = {f["consumivel"] for f in fatores_emissao}
             insumos_faltando = set()
 
-            tecnologias_raw = data.get("tecnologias_alternativas", [])
+            tecnologias_raw = data.get("tecnologias_alternativas")
+            if tecnologias_raw is None:
+                tecnologias_raw = data.get("tecnologias", [])
             tecnologias_obj = []
             tecnologias_map = {}  # Mapa ID -> objeto Tecnologia
 
             for t in tecnologias_raw:
+                tec_id = str(t.get("id", "")).strip()
+                tec_nome = str(t.get("nome", "")).strip()
+                if not tec_id or not tec_nome:
+                    continue
+
                 insumos = []
                 for i in t.get("insumos", []):
-                    nome = i["nome"]
+                    nome = i.get("nome")
+                    if not nome:
+                        continue
                     if nome not in insumos_disponiveis:
                         insumos_faltando.add(nome)
                         insumos.append({"nome": nome, "fator_consumo": 0.0})
                     else:
-                        insumos.append(i)
+                        insumos.append({
+                            "nome": nome,
+                            "fator_consumo": i.get("fator_consumo", 1.0),
+                        })
                 
                 tecnologia = Tecnologia(
-                    id=t["id"],
-                    nome=t["nome"],
+                    id=tec_id,
+                    nome=tec_nome,
                     insumos=insumos,
                     unidades=t.get("unidades", [])
                 )
                 tecnologias_obj.append(tecnologia)
-                tecnologias_map[t["id"]] = tecnologia
+                tecnologias_map[tec_id] = tecnologia
 
             st.session_state.tecnologias_alternativas = tecnologias_obj
 
@@ -270,7 +283,8 @@ class DatabaseManager:
                         origem=conexao_data.get("origem"),
                         destino=conexao_data.get("destino"),
                         massa=conexao_data.get("massa", 0.0),
-                        label=conexao_data.get("label", "Fluxo")
+                        label=conexao_data.get("label", "Fluxo"),
+                        periodo=conexao_data.get("periodo", ""),
                     )
                 
                 unidade = UnidadeProdutiva(
@@ -315,12 +329,12 @@ class DatabaseManager:
                 
                 # Se a unidade tem uma conexão, adicionar ao session_state.conexoes
                 if conexao:
-                    self.add_edge(conexao.origem, conexao.destino, massa=conexao.massa)
+                    self.add_edge(conexao.origem, conexao.destino, massa=conexao.massa, periodo=conexao.periodo)
 
             print(f"DEBUG import_from_json: Total de conexões a importar: {len(data.get('conexoes', []))}")  # Debug
             for c_data in data.get("conexoes", []):
                 print(f"DEBUG import_from_json: Importando conexão: {c_data}")  # Debug
-                self.add_edge(c_data["origem"], c_data["destino"], massa=c_data.get("massa", 0.0))
+                self.add_edge(c_data["origem"], c_data["destino"], massa=c_data.get("massa", 0.0), periodo=c_data.get("periodo", ""))
             
             print(f"DEBUG import_from_json: Total de conexões em session_state após importação: {len(st.session_state.conexoes)}")  # Debug
             
@@ -333,7 +347,7 @@ class DatabaseManager:
             return False
 
     def get_edges_for_graph(self) -> List[Dict]:
-        return [{"source": c.origem, "target": c.destino, "massa": c.massa} for c in st.session_state.conexoes]
+        return [{"source": c.origem, "target": c.destino, "massa": c.massa, "periodo": c.periodo} for c in st.session_state.conexoes]
 
     # --- Atualização de Pegadas ---
     def propagar_pegada(self):

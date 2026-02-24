@@ -17,15 +17,14 @@ from tabs.FatoresEmissao import FatoresEmissaoTab
 from tabs.Tecnologias import TecnologiasTab
 from tabs.Reports import ReportsTab
 from tabs.Chatbot import ChatbotTab
+from tabs.Settings import SettingsTab
 
 from database import DatabaseManager
 from calculations import EmissionCalculator
 
 # Core modules
-from core.context import AppContext, render_year_selector
+from core.context import AppContext
 from core.io.json_io import load_fatores_emissao
-from core.io.excel_io import gerar_template_excel
-from core.validation.schema import validar_database, ValidationReport
 
 
 class App:
@@ -101,84 +100,30 @@ class App:
             # Informações do usuário
             st.markdown(f" 👤 **{usuario_logado}**")
             
-            # Botão para salvar sessão
-            if st.button("Salvar Sessão", use_container_width=True, help="Salva o progresso atual"):
-                home_tab = HomeTab()
-                if home_tab._save_user_session():
-                    st.toast("Sessão salva com sucesso!", icon="✅")
-            
             st.markdown("---")
             
+            # Suporte a navegação programática (ex: comparação de anos)
+            nav_target = st.session_state.pop("_nav_target", None)
+
+            nav_options = [
+                "Início",
+                "Diagrama de Fluxo",
+                "Unidades & Fluxos",
+                "Fatores de Emissão",
+                "Tecnologias",
+                "Análise de Emissões",
+                "Assistente IA",
+                "Sessões",
+                "Configurações",
+            ]
+            default_index = nav_options.index(nav_target) if nav_target and nav_target in nav_options else 0
+
             aba = st.radio(
                 "Navegação:",
-                [
-                    "Início",
-                    "Diagrama de Fluxo",
-                    "Unidades & Fluxos",
-                    "Fatores de Emissão",
-                    "Tecnologias",
-                    "Análise de Emissões",
-                    "Assistente IA"
-                ],
-                index=0,
+                nav_options,
+                index=default_index,
                 label_visibility="collapsed"
             )
-
-        # Renderizar seletor de ano na sidebar (abaixo da navegação)
-        render_year_selector()
-        
-        # Template download na sidebar
-        with st.sidebar:
-            st.markdown("---")
-            st.markdown("### 📥 Template de Importação")
-            try:
-                template_bytes = gerar_template_excel(
-                    ano=ctx.ano_ativo,
-                    fatores_emissao=st.session_state.get("fatores_emissao", []),
-                )
-                st.download_button(
-                    label="⬇️ Baixar Template Excel",
-                    data=template_bytes,
-                    file_name=f"template_emissoes_{ctx.ano_ativo}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    help="Template com abas README, Unidades, Conexões, Tecnologias e Fatores de Emissão",
-                )
-            except Exception as e:
-                st.caption(f"⚠️ Template indisponível: {e}")
-            
-            st.markdown("---")
-            
-            # Botão Validar Base
-            st.markdown("### 🔍 Validação da Base")
-            if st.button("Validar Base", use_container_width=True, help="Verifica integridade dos dados carregados"):
-                db_data = {
-                    "unidades": st.session_state.get("unidades", []),
-                    "conexoes": st.session_state.get("edges", []),
-                    "fatores_emissao": st.session_state.get("fatores_emissao", []),
-                }
-                report: ValidationReport = validar_database(db_data)
-                st.session_state["_validation_report"] = report
-
-            _report: ValidationReport | None = st.session_state.get("_validation_report")
-            if _report is not None:
-                if _report.is_valid and not _report.avisos:
-                    st.success(f"✅ Base válida — {_report.registros_validos}/{_report.total_registros} registros OK")
-                elif _report.is_valid:
-                    st.warning(f"⚠️ {_report.registros_validos}/{_report.total_registros} válidos, {len(_report.avisos)} aviso(s)")
-                else:
-                    st.error(f"❌ {len(_report.erros)} erro(s), {len(_report.avisos)} aviso(s)")
-                
-                if _report.erros:
-                    with st.expander(f"❌ Erros ({len(_report.erros)})", expanded=True):
-                        for e in _report.erros:
-                            st.markdown(f"- **{e.entidade}[{e.indice}].{e.campo}**: {e.mensagem}")
-                if _report.avisos:
-                    with st.expander(f"⚠️ Avisos ({len(_report.avisos)})"):
-                        for w in _report.avisos:
-                            st.markdown(f"- **{w.entidade}[{w.indice}].{w.campo}**: {w.mensagem}")
-            
-            st.markdown("---")
 
         # Carregamento dinâmico da página
         if aba == "Início":
@@ -195,6 +140,10 @@ class App:
             ReportsTab()._render()
         elif aba == "Assistente IA":
             ChatbotTab()._render()
+        elif aba == "Sessões":
+            SettingsTab()._render_sessions_page()
+        elif aba == "Configurações":
+            SettingsTab()._render()
         else:
             st.error("Página não encontrada.")
 

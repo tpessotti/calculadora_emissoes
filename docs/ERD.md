@@ -1,40 +1,50 @@
 # ERD — Diagrama de Relacionamento de Entidades
 
-> Schema v1.1.0 · Calculadora de Emissões de Carbono
+> Schema v1.2.0 · Calculadora de Emissões de Carbono
 
 ## Visão Geral
 
 ```
-┌─────────────────────┐       ┌─────────────────────┐
-│  FATOR_EMISSAO      │       │    TECNOLOGIA        │
-├─────────────────────┤       ├─────────────────────┤
-│ PK grupo_consumivel │       │ PK id               │
-│ PK consumivel       │       │    nome              │
-│ PK escopo           │       │    insumos[]         │
-│ PK ano  (opcional)  │       │    unidades[]        │
-│    fator_emissao    │       └──────────┬──────────┘
-│    kgCO2e_unid      │                  │ 0..N
-│    data_importacao   │                  │ referencia
-└─────────────────────┘                  │
-                                         ▼
-┌─────────────────────┐       ┌─────────────────────┐
-│     CONEXAO          │       │  UNIDADE_PRODUTIVA   │
-├─────────────────────┤       ├─────────────────────┤
-│ PK origem  ─────────┼──────▶│ PK ID_ELO            │
-│ PK destino ─────────┼──────▶│    Nome               │
-│    massa             │       │    Localizacao        │
-│    label             │       │    Periodo            │
-└─────────────────────┘       │    Input / MassaInput  │
-                               │    Output / MassaOutput│
-                               │    Consumiveis[]       │
-                               │    ConsumoEspecifico[]  │
-                               │    TaxacaoFronteira     │
-                               │    TaxacaoLocal         │
-                               │ FK Tecnologia → id     │
-                               │    ConfigOperacional    │
-                               │* IntensidadeEmissao     │
-                               │* Pegada                 │
-                               └─────────────────────┘
+┌──────────────────┐       ┌──────────────────────────┐
+│   Tecnologia     │       │   FatorEmissao           │
+│──────────────────│       │──────────────────────────│
+│ PK: id           │       │ PK: (consumivel, escopo, │
+│    nome           │       │      ano)               │
+│    insumos[]      │       │    grupo_consumivel      │
+│    unidades[]     │       │    fator_emissao         │
+└────────┬─────────┘       │    kgCO2e_unid           │
+         │ 0..N            └────────────┬─────────────┘
+         │                              │ 0..N
+         │ FK: Tecnologia              │ Consumiveis[].nome
+┌────────▼─────────────────┐            │
+│   Unidade                │◄───────────┘
+│──────────────────────────│
+│ PK: (ID_ELO, Periodo)   │
+│    Nome                  │
+│    Localizacao           │
+│    Input, MassaInput     │
+│    Output, MassaOutput   │
+│ FK: Tecnologia → Tec.id │
+│    Consumiveis[]         │
+│    ConsumoEspecifico[]   │
+│    TaxacaoFronteira      │
+│    TaxacaoLocal          │
+│* IntensidadeEmissao      │
+│* Pegada                  │
+└──────┬──────┬────────────┘
+       │      │
+       │ 0..N │ 0..N
+       │FK:origem FK:destino
+┌──────▼──────▼────────────┐
+│   Conexao                │
+│──────────────────────────│
+│ PK: (origem, destino,    │
+│      periodo)            │
+│ FK: origem  → Unidade.ID │
+│ FK: destino → Unidade.ID │
+│    massa                 │
+│    label                 │
+└──────────────────────────┘
 ```
 
 _Campos marcados com `*` são calculados automaticamente._
@@ -66,8 +76,8 @@ _Campos marcados com `*` são calculados automaticamente._
 | `Pegada` | `float` | calc | Pegada acumulada (tCO₂/t) |
 | `PegadaEscopo1..3` | `float` | calc | Pegada por escopo |
 
-**Chave**: `ID_ELO`
-**Multi-ano**: Controlado pelo campo `Periodo`.
+**Chave composta**: `(ID_ELO, Periodo)`
+**Multi-ano**: Cada combinação `(ID_ELO, Periodo)` é um registro distinto.
 
 ### 2. `conexoes` (Conexao)
 
@@ -77,9 +87,10 @@ _Campos marcados com `*` são calculados automaticamente._
 | `destino` | `str` | ✅ | FK → `unidades.ID_ELO` |
 | `massa` | `float` | ❌ | Massa transferida (toneladas) |
 | `label` | `str` | ❌ | Rótulo da conexão |
+| `periodo` | `str` | ✅ | Período/ano da conexão (deve ser consistente com as unidades) |
 
-**Chave composta**: `(origem, destino)`
-**Restrição**: Ambos devem referenciar `ID_ELO` existentes.
+**Chave composta**: `(origem, destino, periodo)`
+**Restrição**: `origem`/`destino` devem referenciar `ID_ELO` existentes. O `periodo` deve ser consistente com o período das unidades referenciadas.
 
 ### 3. `tecnologias` (Tecnologia)
 
@@ -115,12 +126,13 @@ _Campos marcados com `*` são calculados automaticamente._
 | `conexao.destino` | `unidade.ID_ELO` | N:1 | Obrigatória | `destino` |
 | `unidade.Tecnologia` | `tecnologia.id` | N:1 | Opcional | `Tecnologia` |
 | `unidade.Consumiveis[].nome` | `fator_emissao.consumivel` | N:1 | Implícita | Via nome |
+| `conexao.periodo` | `unidade.Periodo` | Consistência | Semântica | `periodo` ↔ `Periodo` |
 
 ## Metadados do Schema
 
 ```json
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "created_at": "ISO-8601",
   "updated_at": "ISO-8601",
   "source": "app | session_export | import",
@@ -130,17 +142,32 @@ _Campos marcados com `*` são calculados automaticamente._
 
 ## Validações Implementadas
 
+### Validação de Schema (schema.py)
+
 | Regra | Severidade | Descrição |
 |-------|:----------:|-----------|
 | Campos obrigatórios | Error | Todos os campos `✅` devem estar presentes |
-| Massa não-negativa | Error | `MassaInput`, `MassaOutput` ≥ 0 |
-| Consumiveis/CE alinhados | Error | `len(Consumiveis) == len(ConsumoEspecifico)` |
+| Tipos de dados | Warning | Tipos devem corresponder ao esperado |
+| Unicidade PK simples | Warning | `ID_ELO`, `tecnologia.id` sem duplicatas |
+| Unicidade PK composta | Warning | `(consumivel,escopo,ano)`, `(origem,destino,periodo)` sem duplicatas |
 | Referência conexão→unidade | Error | `origem`/`destino` devem existir em `unidades` |
-| Referência unidade→tecnologia | Warning | `Tecnologia` deve existir em `tecnologias` |
-| Unicidade ID_ELO | Warning | Sem duplicatas |
-| Unicidade fator (consumivel,escopo,ano) | Warning | Sem duplicatas na chave composta |
 | Período válido | Warning | Parseável pelo parser de períodos |
-| Fator negativo | Warning | `fator_emissao` ≥ 0 |
+
+### Validação Relacional (relational.py)
+
+| Regra | Severidade | Tipo | Descrição |
+|-------|:----------:|------|-----------|
+| PK vazia | Error | `pk_empty` | Campos de chave primária não podem estar vazios |
+| PK duplicada | Error | `pk_duplicate` | Chaves primárias compostas devem ser únicas |
+| FK ausente | Error | `fk_missing` | Referências devem apontar para registros existentes |
+| FK nula obrigatória | Error | `fk_null` | FKs obrigatórias não podem ser nulas |
+| Periodo inconsistente | Warning | `periodo_inconsistente` | Periodo da conexão deve existir nas unidades referenciadas |
+| Periodo vazio | Warning | `periodo_vazio` | Conexão sem período definido |
+| Consumível sem fator | Warning | `consumivel_sem_fator` | Consumível não encontrado nos fatores de emissão |
+| Massa negativa | Error | `domain_positive` | MassaInput, MassaOutput, massa ≥ 0 |
+| Listas desalinhadas | Error | `domain_length_match` | `len(Consumiveis) == len(ConsumoEspecifico)` |
+| Unidade órfã | Info | `orfao` | Unidade sem conexões (isolada no grafo) |
+| Tecnologia não usada | Info | `orfao` | Tecnologia não atribuída a nenhuma unidade |
 
 ## CLI de Validação
 

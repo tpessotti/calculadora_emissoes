@@ -1,11 +1,2695 @@
 {
-  "schema_version": "1.0.0",
-  "created_at": "2025-01-01T00:00:00",
-  "updated_at": "2025-01-01T00:00:00",
-  "source": "initial_setup",
-  "anos_disponiveis": [2025],
-  "fatores_emissao": [],
-  "unidades": [],
-  "conexoes": [],
-  "tecnologias": []
+  "schema_version": "1.2.0",
+  "created_at": "2026-02-24T15:57:14.167169",
+  "updated_at": "2026-02-24T15:57:14.167169",
+  "source": "session_export",
+  "anos_disponiveis": [
+    2023,
+    2024,
+    2025
+  ],
+  "fatores_emissao": [
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "ANFO",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 0.178,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "ANFO",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 4.32026,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "AMMONIUM NITRATE",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 0.178,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "AMMONIUM NITRATE",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 2.42,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL S10 (BRASIL)",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.35001432063345,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL S10 (BRASIL)",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.538637281333333,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B10",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.38068707,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B10",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.51878264,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B12",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.32810445,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B12",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.552819168,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B13",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.30181579,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B13",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.569837432,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "DINAMITE IBEGEL 3X24\"",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 0.3874,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "DINAMITE IBEGEL 3X24\"",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 4.32026,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "ELECTRICITY",
+      "consumivel": "ELECTRICITY",
+      "escopo": "SCOPE 2",
+      "ano": null,
+      "fator_emissao": 0.0,
+      "kgCO2e_unid": "MWH",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "ELECTRICITY",
+      "consumivel": "ELECTRICITY",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 67.78,
+      "kgCO2e_unid": "MWH",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "ELECTRICITY",
+      "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
+      "escopo": "SCOPE 2",
+      "ano": null,
+      "fator_emissao": 60.672,
+      "kgCO2e_unid": "MWH",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "ELECTRICITY",
+      "consumivel": "ELECTRICITY SERRA LESTE AND EFC 1",
+      "escopo": "SCOPE 2",
+      "ano": null,
+      "fator_emissao": 62.524,
+      "kgCO2e_unid": "MWH",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "FLOCCULANT",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.8835,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "GASOLINE",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.0,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "GASOLINE",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.46004,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "HFC-134A OU R-134A",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 1300.0,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "HFC-134A OU R-134A",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 15.0833,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "IBENITE",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 0.178,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "IBENITE",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 4.32026,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "PUMPED EMULSION",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 0.166,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "PUMPED EMULSION",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 4.32026,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-404A",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 3921.6,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-404A",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 15.0833,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-407C",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 1773.85,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-407C",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 15.0833,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-410A",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2087.5,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-410A",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 15.0833,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "SF6",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 23500.0,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "SF6",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 128.0,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "SUPPRESSION",
+      "consumivel": "SUPPRESSION - SCOPE 3",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "SUPPRESSION",
+      "consumivel": "SUPPRESSION - SCOPE 1",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "WASTE AND EFFLUENTS",
+      "consumivel": "WASTE GENERATION - SCOPE 3",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "WASTE AND EFFLUENTS",
+      "consumivel": "EFFLUENTS",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "WASTE AND EFFLUENTS",
+      "consumivel": "WASTE GENERATION - SCOPE 1",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "ANTHRACITE - SÃO LUIS",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.55735545654167,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "ANTHRACITE - SÃO LUIS",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.1292,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "BENTONITE - SÃO LUIS",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.1531,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "CALCITIC LIMESTONE - SÃO LUIS",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 0.439,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "CALCITIC LIMESTONE - SÃO LUIS",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.08202,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "CHARCOAL",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 3.278269176,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "CHARCOAL",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.8306,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "FUEL OIL 1A",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 3.18607472131667,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "FUEL OIL 1A",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.2553,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "NATURAL GAS",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.0349544958159,
+      "kgCO2e_unid": "M³",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "NATURAL GAS",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.2819,
+      "kgCO2e_unid": "M³",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "FOSSIL FUELS IN LAND",
+      "consumivel": "GASOLINE PREMIUM",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.0,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "FOSSIL FUELS IN LAND",
+      "consumivel": "GASOLINE PREMIUM",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.46004,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "GLYCERIN",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 2.97,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "MARINE TRANSPORTATION",
+      "consumivel": "MARINE DIESEL A2/B2",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.38068707,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "MARINE TRANSPORTATION",
+      "consumivel": "MARINE DIESEL A2/B2",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.344736,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "BIOMETHANE",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.7094546250000002,
+      "kgCO2e_unid": "M³",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "BIOMETHANE",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.2819,
+      "kgCO2e_unid": "M³",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B30",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 2.47596722324146,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B30",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.552819168,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "ETHANOL",
+      "escopo": "SCOPE 1",
+      "ano": null,
+      "fator_emissao": 0.0178,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "ETHANOL",
+      "escopo": "SCOPE 3",
+      "ano": null,
+      "fator_emissao": 0.1012,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2025-06-12 09:42:51"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "ANFO",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 0.178,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "ANFO",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 4.32026,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "AMMONIUM NITRATE",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 0.178,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "AMMONIUM NITRATE",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 2.42,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL S10 (BRASIL)",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.35001432063345,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL S10 (BRASIL)",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.538637281333333,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B10",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.38068707,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B10",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.51878264,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B12",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.32810445,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B12",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.552819168,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B13",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.30181579,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B13",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.569837432,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "DINAMITE IBEGEL 3X24\"",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 0.3874,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "DINAMITE IBEGEL 3X24\"",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 4.32026,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "ELECTRICITY",
+      "consumivel": "ELECTRICITY",
+      "escopo": "SCOPE 2",
+      "ano": 2023,
+      "fator_emissao": 0.0,
+      "kgCO2e_unid": "MWH",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "ELECTRICITY",
+      "consumivel": "ELECTRICITY",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 67.78,
+      "kgCO2e_unid": "MWH",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "ELECTRICITY",
+      "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
+      "escopo": "SCOPE 2",
+      "ano": 2023,
+      "fator_emissao": 60.672,
+      "kgCO2e_unid": "MWH",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "ELECTRICITY",
+      "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
+      "escopo": "SCOPE 2",
+      "ano": 2024,
+      "fator_emissao": 62.524,
+      "kgCO2e_unid": "MWH",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "FLOCCULANT",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.8835,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "GASOLINE",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.0,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "GASOLINE",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.46004,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "HFC-134A OU R-134A",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 1300.0,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "HFC-134A OU R-134A",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 15.0833,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "IBENITE",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 0.178,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "IBENITE",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 4.32026,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "PUMPED EMULSION",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 0.166,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "EXPLOSIVE",
+      "consumivel": "PUMPED EMULSION",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 4.32026,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-404A",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 3921.6,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-404A",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 15.0833,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-407C",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 1773.85,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-407C",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 15.0833,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-410A",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2087.5,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "R-410A",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 15.0833,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "SF6",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 23500.0,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "REFRIGERANT FLUIDS",
+      "consumivel": "SF6",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 128.0,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "SUPPRESSION",
+      "consumivel": "SUPPRESSION - SCOPE 3",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "SUPPRESSION",
+      "consumivel": "SUPPRESSION - SCOPE 1",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "WASTE AND EFFLUENTS",
+      "consumivel": "WASTE GENERATION - SCOPE 3",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "WASTE AND EFFLUENTS",
+      "consumivel": "EFFLUENTS",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "WASTE AND EFFLUENTS",
+      "consumivel": "WASTE GENERATION - SCOPE 1",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 1000.0,
+      "kgCO2e_unid": "TCO2E",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "ANTHRACITE - SÃO LUIS",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.55735545654167,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "ANTHRACITE - SÃO LUIS",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.1292,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "BENTONITE - SÃO LUIS",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.1531,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "CALCITIC LIMESTONE - SÃO LUIS",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 0.439,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "CALCITIC LIMESTONE - SÃO LUIS",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.08202,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "CHARCOAL",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 3.278269176,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "CHARCOAL",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.8306,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "FUEL OIL 1A",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 3.18607472131667,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "FUEL OIL 1A",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.2553,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "NATURAL GAS",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.0349544958159,
+      "kgCO2e_unid": "M³",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "NATURAL GAS",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.2819,
+      "kgCO2e_unid": "M³",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "GLYCERIN",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 2.97,
+      "kgCO2e_unid": "KG",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "MARINE TRANSPORTATION",
+      "consumivel": "MARINE DIESEL A2/B2",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.38068707,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "MARINE TRANSPORTATION",
+      "consumivel": "MARINE DIESEL A2/B2",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.344736,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "BIOMETHANE",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.709454625,
+      "kgCO2e_unid": "M³",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "INPUTS",
+      "consumivel": "BIOMETHANE",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.2819,
+      "kgCO2e_unid": "M³",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B30",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 2.47596722324146,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "DIESEL-B30",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.552819168,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "ETHANOL",
+      "escopo": "SCOPE 1",
+      "ano": 2023,
+      "fator_emissao": 0.0178,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    },
+    {
+      "grupo_consumivel": "LAND TRANSPORTATION",
+      "consumivel": "ETHANOL",
+      "escopo": "SCOPE 3",
+      "ano": 2023,
+      "fator_emissao": 0.1012,
+      "kgCO2e_unid": "L",
+      "data_importacao": "2026-02-24 15:35:59"
+    }
+  ],
+  "unidades": [
+    {
+      "ID_ELO": "U001",
+      "Nome": "BENEF_STD Etapa 2",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2023",
+      "Input": "AF70",
+      "MassaInput": 3455084.308518444,
+      "Output": "AF70",
+      "MassaOutput": 3455084.308518444,
+      "Consumiveis": [
+        {
+          "nome": "EFFLUENTS",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        }
+      ],
+      "ConsumoEspecifico": [
+        1.19765728054384e-05,
+        0.00404918932758683,
+        0.000105164332264879
+      ],
+      "IntensidadeEmissao": 0.11714090507031741,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.11714090507031741,
+      "Pegada": 404731.7029941023,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_BENEF_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U002",
+      "Nome": "EMB_STD Etapa 8",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2023",
+      "Input": "AF70",
+      "MassaInput": 3102097.0,
+      "Output": "AF70",
+      "MassaOutput": 3102097.0,
+      "Consumiveis": [
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.0
+      ],
+      "IntensidadeEmissao": 0.0,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 0.0,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_EMB_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U003",
+      "Nome": "FER_STD Etapa 3",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2023",
+      "Input": "AF70",
+      "MassaInput": 3455084.308518444,
+      "Output": "AF70",
+      "MassaOutput": 3455084.308518444,
+      "Consumiveis": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "EFFLUENTS",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator": 60.672,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "DIESEL-B30",
+          "fator": 2.47596722324146,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ETHANOL",
+          "fator": 0.0178,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.00163751938842409,
+        0.837432290650364,
+        0.571649245009859,
+        0.236768347314646,
+        2.31361272079211e-06,
+        4.90256013019766e-05,
+        7.5308361491668e-05,
+        1.8,
+        1.826
+      ],
+      "IntensidadeEmissao": 8.443208949261845,
+      "IntensidadeEmissaoEscopo1": 8.362612493767191,
+      "IntensidadeEmissaoEscopo2": 0.002974481282193524,
+      "IntensidadeEmissaoEscopo3": 0.07762197421246012,
+      "Pegada": 29171998.7541371,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_FER_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U004",
+      "Nome": "MINA_STD Etapa 1",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2023",
+      "Input": "AF70",
+      "MassaInput": 3455084.308518444,
+      "Output": "AF70",
+      "MassaOutput": 3455084.308518444,
+      "Consumiveis": [
+        {
+          "nome": "ANFO",
+          "fator": 0.178,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "FLOCCULANT",
+          "fator": 0.8835,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "HFC-134A OU R-134A",
+          "fator": 1300.0,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "IBENITE",
+          "fator": 0.178,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "PUMPED EMULSION",
+          "fator": 0.166,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "R-404A",
+          "fator": 3921.6,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "R-407C",
+          "fator": 1773.85,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "R-410A",
+          "fator": 2087.5,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "SUPPRESSION - SCOPE 1",
+          "fator": 1000.0,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "SUPPRESSION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "DIESEL-B30",
+          "fator": 2.47596722324146,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ETHANOL",
+          "fator": 0.0178,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.082709515642632,
+        0.0481844965808483,
+        0.865023695587112,
+        0.536419527001597,
+        0.263706665683276,
+        0.00112298347090252,
+        0.00054391176181678,
+        2.84766723212285e-07,
+        0.182121983245838,
+        0.0201469757245206,
+        5.85638505320894e-07,
+        6.4832012659352e-07,
+        8.58811416248154e-06,
+        3.874e-05,
+        0.000438859112328772,
+        3.54000175263189e-06,
+        1.28715,
+        3.366
+      ],
+      "IntensidadeEmissao": 7.829134463166701,
+      "IntensidadeEmissaoEscopo1": 7.386254803043732,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.44287966012296903,
+      "Pegada": 27050319.632968243,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_MINA_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U005",
+      "Nome": "PATIO_STD Etapa 4",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2023",
+      "Input": "AF70",
+      "MassaInput": 3455084.308518444,
+      "Output": "AF70",
+      "MassaOutput": 3455084.308518444,
+      "Consumiveis": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "EFFLUENTS",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "MARINE DIESEL A2/B2",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.00437473403121566,
+        0.00257527512273719,
+        0.00251110307121556,
+        0.00215958316882655,
+        3.03376697907341e-06,
+        0.00186443208461363,
+        0.0044660790772964
+      ],
+      "IntensidadeEmissao": 0.040894788373031676,
+      "IntensidadeEmissaoEscopo1": 0.037861021393958263,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0030337669790734103,
+      "Pegada": 141294.94160784426,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_PATIO_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U006",
+      "Nome": "PELOT_STD Etapa 5",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2023",
+      "Input": "AF70",
+      "MassaInput": 3452862.703193559,
+      "Output": "AF70",
+      "MassaOutput": 3452862.703193559,
+      "Consumiveis": [
+        {
+          "nome": "ANTHRACITE - SÃO LUIS",
+          "fator": 2.55735545654167,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "BENTONITE - SÃO LUIS",
+          "fator": 0.1531,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "CALCITIC LIMESTONE - SÃO LUIS",
+          "fator": 0.439,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "CHARCOAL",
+          "fator": 3.278269176,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "FUEL OIL 1A",
+          "fator": 3.18607472131667,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "GASOLINE",
+          "fator": 2.0,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "GLYCERIN",
+          "fator": 2.97,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 1",
+          "fator": 1000.0,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "BIOMETHANE",
+          "fator": 2.709454625,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "NATURAL GAS",
+          "fator": 2.0349544958159,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        11.9282458241588,
+        4.30083918604697,
+        38.3213548699614,
+        0.105326673944007,
+        0.0336957584392537,
+        15.4566894012831,
+        0.00062393577378901,
+        0.140435565258677,
+        1.33868152086499e-07,
+        0.00397720491220359,
+        14.7287,
+        13.700708352
+      ],
+      "IntensidadeEmissao": 169.76049705067626,
+      "IntensidadeEmissaoEscopo1": 164.7077400302706,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 5.052757020405652,
+      "Pegada": 586159688.7418802,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_PELOT_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U007",
+      "Nome": "PORTO_STD Etapa 6",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2023",
+      "Input": "AF70",
+      "MassaInput": 3102097.0,
+      "Output": "AF70",
+      "MassaOutput": 3102097.0,
+      "Consumiveis": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "MARINE DIESEL A2/B2",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "IntensidadeEmissao": 0.0,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 0.0,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_PORTO_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U008",
+      "Nome": "TRANSP_STD Etapa 7",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2023",
+      "Input": "AF70",
+      "MassaInput": 3102097.0,
+      "Output": "AF70",
+      "MassaOutput": 3102097.0,
+      "Consumiveis": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator": 60.672,
+          "escopo": "SCOPE 2"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "IntensidadeEmissao": 0.0,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 0.0,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_TRANSP_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U001",
+      "Nome": "BENEF_STD Etapa 2",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2024",
+      "Input": "AF70",
+      "MassaInput": 3455084.308518444,
+      "Output": "AF70",
+      "MassaOutput": 3455084.308518444,
+      "Consumiveis": [
+        {
+          "nome": "EFFLUENTS",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        }
+      ],
+      "ConsumoEspecifico": [
+        1.19765728054384e-05,
+        0.00404918932758683,
+        0.000105164332264879
+      ],
+      "IntensidadeEmissao": 0.11714090507031741,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.11714090507031741,
+      "Pegada": 15.775409831403719,
+      "PegadaEscopo1": 14.772509606087464,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 1.0029002253162556,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_BENEF_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U002",
+      "Nome": "EMB_STD Etapa 8",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2024",
+      "Input": "AF70",
+      "MassaInput": 3102097.0,
+      "Output": "AF70",
+      "MassaOutput": 3102097.0,
+      "Consumiveis": [
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.0
+      ],
+      "IntensidadeEmissao": 0.0,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 2937.817859896256,
+      "PegadaEscopo1": 2818.405981349662,
+      "PegadaEscopo2": 0.10925037521849126,
+      "PegadaEscopo3": 119.30262817137576,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_EMB_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U003",
+      "Nome": "FER_STD Etapa 3",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2024",
+      "Input": "AF70",
+      "MassaInput": 3455084.308518444,
+      "Output": "AF70",
+      "MassaOutput": 3455084.308518444,
+      "Consumiveis": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "EFFLUENTS",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator": 62.524,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "DIESEL-B30",
+          "fator": 2.47596722324146,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ETHANOL",
+          "fator": 0.0178,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.00163751938842409,
+        0.837432290650364,
+        0.571649245009859,
+        0.236768347314646,
+        2.31361272079211e-06,
+        4.90256013019766e-05,
+        7.5308361491668e-05,
+        1.8,
+        1.826
+      ],
+      "IntensidadeEmissao": 8.443299744675457,
+      "IntensidadeEmissaoEscopo1": 8.362612493767191,
+      "IntensidadeEmissaoEscopo2": 0.003065276695804785,
+      "IntensidadeEmissaoEscopo3": 0.07762197421246012,
+      "Pegada": 39.9941194074829,
+      "PegadaEscopo1": 37.90763170594212,
+      "PegadaEscopo2": 0.003065276695804785,
+      "PegadaEscopo3": 2.0834224248449713,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_FER_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U004",
+      "Nome": "MINA_STD Etapa 1",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2024",
+      "Input": "AF70",
+      "MassaInput": 3455084.308518444,
+      "Output": "AF70",
+      "MassaOutput": 3455084.308518444,
+      "Consumiveis": [
+        {
+          "nome": "ANFO",
+          "fator": 0.178,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "FLOCCULANT",
+          "fator": 0.8835,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "HFC-134A OU R-134A",
+          "fator": 1300.0,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "IBENITE",
+          "fator": 0.178,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "PUMPED EMULSION",
+          "fator": 0.166,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "R-404A",
+          "fator": 3921.6,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "R-407C",
+          "fator": 1773.85,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "R-410A",
+          "fator": 2087.5,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "SUPPRESSION - SCOPE 1",
+          "fator": 1000.0,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "SUPPRESSION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "DIESEL-B30",
+          "fator": 2.47596722324146,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ETHANOL",
+          "fator": 0.0178,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.082709515642632,
+        0.0481844965808483,
+        0.865023695587112,
+        0.536419527001597,
+        0.263706665683276,
+        0.00112298347090252,
+        0.00054391176181678,
+        2.84766723212285e-07,
+        0.182121983245838,
+        0.0201469757245206,
+        5.85638505320894e-07,
+        6.4832012659352e-07,
+        8.58811416248154e-06,
+        3.874e-05,
+        0.000438859112328772,
+        3.54000175263189e-06,
+        1.28715,
+        3.366
+      ],
+      "IntensidadeEmissao": 7.829134463166701,
+      "IntensidadeEmissaoEscopo1": 7.386254803043732,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.44287966012296903,
+      "Pegada": 7.829134463166701,
+      "PegadaEscopo1": 7.386254803043732,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.44287966012296903,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_MINA_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U005",
+      "Nome": "PATIO_STD Etapa 4",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2024",
+      "Input": "AF70",
+      "MassaInput": 3455084.308518444,
+      "Output": "AF70",
+      "MassaOutput": 3455084.308518444,
+      "Consumiveis": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "EFFLUENTS",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "MARINE DIESEL A2/B2",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.00437473403121566,
+        0.00257527512273719,
+        0.00251110307121556,
+        0.00215958316882655,
+        3.03376697907341e-06,
+        0.00186443208461363,
+        0.0044660790772964
+      ],
+      "IntensidadeEmissao": 0.040894788373031676,
+      "IntensidadeEmissaoEscopo1": 0.037861021393958263,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0030337669790734103,
+      "Pegada": 80.02913360333883,
+      "PegadaEscopo1": 75.85312443327821,
+      "PegadaEscopo2": 0.00613055339160957,
+      "PegadaEscopo3": 4.169878616669016,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_PATIO_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U006",
+      "Nome": "PELOT_STD Etapa 5",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2024",
+      "Input": "AF70",
+      "MassaInput": 3452862.703193559,
+      "Output": "AF70",
+      "MassaOutput": 3452862.703193559,
+      "Consumiveis": [
+        {
+          "nome": "ANTHRACITE - SÃO LUIS",
+          "fator": 2.55735545654167,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "BENTONITE - SÃO LUIS",
+          "fator": 0.1531,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "CALCITIC LIMESTONE - SÃO LUIS",
+          "fator": 0.439,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "CHARCOAL",
+          "fator": 3.278269176,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "FUEL OIL 1A",
+          "fator": 3.18607472131667,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "GASOLINE",
+          "fator": 2.0,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "GLYCERIN",
+          "fator": 2.97,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 1",
+          "fator": 1000.0,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator": 1000.0,
+          "escopo": "SCOPE 3"
+        },
+        {
+          "nome": "BIOMETHANE",
+          "fator": 2.709454625,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "NATURAL GAS",
+          "fator": 2.0349544958159,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        11.9282458241588,
+        4.30083918604697,
+        38.3213548699614,
+        0.105326673944007,
+        0.0336957584392537,
+        15.4566894012831,
+        0.00062393577378901,
+        0.140435565258677,
+        1.33868152086499e-07,
+        0.00397720491220359,
+        14.7287,
+        13.700708352
+      ],
+      "IntensidadeEmissao": 169.76049705067626,
+      "IntensidadeEmissaoEscopo1": 164.7077400302706,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 5.052757020405652,
+      "Pegada": 329.92174729759745,
+      "PegadaEscopo1": 316.5115981675312,
+      "PegadaEscopo2": 0.0122689956981457,
+      "PegadaEscopo3": 13.397880134368101,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_PELOT_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U007",
+      "Nome": "PORTO_STD Etapa 6",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2024",
+      "Input": "AF70",
+      "MassaInput": 3102097.0,
+      "Output": "AF70",
+      "MassaOutput": 3102097.0,
+      "Consumiveis": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "MARINE DIESEL A2/B2",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "IntensidadeEmissao": 0.0,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 734.454464974064,
+      "PegadaEscopo1": 704.6014953374155,
+      "PegadaEscopo2": 0.027312593804622816,
+      "PegadaEscopo3": 29.82565704284394,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_PORTO_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "U008",
+      "Nome": "TRANSP_STD Etapa 7",
+      "Localizacao": "Desconhecida",
+      "Periodo": "2024",
+      "Input": "AF70",
+      "MassaInput": 3102097.0,
+      "Output": "AF70",
+      "MassaOutput": 3102097.0,
+      "Consumiveis": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator": 2.35001432063345,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator": 2.38068707,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator": 2.32810445,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator": 2.30181579,
+          "escopo": "SCOPE 1"
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator": 0.0,
+          "escopo": "SCOPE 2"
+        },
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator": 62.524,
+          "escopo": "SCOPE 2"
+        }
+      ],
+      "ConsumoEspecifico": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "IntensidadeEmissao": 0.0,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 1468.908929948128,
+      "PegadaEscopo1": 1409.202990674831,
+      "PegadaEscopo2": 0.05462518760924563,
+      "PegadaEscopo3": 59.65131408568788,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "BAU_TRANSP_STD",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    }
+  ],
+  "conexoes": [
+    {
+      "origem": "U001",
+      "destino": "U003",
+      "massa": 3455084.308518444,
+      "label": "Fluxo",
+      "periodo": "2023"
+    },
+    {
+      "origem": "U003",
+      "destino": "U005",
+      "massa": 3455084.308518444,
+      "label": "Fluxo",
+      "periodo": "2023"
+    },
+    {
+      "origem": "U004",
+      "destino": "U001",
+      "massa": 3455084.308518444,
+      "label": "Fluxo",
+      "periodo": "2023"
+    },
+    {
+      "origem": "U005",
+      "destino": "U006",
+      "massa": 3455084.308518444,
+      "label": "Fluxo",
+      "periodo": "2023"
+    },
+    {
+      "origem": "U006",
+      "destino": "U007",
+      "massa": 3452862.703193559,
+      "label": "Fluxo",
+      "periodo": "2023"
+    },
+    {
+      "origem": "U007",
+      "destino": "U008",
+      "massa": 3102097.0,
+      "label": "Fluxo",
+      "periodo": "2023"
+    },
+    {
+      "origem": "U008",
+      "destino": "U002",
+      "massa": 3102097.0,
+      "label": "Fluxo",
+      "periodo": "2023"
+    },
+    {
+      "origem": "U001",
+      "destino": "U003",
+      "massa": 3455084.308518444,
+      "label": "Fluxo",
+      "periodo": "2024"
+    },
+    {
+      "origem": "U003",
+      "destino": "U005",
+      "massa": 3455084.308518444,
+      "label": "Fluxo",
+      "periodo": "2024"
+    },
+    {
+      "origem": "U004",
+      "destino": "U001",
+      "massa": 3455084.308518444,
+      "label": "Fluxo",
+      "periodo": "2024"
+    },
+    {
+      "origem": "U005",
+      "destino": "U006",
+      "massa": 3455084.308518444,
+      "label": "Fluxo",
+      "periodo": "2024"
+    },
+    {
+      "origem": "U006",
+      "destino": "U007",
+      "massa": 3452862.703193559,
+      "label": "Fluxo",
+      "periodo": "2024"
+    },
+    {
+      "origem": "U007",
+      "destino": "U008",
+      "massa": 3102097.0,
+      "label": "Fluxo",
+      "periodo": "2024"
+    },
+    {
+      "origem": "U008",
+      "destino": "U002",
+      "massa": 3102097.0,
+      "label": "Fluxo",
+      "periodo": "2024"
+    }
+  ],
+  "tecnologias": [
+    {
+      "id": "BAU_BENEF_STD",
+      "nome": "BAU_BENEF_STD",
+      "insumos": [
+        {
+          "nome": "EFFLUENTS",
+          "fator_consumo": 1.19765728054384e-05
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator_consumo": 0.00404918932758683
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator_consumo": 0.000105164332264879
+        }
+      ],
+      "unidades": []
+    },
+    {
+      "id": "BAU_EMB_STD",
+      "nome": "BAU_EMB_STD",
+      "insumos": [
+        {
+          "nome": "ELECTRICITY",
+          "fator_consumo": 0.0
+        }
+      ],
+      "unidades": []
+    },
+    {
+      "id": "BAU_FER_STD",
+      "nome": "BAU_FER_STD",
+      "insumos": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator_consumo": 0.00163751938842409
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator_consumo": 0.837432290650364
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator_consumo": 0.571649245009859
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator_consumo": 0.236768347314646
+        },
+        {
+          "nome": "EFFLUENTS",
+          "fator_consumo": 2.31361272079211e-06
+        },
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator_consumo": 4.90256013019766e-05
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator_consumo": 7.5308361491668e-05
+        },
+        {
+          "nome": "DIESEL-B30",
+          "fator_consumo": 1.8
+        },
+        {
+          "nome": "ETHANOL",
+          "fator_consumo": 1.826
+        }
+      ],
+      "unidades": []
+    },
+    {
+      "id": "BAU_MINA_STD",
+      "nome": "BAU_MINA_STD",
+      "insumos": [
+        {
+          "nome": "ANFO",
+          "fator_consumo": 0.082709515642632
+        },
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator_consumo": 0.0481844965808483
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator_consumo": 0.865023695587112
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator_consumo": 0.536419527001597
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator_consumo": 0.263706665683276
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator_consumo": 0.00112298347090252
+        },
+        {
+          "nome": "FLOCCULANT",
+          "fator_consumo": 0.00054391176181678
+        },
+        {
+          "nome": "HFC-134A OU R-134A",
+          "fator_consumo": 2.84766723212285e-07
+        },
+        {
+          "nome": "IBENITE",
+          "fator_consumo": 0.182121983245838
+        },
+        {
+          "nome": "PUMPED EMULSION",
+          "fator_consumo": 0.0201469757245206
+        },
+        {
+          "nome": "R-404A",
+          "fator_consumo": 5.85638505320894e-07
+        },
+        {
+          "nome": "R-407C",
+          "fator_consumo": 6.4832012659352e-07
+        },
+        {
+          "nome": "R-410A",
+          "fator_consumo": 8.58811416248154e-06
+        },
+        {
+          "nome": "SUPPRESSION - SCOPE 1",
+          "fator_consumo": 3.874e-05
+        },
+        {
+          "nome": "SUPPRESSION - SCOPE 3",
+          "fator_consumo": 0.000438859112328772
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator_consumo": 3.54000175263189e-06
+        },
+        {
+          "nome": "DIESEL-B30",
+          "fator_consumo": 1.28715
+        },
+        {
+          "nome": "ETHANOL",
+          "fator_consumo": 3.366
+        }
+      ],
+      "unidades": []
+    },
+    {
+      "id": "BAU_PATIO_STD",
+      "nome": "BAU_PATIO_STD",
+      "insumos": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator_consumo": 0.00437473403121566
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator_consumo": 0.00257527512273719
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator_consumo": 0.00251110307121556
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator_consumo": 0.00215958316882655
+        },
+        {
+          "nome": "EFFLUENTS",
+          "fator_consumo": 3.03376697907341e-06
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator_consumo": 0.00186443208461363
+        },
+        {
+          "nome": "MARINE DIESEL A2/B2",
+          "fator_consumo": 0.0044660790772964
+        }
+      ],
+      "unidades": []
+    },
+    {
+      "id": "BAU_PELOT_STD",
+      "nome": "BAU_PELOT_STD",
+      "insumos": [
+        {
+          "nome": "ANTHRACITE - SÃO LUIS",
+          "fator_consumo": 11.9282458241588
+        },
+        {
+          "nome": "BENTONITE - SÃO LUIS",
+          "fator_consumo": 4.30083918604697
+        },
+        {
+          "nome": "CALCITIC LIMESTONE - SÃO LUIS",
+          "fator_consumo": 38.3213548699614
+        },
+        {
+          "nome": "CHARCOAL",
+          "fator_consumo": 0.105326673944007
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator_consumo": 0.0336957584392537
+        },
+        {
+          "nome": "FUEL OIL 1A",
+          "fator_consumo": 15.4566894012831
+        },
+        {
+          "nome": "GASOLINE",
+          "fator_consumo": 0.00062393577378901
+        },
+        {
+          "nome": "GLYCERIN",
+          "fator_consumo": 0.140435565258677
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 1",
+          "fator_consumo": 1.33868152086499e-07
+        },
+        {
+          "nome": "WASTE GENERATION - SCOPE 3",
+          "fator_consumo": 0.00397720491220359
+        },
+        {
+          "nome": "BIOMETHANE",
+          "fator_consumo": 14.7287
+        },
+        {
+          "nome": "NATURAL GAS",
+          "fator_consumo": 13.700708352
+        }
+      ],
+      "unidades": []
+    },
+    {
+      "id": "BAU_PORTO_STD",
+      "nome": "BAU_PORTO_STD",
+      "insumos": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "MARINE DIESEL A2/B2",
+          "fator_consumo": 0.0
+        }
+      ],
+      "unidades": []
+    },
+    {
+      "id": "BAU_TRANSP_STD",
+      "nome": "BAU_TRANSP_STD",
+      "insumos": [
+        {
+          "nome": "DIESEL S10 (BRASIL)",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "DIESEL-B10",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "DIESEL-B12",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "DIESEL-B13",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "ELECTRICITY",
+          "fator_consumo": 0.0
+        },
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator_consumo": 0.0
+        }
+      ],
+      "unidades": []
+    }
+  ]
 }

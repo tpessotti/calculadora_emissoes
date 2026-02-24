@@ -122,7 +122,7 @@ class AppContext:
         if not anos:
             anos.add(DEFAULT_YEAR)
 
-        self.anos_disponiveis = sorted(anos, reverse=True)
+        self.anos_disponiveis = sorted(anos)
         if self.ano_ativo not in self.anos_disponiveis:
             self.ano_ativo = self.anos_disponiveis[0]
 

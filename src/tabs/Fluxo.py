@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_agraph import agraph, Node, Edge, Config
 from config import CANVAS_CONFIG
 from utils import UtilsUI
+from core.calc.fatores import FatorIndex
 import base64
 from io import BytesIO
 try:
@@ -229,6 +230,7 @@ class FluxoTab:
                 
                 # Insumos e fatores
                 if tecnologia and tecnologia.insumos:
+                    fator_index = FatorIndex(st.session_state.get('fatores_emissao', []))
                     y_text -= 0.5*cm
                     c.setFont("Helvetica-Bold", 8)
                     c.drawString(2.7*cm, y_text, "Insumos e Fatores:")
@@ -242,12 +244,25 @@ class FluxoTab:
                         # Buscar fator de emissão
                         fator_emissao = 0.0
                         escopo = "N/A"
-                        if 'fatores_emissao' in st.session_state:
+                        ano_unidade = None
+                        try:
+                            ano_unidade = int(float(str(getattr(unidade, 'Periodo', '')).strip()))
+                        except (ValueError, TypeError):
+                            ano_unidade = None
+
+                        fator_dict = fator_index.get_fator_dict(nome_insumo, "1", ano=ano_unidade)
+                        if fator_dict is None and 'fatores_emissao' in st.session_state:
                             for f in st.session_state.fatores_emissao:
-                                if f.get('consumivel') == nome_insumo:
-                                    fator_emissao = f.get('fator_emissao', 0.0)
-                                    escopo = f.get('escopo', 'N/A')
+                                if str(f.get('consumivel', '')).strip().upper() == nome_insumo.strip().upper():
+                                    fator_dict = f
                                     break
+
+                        if fator_dict is not None:
+                            try:
+                                fator_emissao = float(fator_dict.get('fator_emissao', 0.0))
+                            except (ValueError, TypeError):
+                                fator_emissao = 0.0
+                            escopo = fator_dict.get('escopo', 'N/A')
                         
                         # Calcular emissão do insumo
                         emissao_insumo = fator_consumo * fator_emissao * unidade.MassaOutput
@@ -474,7 +489,9 @@ class FluxoTab:
 
     def _create_connection(self, origem, destino):
         if self._validate_connection(origem, destino):
-            self.utils_ui.db.add_edge(origem, destino)
+            u_src = self.utils_ui.db.get_unidade_by_id(origem)
+            periodo = str(u_src.Periodo) if u_src else ""
+            self.utils_ui.db.add_edge(origem, destino, periodo=periodo)
             st.session_state.edges = self.utils_ui.db.get_edges_for_graph()
             st.success(f"Conexão criada: {origem} → {destino}")
             self._set_selection_mode(False, False)

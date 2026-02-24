@@ -75,8 +75,10 @@ def main() -> int:
 
     # Validar
     from core.validation.schema import validar_database, ValidationReport
+    from core.validation.relational import validar_integridade_relacional
 
     report: ValidationReport = validar_database(data)
+    rel_report = validar_integridade_relacional(data)
 
     # Saída
     if args.json_output:
@@ -112,17 +114,27 @@ def main() -> int:
         print(f"║  Validação: {filepath}")
         print(f"╚══════════════════════════════════════════╝")
         print()
+        print("── Schema ──")
         print(report.summary())
+        print()
+        print("── Relacional ──")
+        print(rel_report.summary())
         print()
 
         if report.avisos:
-            print(f"Avisos ({len(report.avisos)}):")
+            print(f"Avisos Schema ({len(report.avisos)}):")
             for w in report.avisos:
+                print(f"  ⚠️  {w}")
+            print()
+        
+        if rel_report.warnings:
+            print(f"Avisos Relacional ({len(rel_report.warnings)}):")
+            for w in rel_report.warnings:
                 print(f"  ⚠️  {w}")
             print()
 
     # Determinar exit code
-    is_fail = not report.is_valid
+    is_fail = not report.is_valid or not rel_report.is_valid
     if args.strict and report.avisos:
         is_fail = True
         if not args.json_output:

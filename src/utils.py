@@ -2,6 +2,28 @@ import streamlit as st
 import database
 from database import UnidadeProdutiva, Tecnologia
 import calculations
+from core.calc.fatores import FatorIndex
+
+
+def _parse_ano_periodo(periodo):
+    try:
+        return int(float(str(periodo).strip()))
+    except (ValueError, TypeError):
+        return None
+
+
+def _resolver_fator_para_ano(nome_insumo, fatores, ano_ref):
+    """Resolve fator/escopo por consumível priorizando ano exato e fallback global."""
+    idx = FatorIndex(fatores)
+    d = idx.get_fator_dict(nome_insumo, "1", ano=ano_ref)
+    if d is None:
+        for f in fatores:
+            if str(f.get("consumivel", "")).strip().upper() == str(nome_insumo).strip().upper():
+                d = f
+                break
+    if d is None:
+        return 0.0, "1"
+    return float(d.get("fator_emissao", 0.0)), str(d.get("escopo", "1"))
 
 class UtilsUI:
     def __init__(self):
@@ -269,7 +291,7 @@ class UtilsUI:
         
         return None
 
-    def render_tecnologia(self, key_prefix="tec_selector", tecnologia_atual=None):
+    def render_tecnologia(self, key_prefix="tec_selector", tecnologia_atual=None, ano_referencia=None):
         """
         Componente unificado para selecionar e editar tecnologia
         
@@ -347,13 +369,10 @@ class UtilsUI:
             for insumo in tecnologia_escolhida.insumos:
                 nome_insumo = insumo["nome"]
                 fator_consumo = insumo["fator_consumo"]
-                fator_emissao = next(
-                    (f["fator_emissao"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
-                    0.0
-                )
-                escopo = next(
-                    (f["escopo"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
-                    "1"
+                fator_emissao, escopo = _resolver_fator_para_ano(
+                    nome_insumo,
+                    st.session_state.fatores_emissao,
+                    ano_referencia,
                 )
                 consumiveis.append({
                     "nome": nome_insumo,
@@ -394,7 +413,8 @@ class UtilsUI:
 
         # Usar o componente unificado de tecnologia
         tecnologia_escolhida, consumiveis, consumo_especifico = self.render_tecnologia(
-            key_prefix="form_create"
+            key_prefix="form_create",
+            ano_referencia=_parse_ano_periodo(periodo),
         )
 
         if st.button("Salvar", key="form_create_save"):
@@ -485,10 +505,10 @@ class UtilsUI:
 
     def render_table(self, unidades, edges, editar_callback=None, remover_callback=None):
         """Renderiza a tabela de unidades com opções de editar e remover"""
-        col_widths = [1.3, 2.3, 1.2, 1.2, 1.3, 1.3, 2.1, 2.5, 0.9, 1]
+        col_widths = [1.2, 2.0, 1.0, 1.1, 1.1, 1.1, 1.1, 1.9, 2.2, 0.9, 0.9]
         col_header = st.columns(col_widths)
         header_labels = [
-            "ID", "Nome", "Entrada", "Saída", "Massa In", "Massa Out",
+            "ID", "Nome", "Ano", "Entrada", "Saída", "Massa In", "Massa Out",
             "Emissões Totais (tCO₂e)", "Destino", "Editar", "Remover"
         ]
 
@@ -496,28 +516,35 @@ class UtilsUI:
             col.markdown(f"**{label}**")
 
         for i, u in enumerate(unidades):
-            destinos = [e['target'] for e in edges if e['source'] == u.ID_ELO]
+            periodo_key = str(getattr(u, 'Periodo', '') or '')
+            row_key = f"{u.ID_ELO}_{periodo_key}_{i}"
+            destinos = [
+                f"{e['target']} ({e.get('periodo', '')})" if e.get('periodo') else e['target']
+                for e in edges
+                if e['source'] == u.ID_ELO
+            ]
             cols = st.columns(col_widths)
             bg_color = "#f9f9f9" if i % 2 == 0 else "#ffffff"
             style = f"background-color: {bg_color}; padding: 0.2em; border-radius: 0.3em"
 
             with cols[0]: st.markdown(f"<div style='{style}'>{u.ID_ELO}</div>", unsafe_allow_html=True)
             with cols[1]: st.markdown(f"<div style='{style}'>{u.Nome}</div>", unsafe_allow_html=True)
-            with cols[2]: st.markdown(f"<div style='{style}'>{u.Input}</div>", unsafe_allow_html=True)
-            with cols[3]: st.markdown(f"<div style='{style}'>{u.Output}</div>", unsafe_allow_html=True)
-            with cols[4]: st.markdown(f"<div style='{style}'>{u.MassaInput:.1f}</div>", unsafe_allow_html=True)
-            with cols[5]: st.markdown(f"<div style='{style}'>{u.MassaOutput:.1f}</div>", unsafe_allow_html=True)
+            with cols[2]: st.markdown(f"<div style='{style}'>{getattr(u, 'Periodo', '')}</div>", unsafe_allow_html=True)
+            with cols[3]: st.markdown(f"<div style='{style}'>{u.Input}</div>", unsafe_allow_html=True)
+            with cols[4]: st.markdown(f"<div style='{style}'>{u.Output}</div>", unsafe_allow_html=True)
+            with cols[5]: st.markdown(f"<div style='{style}'>{u.MassaInput:.1f}</div>", unsafe_allow_html=True)
+            with cols[6]: st.markdown(f"<div style='{style}'>{u.MassaOutput:.1f}</div>", unsafe_allow_html=True)
 
             emissao_total = u.IntensidadeEmissao * u.MassaOutput
-            with cols[6]: st.markdown(f"<div style='{style}'>{emissao_total:.2f}</div>", unsafe_allow_html=True)
-            with cols[7]: st.markdown(f"<div style='{style}'>{', '.join(destinos)}</div>", unsafe_allow_html=True)
-
-            with cols[8]:
-                if editar_callback and st.button("✏️", key=f"editar_{u.ID_ELO}"):
-                    editar_callback(u.ID_ELO)
+            with cols[7]: st.markdown(f"<div style='{style}'>{emissao_total:.2f}</div>", unsafe_allow_html=True)
+            with cols[8]: st.markdown(f"<div style='{style}'>{', '.join(destinos)}</div>", unsafe_allow_html=True)
 
             with cols[9]:
-                if remover_callback and st.button("🗑️", key=f"remover_{u.ID_ELO}"):
+                if editar_callback and st.button("✏️", key=f"editar_{row_key}"):
+                    editar_callback(u.ID_ELO)
+
+            with cols[10]:
+                if remover_callback and st.button("🗑️", key=f"remover_{row_key}"):
                     remover_callback(u.ID_ELO)
 
     def render_edit_form(self, unidade, fatores_emissao, callback_salvar):
@@ -548,7 +575,8 @@ class UtilsUI:
         
         tecnologia_escolhida, consumiveis, consumo_especifico = self.render_tecnologia(
             key_prefix=f"edit_{unidade.ID_ELO}",
-            tecnologia_atual=tecnologia_atual
+            tecnologia_atual=tecnologia_atual,
+            ano_referencia=_parse_ano_periodo(periodo),
         )
         
         st.divider()
