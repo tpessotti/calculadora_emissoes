@@ -2,5 +2,8 @@
   "localizacoes": [
     "Brasil"
   ],
-  "produtos": []
+  "insumos": [
+    "Bostaa",
+    "Mijo"
+  ]
 }

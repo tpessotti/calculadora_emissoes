@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional
+from core.units import convert_mass, normalize_unit
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ if OPENPYXL_AVAILABLE:
 def gerar_template_excel(
     ano: Optional[int] = None,
     fatores_emissao: Optional[List[Dict]] = None,
+    massa_unidade: str = "t",
 ) -> bytes:
     """Gera template Excel em memória para input de dados.
 
@@ -74,6 +76,7 @@ def gerar_template_excel(
 
     wb = Workbook()
     ano = ano or datetime.now().year
+    massa_unidade = normalize_unit(massa_unidade)
 
     # ─── ABA README ─────────────────────────────────────────────
     ws_readme = wb.active
@@ -99,7 +102,7 @@ def gerar_template_excel(
         ["REGRAS:"],
         ["- ID_ELO deve ser único por unidade produtiva."],
         ["- Periodo deve ser um ano (ex: 2025)."],
-        ["- Massas em toneladas (t)."],
+        [f"- Massas na unidade: {massa_unidade}."],
         ["- Consumíveis e ConsumoEspecifico são listas separadas por ';'."],
         ["  Exemplo Consumíveis: DIESEL S10 (BRASIL);ELETRICIDADE"],
         ["  Exemplo ConsumoEspecifico: 0.5;1.2"],
@@ -129,9 +132,10 @@ def gerar_template_excel(
         ("Localizacao *", True),
         ("Periodo *", True),
         ("Input", False),
-        ("MassaInput (t) *", True),
+        (f"MassaInput ({massa_unidade}) *", True),
         ("Output", False),
-        ("MassaOutput (t) *", True),
+        (f"MassaOutput ({massa_unidade}) *", True),
+        ("Unidade_Massa", False),
         ("Consumiveis", False),
         ("ConsumoEspecifico", False),
         ("TaxacaoFronteira", False),
@@ -143,7 +147,7 @@ def gerar_template_excel(
     # Exemplo de dados
     exemplo_unidade = [
         "U001", "Mina de Ferro", "Minas Gerais", str(ano),
-        "Minério ROM", 1000.0, "Concentrado Fe", 500.0,
+        "Minério ROM", 1000.0, "Concentrado Fe", 500.0, massa_unidade,
         "DIESEL S10 (BRASIL);ELETRICIDADE", "0.5;1.2",
         "FALSE", "FALSE", "",
     ]
@@ -164,13 +168,14 @@ def gerar_template_excel(
     conexoes_headers = [
         ("Origem (ID_ELO) *", True),
         ("Destino (ID_ELO) *", True),
-        ("Massa (t)", False),
+        (f"Massa ({massa_unidade})", False),
+        ("Unidade_Massa", False),
         ("Label", False),
         ("Periodo *", True),
     ]
     _write_headers(ws_c, conexoes_headers)
 
-    exemplo_conexao = ["U001", "U002", 500.0, "Fluxo Concentrado", "2025"]
+    exemplo_conexao = ["U001", "U002", 500.0, massa_unidade, "Fluxo Concentrado", "2025"]
     _write_example_row(ws_c, 3, exemplo_conexao)
     _auto_width(ws_c)
 
@@ -248,6 +253,7 @@ def exportar_sessao_excel(
     tecnologias: Optional[List[Dict]] = None,
     fatores_emissao: Optional[List[Dict]] = None,
     ano: Optional[int] = None,
+    massa_unidade: str = "t",
 ) -> bytes:
     """Gera um arquivo Excel preenchido com os dados da sessão.
 
@@ -266,6 +272,7 @@ def exportar_sessao_excel(
 
     wb = Workbook()
     ano = ano or datetime.now().year
+    massa_unidade = normalize_unit(massa_unidade)
 
     _DATA_FONT = Font(name="Calibri", size=10)
 
@@ -297,9 +304,10 @@ def exportar_sessao_excel(
         ("Localizacao *", True),
         ("Periodo *", True),
         ("Input", False),
-        ("MassaInput (t) *", True),
+        (f"MassaInput ({massa_unidade}) *", True),
         ("Output", False),
-        ("MassaOutput (t) *", True),
+        (f"MassaOutput ({massa_unidade}) *", True),
+        ("Unidade_Massa", False),
         ("Consumiveis", False),
         ("ConsumoEspecifico", False),
         ("TaxacaoFronteira", False),
@@ -339,9 +347,10 @@ def exportar_sessao_excel(
             d.get("Localizacao") or d.get("localizacao", ""),
             d.get("Periodo") or d.get("periodo", str(ano)),
             d.get("Input") or d.get("input", ""),
-            d.get("MassaInput") or d.get("massa_input", 0),
+            convert_mass(d.get("MassaInput") or d.get("massa_input", 0), "t", massa_unidade),
             d.get("Output") or d.get("output", ""),
-            d.get("MassaOutput") or d.get("massa_output", 0),
+            convert_mass(d.get("MassaOutput") or d.get("massa_output", 0), "t", massa_unidade),
+            massa_unidade,
             cons_nomes,
             cons_esp,
             str(d.get("TaxacaoFronteira", d.get("taxacao_fronteira", False))).upper(),
@@ -360,7 +369,8 @@ def exportar_sessao_excel(
     conexoes_headers = [
         ("Origem (ID_ELO) *", True),
         ("Destino (ID_ELO) *", True),
-        ("Massa (t)", False),
+        (f"Massa ({massa_unidade})", False),
+        ("Unidade_Massa", False),
         ("Label", False),
         ("Periodo *", True),
     ]
@@ -372,7 +382,8 @@ def exportar_sessao_excel(
         values = [
             d.get("origem", ""),
             d.get("destino", ""),
-            d.get("massa", 0),
+            convert_mass(d.get("massa", 0), "t", massa_unidade),
+            massa_unidade,
             d.get("label", "Fluxo"),
             d.get("periodo", ""),
         ]
@@ -526,17 +537,22 @@ def excel_to_json_db(filepath_or_bytes: Any) -> Dict[str, Any]:
             "Localizacao": "Localizacao",
             "Periodo": "Periodo",
             "Input": "Input",
-            "MassaInput (t)": "MassaInput",
             "MassaInput": "MassaInput",
             "Output": "Output",
-            "MassaOutput (t)": "MassaOutput",
             "MassaOutput": "MassaOutput",
+            "Unidade_Massa": "Unidade_Massa",
             "TaxacaoFronteira": "TaxacaoFronteira",
             "TaxacaoLocal": "TaxacaoLocal",
             "Tecnologia": "Tecnologia",
             "Consumiveis": "Consumiveis",
             "ConsumoEspecifico": "ConsumoEspecifico",
         }
+        for col in list(df.columns):
+            col_clean = str(col).strip()
+            if col_clean.startswith("MassaInput"):
+                col_map[col] = "MassaInput"
+            if col_clean.startswith("MassaOutput"):
+                col_map[col] = "MassaOutput"
         df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
         for _, row in df.iterrows():
@@ -584,9 +600,17 @@ def excel_to_json_db(filepath_or_bytes: Any) -> Dict[str, Any]:
                 "Localizacao": str(row.get("Localizacao", "")),
                 "Periodo": periodo,
                 "Input": str(row.get("Input", "")),
-                "MassaInput": _safe_float(row.get("MassaInput", 0), 0.0),
+                "MassaInput": convert_mass(
+                    _safe_float(row.get("MassaInput", 0), 0.0),
+                    normalize_unit(row.get("Unidade_Massa", "t")),
+                    "t",
+                ),
                 "Output": str(row.get("Output", "")),
-                "MassaOutput": _safe_float(row.get("MassaOutput", 0), 0.0),
+                "MassaOutput": convert_mass(
+                    _safe_float(row.get("MassaOutput", 0), 0.0),
+                    normalize_unit(row.get("Unidade_Massa", "t")),
+                    "t",
+                ),
                 "Consumiveis": consumiveis,
                 "ConsumoEspecifico": consumo_especifico,
                 "TaxacaoFronteira": _parse_bool(row.get("TaxacaoFronteira")),
@@ -602,11 +626,15 @@ def excel_to_json_db(filepath_or_bytes: Any) -> Dict[str, Any]:
         col_map = {
             "Origem": "origem",
             "Destino": "destino",
-            "Massa (t)": "massa",
             "Massa": "massa",
+            "Unidade_Massa": "unidade_massa",
             "Label": "label",
             "Periodo": "periodo",
         }
+        for col in list(df.columns):
+            col_clean = str(col).strip()
+            if col_clean.startswith("Massa"):
+                col_map[col] = "massa"
         df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
         if "origem" in df.columns:
             df = df[~df["origem"].astype(str).str.strip().apply(_is_template_hint)]
@@ -617,7 +645,11 @@ def excel_to_json_db(filepath_or_bytes: Any) -> Dict[str, Any]:
                 result["conexoes"].append({
                     "origem": str(row["origem"]).strip(),
                     "destino": str(row["destino"]).strip(),
-                    "massa": _safe_float(row.get("massa", 0), 0.0),
+                    "massa": convert_mass(
+                        _safe_float(row.get("massa", 0), 0.0),
+                        normalize_unit(row.get("unidade_massa", "t")),
+                        "t",
+                    ),
                     "label": str(row.get("label", "Fluxo")),
                     "periodo": str(row.get("periodo", "")) if pd.notna(row.get("periodo")) else "",
                 })

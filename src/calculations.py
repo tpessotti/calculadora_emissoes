@@ -1,6 +1,7 @@
 from typing import List, Dict
 from database import UnidadeProdutiva
 import streamlit as st
+from core.units import convert_mass, get_default_mass_unit_from_session
 
 class EmissionCalculator:
     @staticmethod
@@ -9,11 +10,14 @@ class EmissionCalculator:
         intensidade_escopo1 = 0.0
         intensidade_escopo2 = 0.0
         intensidade_escopo3 = 0.0
+        mass_unit = get_default_mass_unit_from_session(st.session_state)
+        escala_para_ton = convert_mass(1.0, "t", mass_unit)
         
         for c, e in zip(unidade.Consumiveis, unidade.ConsumoEspecifico):
             fator = c.get("fator", 0.0)
             escopo = str(c.get("escopo", "1")).upper()
-            emissao = fator * e
+            consumo_por_ton = float(e) * float(escala_para_ton)
+            emissao = fator * consumo_por_ton
             
             # Aceita tanto "1", "SCOPE 1", "SCOPE1" etc
             if "1" in escopo:

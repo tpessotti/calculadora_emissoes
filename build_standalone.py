@@ -1,6 +1,14 @@
 """
 Script para gerar versão standalone HTML com Stlite
 Cria um arquivo HTML único que roda completamente no navegador
+
+Estrutura empacotada:
+  app.py              ← entrypoint (mapeado de src/app.py)
+  multipage_utils.py  ← utilitários compartilhados
+  tabs/*.py           ← todas as páginas (via st.navigation)
+  core/**             ← lógica de negócio
+  data/**             ← dados e base de emissões
+  assets/**           ← imagens e recursos estáticos
 """
 
 import os
@@ -118,6 +126,9 @@ def get_files_content():
             return False
         if path.suffix in {".pyc", ".pyo"}:
             return False
+        # pasta pages/ foi removida — ignorar caso ainda exista no disco
+        if "pages" in path.parts and path.parent.name == "pages":
+            return False
         return True
     
     # 1. Processar arquivos de src/ (mapeados para a raiz)
@@ -168,6 +179,14 @@ def get_files_content():
                 if content is not None:
                     files[str_path] = content
                     print(f"Adicionado: {str_path}")
+
+    # 4. Incluir .streamlit/config.toml para preservar tema e configurações
+    _config_toml = Path(".streamlit") / "config.toml"
+    if _config_toml.exists():
+        content = read_file_safe(_config_toml)
+        if content is not None:
+            files[".streamlit/config.toml"] = content
+            print("Adicionado: .streamlit/config.toml")
     
     # Criar user_sessions.json vazio se não existir
     if "data/user_sessions.json" not in files:

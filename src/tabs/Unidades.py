@@ -10,6 +10,7 @@ if _root_dir not in sys.path:
 from utils import UtilsUI
 from core.context import AppContext
 from core.validation.relational import validar_integridade_relacional, formatar_relatorio_markdown
+from core.units import convert_mass, get_default_mass_unit_from_session
 
 class UnidadesTab:
     """Classe para gerenciar a aba de Unidades e Fluxos no Streamlit."""
@@ -141,6 +142,7 @@ class UnidadesTab:
 
     def _render_gerenciar_fluxos(self):
         """Tab para gerenciamento de fluxos (importação/exportação e criação/exclusão)"""
+        mass_unit = get_default_mass_unit_from_session(st.session_state)
         st.markdown("### Gerenciar Fluxos")
         st.markdown("---")
         
@@ -188,9 +190,10 @@ class UnidadesTab:
             col3, col4 = st.columns(2)
             
             with col3:
+                massa_saida_disp = convert_mass(massa_saida, "t", mass_unit)
                 st.metric(
-                    "Massa do Fluxo (ton):",
-                    f"{massa_saida:.2f}",
+                    f"Massa do Fluxo ({mass_unit}):",
+                    f"{massa_saida_disp:.2f}",
                     help="A massa do fluxo é sempre a massa de saída da unidade de origem"
                 )
                 st.caption(f"Ano de origem: {getattr(origem_unidade, 'Periodo', '') or 'Não informado'}")
@@ -223,7 +226,7 @@ class UnidadesTab:
         else:
             # Criar lista de fluxos formatada
             fluxos_disponiveis = [
-                f"{getattr(c, 'id', '') or '-'} | {c.origem} → {c.destino} ({c.massa} ton) [{c.periodo}]"
+                f"{getattr(c, 'id', '') or '-'} | {c.origem} → {c.destino} ({convert_mass(c.massa, 't', mass_unit):.2f} {mass_unit}) [{c.periodo}]"
                 for c in st.session_state.conexoes
             ]
             
@@ -348,7 +351,7 @@ class UnidadesTab:
                 return
 
         # Visualização da tabela (estado padrão)
-        st.markdown("### Unidades Produtivas")
+        st.markdown("### Unidades")
         st.markdown("---")
 
         unidades = self.utils_ui.db.get_unidades()

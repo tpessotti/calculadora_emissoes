@@ -1,218 +1,212 @@
-import streamlit as st
-import json
+"""
+Calculadora de Emissões CMP - Entrypoint principal
+Usa st.navigation (Streamlit ≥ 1.36) para navegação programática —
+não depende de uma pasta pages/ e não usa st.switch_page.
+"""
 import os
 import sys
-import time
+import streamlit as st
 
-# Adicionar diretórios ao path
+# ── path setup ────────────────────────────────────────────────────────────────
 _src_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.dirname(_src_dir)
 sys.path.insert(0, _src_dir)
 sys.path.insert(0, _root_dir)
 
-# Importação direta das páginas
+# ── app utils ─────────────────────────────────────────────────────────────────
+from multipage_utils import init_session_state, apply_theme, render_header_bar, render_sidebar_extras
+
+# ── tab imports ───────────────────────────────────────────────────────────────
 from tabs.Home import HomeTab
-from tabs.Unidades import UnidadesTab
 from tabs.FluxoPlotly import FluxoTab
+from tabs.Unidades import UnidadesTab
 from tabs.FatoresEmissao import FatoresEmissaoTab
 from tabs.Tecnologias import TecnologiasTab
 from tabs.Reports import ReportsTab
 from tabs.Chatbot import ChatbotTab
+from tabs.Sessoes import SessoesTab
 from tabs.Settings import SettingsTab
 
-from database import DatabaseManager
-from calculations import EmissionCalculator
+# ── page config (must be first Streamlit call) ────────────────────────────────
+st.set_page_config(
+    page_title="CMP - Calculadora de Emissões",
+    page_icon="🌍",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# Core modules
-from core.context import AppContext
-from core.io.json_io import load_fatores_emissao
+# ── shared state ──────────────────────────────────────────────────────────────
+init_session_state()
 
+usuario_logado = st.session_state.get("usuario_logado", None)
+# ── loading screen (disparado logo após o login) ──────────────────────────────
+if st.session_state.pop("_show_loading", False) and usuario_logado:
+    import time
+    import streamlit.components.v1 as _cmp
 
-class App:
-    def __init__(self):
-        self.db = DatabaseManager()
-        self.ec = EmissionCalculator()
-        self.init_session_state()
-        self.setup_page_config()
+    escaped_user = usuario_logado.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-
-    def init_session_state(self):
-        session_defaults = {
-            "selected_nodes": [],
-            "selected_edge": None,
-            "modo_selecao": False,
-            "modo_exclusao_fluxo": False,
-            "refresh_canvas": True,
-            "canvas_opened_once": False,
-            "unidades": self.db.get_unidades(),
-            "edges": self.db.get_edges_for_graph(),
-            "ui_theme_mode": "light",
-            "auto_save_session": False,
-            "_auto_save_last_ts": 0.0,
-        }
-        for key, value in session_defaults.items():
-            if key not in st.session_state:
-                st.session_state[key] = value
-
-        # Carrega fatores de emissão com cache
-        if "fatores_emissao" not in st.session_state or not st.session_state["fatores_emissao"]:
-            ctx = AppContext.get()
-            fatores = load_fatores_emissao(ctx.fatores_path())
-            if fatores:
-                st.session_state.fatores_emissao = fatores
-            else:
-                st.session_state.fatores_emissao = []
-                st.session_state["mostrar_aviso_fatores_emissao"] = True
-
-    def setup_page_config(self):
-        st.set_page_config(
-            page_title="CMP - Calculadora de Emissões",
-            page_icon="🌍",
-            layout="wide",
-            initial_sidebar_state="collapsed"
-        )
-
-    def _apply_theme(self):
-        """Aplica tema global (light/dark) com base na preferência atual."""
-        theme_mode = st.session_state.get("ui_theme_mode", "light")
-        if theme_mode != "dark":
-            return
-
-        st.markdown(
-            """
-            <style>
-                .stApp {
-                    background-color: #0e1117;
-                    color: #f9fafb;
+    st.markdown(
+        f"""
+        <div style="
+            position:fixed; inset:0; z-index:999999;
+            background:linear-gradient(135deg,#edf0e7 0%,#d6e4da 100%);
+            display:flex; flex-direction:column; align-items:center;
+            justify-content:center; gap:1.4rem;
+            font-family:'Segoe UI',sans-serif;
+        ">
+            <div style="font-size:3.5rem; animation:pulse-logo 1.4s ease-in-out infinite;">🌍</div>
+            <p style="font-size:1.8rem;font-weight:700;color:#4c8061;margin:0;">
+                Calculadora de Emissões
+            </p>
+            <p style="font-size:1rem;color:#6b7280;margin:0;">
+                Bem-vindo(a), <strong>{escaped_user}</strong>
+            </p>
+            <div style="
+                width:min(420px,80vw); background:rgba(76,128,97,0.15);
+                border-radius:999px; height:8px; overflow:hidden;
+            ">
+                <div id="_cmp-pbar" style="
+                    height:100%; border-radius:999px; width:0%;
+                    background:linear-gradient(90deg,#4c8061,#6cba89);
+                "></div>
+            </div>
+            <p id="_cmp-step-txt" style="font-size:0.82rem;color:#9ca3af;margin:0;">
+                Inicializando sessão...
+            </p>
+        </div>
+        <style>
+        @keyframes pulse-logo {{
+            0%,100% {{ transform:scale(1); opacity:1; }}
+            50%      {{ transform:scale(1.08); opacity:0.85; }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    # JS para ciclar o texto de status e animar a barra (iframe same-origin)
+    _cmp.html(
+        """
+        <script>
+        (function() {
+            var pd = window.parent.document;
+            var steps = [
+                'Inicializando sessão...',
+                'Carregando fatores de emissão...',
+                'Preparando dados do painel...',
+                'Quase pronto!'
+            ];
+            var pcts = [18, 52, 82, 100];
+            var el   = pd.getElementById('_cmp-step-txt');
+            var bar  = pd.getElementById('_cmp-pbar');
+            if (!el || !bar) return;
+            var i = 0;
+            bar.style.transition = 'width 0.5s ease';
+            bar.style.width = pcts[0] + '%';
+            var iv = setInterval(function() {
+                i++;
+                if (i < steps.length) {
+                    el.textContent   = steps[i];
+                    bar.style.width  = pcts[i] + '%';
+                } else {
+                    clearInterval(iv);
                 }
-                [data-testid="stSidebar"] {
-                    background-color: #111827;
-                }
-                .stMarkdown, .stText, label, p, h1, h2, h3, h4 {
-                    color: #f9fafb !important;
-                }
-                .stDataFrame, .stTable {
-                    background-color: #111827;
-                }
-                div[data-testid="stExpander"] {
-                    background-color: #111827;
-                }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
+            }, 550);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+    time.sleep(2.4)
+    st.rerun()
+# ── page functions ────────────────────────────────────────────────────────────
+def page_home():
+    HomeTab()._render()
 
-    def run(self):
-        self._apply_theme()
+def page_fluxo():
+    if not usuario_logado:
+        st.warning("⚠️ Faça login para acessar esta página.")
+        HomeTab()._render()
+        return
+    FluxoTab()._render()
 
-        # Verificar se o usuário está logado
-        usuario_logado = st.session_state.get("usuario_logado", None)
-        
-        # Se não estiver logado, mostrar apenas a landing page
-        if usuario_logado is None:
-            HomeTab()._render()
-            return
+def page_unidades():
+    if not usuario_logado:
+        st.warning("⚠️ Faça login para acessar esta página.")
+        HomeTab()._render()
+        return
+    UnidadesTab()._render()
 
-        tabs = {
-            "Início": HomeTab(),
-            "Diagrama de Fluxo": FluxoTab(),
-            "Unidades & Fluxos": UnidadesTab(),
-            "Fatores de Emissão": FatoresEmissaoTab(),
-            "Tecnologias": TecnologiasTab(),
-            "Análise de Emissões": ReportsTab(),
-            "Assistente IA": ChatbotTab(),
-            "Sessões": SettingsTab(),
-            "Configurações": SettingsTab(),
-        }
-        
-        # Inicializar contexto de ano
-        ctx = AppContext.get()
-        
-        # Usuário logado - mostrar menu lateral completo
-        with st.sidebar:
-            # Logo e cabeçalho
-            st.markdown("""
-            <style>
-            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap');
-            .sidebar-header {
-                font-family: 'Poppins', sans-serif;
-                color: #4c8061;
-                font-size: 1.3rem;
-                font-weight: 600;
-                margin-bottom: 1rem;
-                text-align: center;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            # Informações do usuário
-            st.markdown(f" 👤 **{usuario_logado}**")
+def page_fatores():
+    if not usuario_logado:
+        st.warning("⚠️ Faça login para acessar esta página.")
+        HomeTab()._render()
+        return
+    FatoresEmissaoTab()._render()
 
-            auto_save = st.toggle(
-                "💾 Salvamento automático da sessão",
-                value=st.session_state.get("auto_save_session", True),
-                key="sidebar_auto_save_session",
-                help="Quando ativo, a sessão é salva automaticamente em intervalos curtos.",
-            )
-            st.session_state.auto_save_session = bool(auto_save)
+def page_tecnologias():
+    if not usuario_logado:
+        st.warning("⚠️ Faça login para acessar esta página.")
+        HomeTab()._render()
+        return
+    TecnologiasTab()._render()
 
-            if st.session_state.auto_save_session:
-                now_ts = time.time()
-                last_ts = float(st.session_state.get("_auto_save_last_ts", 0.0) or 0.0)
-                if (now_ts - last_ts) >= 20:
-                    settings_tab = tabs["Sessões"]
-                    if settings_tab._save_user_session():
-                        st.session_state._auto_save_last_ts = now_ts
-            
-            st.markdown("---")
-            
-            # Suporte a navegação programática (ex: comparação de anos)
-            nav_target = st.session_state.pop("_nav_target", None)
+def page_relatorios():
+    if not usuario_logado:
+        st.warning("⚠️ Faça login para acessar esta página.")
+        HomeTab()._render()
+        return
+    ReportsTab()._render()
 
-            nav_options = [
-                "Início",
-                "Diagrama de Fluxo",
-                "Unidades & Fluxos",
-                "Fatores de Emissão",
-                "Tecnologias",
-                "Análise de Emissões",
-                "Assistente IA",
-                "Sessões",
-                "Configurações",
-            ]
-            default_index = nav_options.index(nav_target) if nav_target and nav_target in nav_options else 0
+def page_chatbot():
+    if not usuario_logado:
+        st.warning("⚠️ Faça login para acessar esta página.")
+        HomeTab()._render()
+        return
+    ChatbotTab()._render()
 
-            aba = st.radio(
-                "Navegação:",
-                nav_options,
-                index=default_index,
-                label_visibility="collapsed"
-            )
+def page_sessoes():
+    if not usuario_logado:
+        st.warning("⚠️ Faça login para acessar esta página.")
+        HomeTab()._render()
+        return
+    SessoesTab()._render()
 
-            st.markdown("---")
-            
-        # Carregamento dinâmico da página
-        if aba == "Início":
-            tabs["Início"]._render()
-        elif aba == "Unidades & Fluxos":
-            tabs["Unidades & Fluxos"]._render()
-        elif aba == "Diagrama de Fluxo":
-            tabs["Diagrama de Fluxo"]._render()
-        elif aba == "Fatores de Emissão":
-            tabs["Fatores de Emissão"]._render()
-        elif aba == "Tecnologias":
-            tabs["Tecnologias"]._render()
-        elif aba == "Análise de Emissões":
-            tabs["Análise de Emissões"]._render()
-        elif aba == "Assistente IA":
-            tabs["Assistente IA"]._render()
-        elif aba == "Sessões":
-            tabs["Sessões"]._render_sessions_page()
-        elif aba == "Configurações":
-            tabs["Configurações"]._render()
-        else:
-            st.error("Página não encontrada.")
+def page_configuracoes():
+    if not usuario_logado:
+        st.warning("⚠️ Faça login para acessar esta página.")
+        HomeTab()._render()
+        return
+    SettingsTab()._render()
 
+# ── navigation definition ─────────────────────────────────────────────────────
+_pages_publicas = [
+    st.Page(page_home, title="Início", default=True),
+    st.Page(page_configuracoes,title="Configurações"),
+]
 
-if __name__ == "__main__":
-    App().run()
+_pages_autenticadas = [
+    st.Page(page_unidades,     title="Unidades & Fluxos"),
+    st.Page(page_fluxo,        title="Diagrama de Fluxo"),
+    st.Page(page_fatores,      title="Fatores de Emissão"),
+    st.Page(page_tecnologias,  title="Tecnologias"),
+    st.Page(page_relatorios,   title="Análise de Emissões"),
+    st.Page(page_chatbot,      title="Assistente IA"),
+    st.Page(page_sessoes,      title="Sessões"),
+]
+
+if usuario_logado:
+    nav_pages = {"": _pages_publicas, "Ferramentas": _pages_autenticadas}
+else:
+    nav_pages = {"": _pages_publicas}
+
+# ── render navigation & header bar ──────────────────────────────────────────
+pg = st.navigation(nav_pages, position="sidebar", expanded=True)
+
+# Header bar (usuário + auto-save) no canto superior direito
+render_header_bar(usuario_logado)
+
+with st.sidebar:
+    render_sidebar_extras(usuario_logado)
+
+pg.run()

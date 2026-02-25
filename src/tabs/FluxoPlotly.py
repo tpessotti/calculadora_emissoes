@@ -6,6 +6,7 @@ from config import CANVAS_CONFIG
 from utils import UtilsUI
 from core.io.excel_io import exportar_sessao_excel
 from core.context import AppContext
+from core.units import normalize_unit
 import base64
 from io import BytesIO
 
@@ -176,6 +177,7 @@ class FluxoTab:
                             tecnologias=list(st.session_state.get("tecnologias_alternativas", [])),
                             fatores_emissao=list(st.session_state.get("fatores_emissao", [])),
                             ano=ctx.ano_ativo,
+                            massa_unidade=normalize_unit(st.session_state.get("mass_unit", "t")),
                         )
                         st.download_button(
                             "⬇️ Baixar Excel", data=xlsx_data,

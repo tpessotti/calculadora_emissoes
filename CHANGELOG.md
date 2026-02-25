@@ -20,7 +20,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ### Documentação
 - `README.md` atualizado com detalhes do novo algoritmo de build standalone e artefatos mínimos gerados automaticamente.
 
-## [0.3.0-beta] - 2025-01
+## [0.3.1-beta] - 2026-02
 
 ### Adicionado
 - **🏗️ Camada `core/` — nova arquitetura modular**

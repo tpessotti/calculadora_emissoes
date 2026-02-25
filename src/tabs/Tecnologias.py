@@ -18,17 +18,26 @@ class TecnologiasTab:
         if feedback_msg:
             st.toast(feedback_msg, icon="✅")
 
-        # Criar abas
-        tab1, tab2 = st.tabs(["Tecnologias Registradas", "Nova Tecnologia"])
-        
-        with tab1:
-            self._render_lista_tecnologias()
-        
-        with tab2:
+        if st.session_state.get("tec_criando_nova"):
+            st.markdown("### ➕ Nova Tecnologia")
+            if st.button("⬅️ Voltar para lista"):
+                del st.session_state["tec_criando_nova"]
+                st.rerun()
+            st.markdown("---")
             self._render_criar_tecnologia()
+        else:
+            self._render_lista_tecnologias()
 
     def _render_lista_tecnologias(self):
         """Renderiza a lista de tecnologias registradas"""
+        st.markdown("### Tecnologias")
+
+        st.markdown("---")
+        
+        if st.button("Adicionar nova tecnologia", type="primary"):
+            st.session_state["tec_criando_nova"] = True
+            st.rerun()
+
         if st.session_state.tecnologias_alternativas:
             for i, tec in enumerate(st.session_state.tecnologias_alternativas):
                 # Criar colunas para expander e botão de remover
@@ -58,10 +67,8 @@ class TecnologiasTab:
     
     def _render_criar_tecnologia(self):
         """Renderiza o formulário de criação de nova tecnologia"""
-        st.markdown("### ➕ Criar Nova Tecnologia")
         st.markdown("Preencha os dados abaixo para criar uma nova tecnologia alternativa.")
-        
-        # Usar render_tecnologia_form para criação
+
         nova_tecnologia = self.utils_ui.render_tecnologia_form(
             tecnologia=None,
             key_prefix="tec_nova",
@@ -73,14 +80,14 @@ class TecnologiasTab:
     def _salvar_nova_tecnologia(self, tecnologia):
         """Callback para salvar nova tecnologia"""
         if tecnologia:
-            # Verificar se ID já existe
             ids_existentes = [t.id for t in st.session_state.tecnologias_alternativas]
             if tecnologia.id in ids_existentes:
                 st.error(f"❌ Já existe uma tecnologia com o ID '{tecnologia.id}'. Use um ID diferente.")
                 return False
-            
+
             st.session_state.tecnologias_alternativas.append(tecnologia)
             st.session_state["tecnologia_feedback_msg"] = f"✅ Tecnologia '{tecnologia.nome}' criada com sucesso!"
+            st.session_state.pop("tec_criando_nova", None)
             st.rerun()
             return True
         return False

@@ -22,6 +22,7 @@ from core.io.excel_io import gerar_template_excel, exportar_sessao_excel, excel_
 from core.validation.schema import validar_database, ValidationReport
 from core.validation.relational import validar_integridade_relacional, formatar_relatorio_markdown
 from core.periodos import parse_periodo, PeriodoError
+from core.units import normalize_unit
 
 class HomeTab:
     def __init__(self):
@@ -392,6 +393,7 @@ class HomeTab:
                         st.session_state.usuario_logado = usuario.strip()
                         st.session_state.data_login = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         st.session_state.show_login_modal = False
+                        st.session_state._show_loading = True  # dispara tela de loading
                         st.rerun()
                     else:
                         st.error("Por favor, digite um nome de usuário válido.")
@@ -563,6 +565,7 @@ class HomeTab:
                         tecnologias=list(tecnologias),
                         fatores_emissao=list(fatores),
                         ano=ctx.ano_ativo,
+                        massa_unidade=normalize_unit(st.session_state.get("mass_unit", "t")),
                     )
                     st.download_button(
                         label="⬇️ Baixar Excel (preenchido)",
@@ -579,6 +582,7 @@ class HomeTab:
                     template_bytes = gerar_template_excel(
                         ano=ctx.ano_ativo,
                         fatores_emissao=list(fatores),
+                        massa_unidade=normalize_unit(st.session_state.get("mass_unit", "t")),
                     )
                     st.download_button(
                         label="⬇️ Baixar Template Excel (vazio)",
@@ -842,6 +846,7 @@ class HomeTab:
             st.session_state.tecnologias_alternativas = tecnologias
             st.session_state.node_counter = sessao_data.get("node_counter", 1)
             st.session_state.ui_theme_mode = sessao_data.get("ui_theme_mode", st.session_state.get("ui_theme_mode", "light"))
+            st.session_state.mass_unit = normalize_unit(sessao_data.get("mass_unit", st.session_state.get("mass_unit", "t")))
             st.session_state.auto_save_session = bool(sessao_data.get("auto_save_session", st.session_state.get("auto_save_session", False)))
 
             # Restaurar contexto de ano

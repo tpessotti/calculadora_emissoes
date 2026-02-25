@@ -20,6 +20,8 @@ from core.context import AppContext
 from core.io.json_io import export_session_to_database, save_database
 from core.validation.relational import validar_integridade_relacional, formatar_relatorio_markdown
 from core.calc.fatores import FatorIndex
+from core.units import unit_keys, unit_label, normalize_unit, convert_mass
+from calculations import EmissionCalculator
 
 
 class SettingsTab:
@@ -145,7 +147,7 @@ class SettingsTab:
         with c4:
             st.markdown("""
             <div class="section-card">
-                <div class="section-title">🗑️ Resetar</div>
+                <div class="section-title">❌ Resetar</div>
                 <div class="section-text">
                     Limpa todos os dados da sessão atual.
                     Esta ação não pode ser desfeita.
@@ -190,10 +192,10 @@ class SettingsTab:
             )
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("🗑️ Confirmar Reset", use_container_width=True, type="primary"):
+                if st.button("❌ Confirmar Reset", use_container_width=True, type="primary"):
                     self._reset_session()
                     st.session_state._confirm_reset = False
-                    st.toast("Sessão resetada.", icon="🗑️")
+                    st.toast("Sessão resetada.", icon="❌")
                     st.rerun()
             with c2:
                 if st.button("Cancelar", use_container_width=True):
@@ -221,16 +223,21 @@ class SettingsTab:
         self._ensure_catalogos_loaded()
         self._inject_css()
 
-        st.markdown('<div class="settings-header">⚙️ Configurações</div>', unsafe_allow_html=True)
+        st.markdown('<div class="settings-header">Configurações</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="settings-description">Gerencie sua conta e configure a plataforma.</div>',
+            '<div class="settings-description">Ajuste preferências globais e mantenha catálogos padronizados para os formulários.</div>',
             unsafe_allow_html=True,
         )
 
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Unidade de Massa", str(st.session_state.get("mass_unit", "t")).upper())
+        c2.metric("Localizações", len(st.session_state.get("cadastro_localizacoes", [])))
+        c3.metric("Insumos", len(st.session_state.get("cadastro_insumos", [])))
+
         tab_pref, tab_loc, tab_insumo = st.tabs([
-            "🎛️ Preferências",
-            "📍 Localizações",
-            "📦 Insumos",
+            "Preferências",
+            "Localizações",
+            "Insumos",
         ])
 
         with tab_pref:
@@ -290,98 +297,263 @@ class SettingsTab:
         except Exception as e:
             st.error(f"Erro ao salvar catálogos: {e}")
 
-    def _render_catalogo_localizacoes(self):
-        st.markdown("### 📍 Cadastro de Localizações")
-        localizacoes = st.session_state.get("cadastro_localizacoes", [])
+    def _open_catalog_item_dialog(self, catalog_type: str):
+        label = "Localização" if catalog_type == "localizacoes" else "Insumo"
+        state_key = "cadastro_localizacoes" if catalog_type == "localizacoes" else "cadastro_insumos"
+        placeholder = "Ex: São Paulo" if catalog_type == "localizacoes" else "Ex: Clínquer"
 
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            nova_loc = st.text_input("Nova localização", key="cfg_nova_localizacao", placeholder="Ex: São Paulo")
-        with c2:
-            if st.button("➕ Adicionar", key="cfg_add_localizacao", use_container_width=True):
-                valor = (nova_loc or "").strip()
-                if not valor:
-                    st.warning("Informe uma localização válida.")
-                elif valor in localizacoes:
-                    st.info("Localização já cadastrada.")
+        @st.dialog(f"➕ Novo {label}", width="small")
+        def add_dialog():
+            with st.form(key=f"cfg_form_{catalog_type}", enter_to_submit=True):
+                valor = st.text_input(
+                    f"Nome do {label.lower()} *",
+                    key=f"cfg_modal_novo_{catalog_type}",
+                    placeholder=placeholder,
+                )
+                st.caption("Pressione **Enter** ou clique em **Salvar** para confirmar.")
+                submitted = st.form_submit_button(
+                    "💾 Salvar",
+                    use_container_width=True,
+                    type="primary",
+                )
+
+            if submitted:
+                valor_limpo = (valor or "").strip()
+                existentes = st.session_state.get(state_key, [])
+                if not valor_limpo:
+                    st.warning(f"Informe um {label.lower()} válido.")
+                elif valor_limpo in existentes:
+                    st.info(f"{label} já cadastrado.")
                 else:
-                    st.session_state.cadastro_localizacoes = sorted(localizacoes + [valor])
+                    st.session_state[state_key] = sorted(existentes + [valor_limpo])
                     self._save_catalogos()
-                    st.toast("Localização cadastrada.", icon="✅")
+                    st.toast(f"{label} cadastrado.", icon="✅")
+                    st.session_state[f"cfg_open_modal_{catalog_type}"] = False
                     st.rerun()
 
-        if st.session_state.get("cadastro_localizacoes"):
-            remover = st.selectbox("Remover localização", st.session_state.cadastro_localizacoes, key="cfg_rm_localizacao")
-            if st.button("🗑️ Remover", key="cfg_del_localizacao", type="secondary"):
-                st.session_state.cadastro_localizacoes = [v for v in st.session_state.cadastro_localizacoes if v != remover]
-                self._save_catalogos()
-                st.toast("Localização removida.", icon="✅")
-                st.rerun()
+        add_dialog()
+
+    def _render_catalogo_localizacoes(self):
+        st.markdown("### Cadastro de Localizações")
+        localizacoes = st.session_state.get("cadastro_localizacoes", [])
+
+        if st.button("➕ Nova localização", key="cfg_add_localizacao_modal", use_container_width=True):
+            st.session_state["cfg_open_modal_localizacoes"] = True
+        filtro_loc = st.text_input(
+            "Buscar localização",
+            key="cfg_filter_localizacoes",
+            placeholder="🔍 Filtrar localizações...",
+            label_visibility="collapsed",
+        )
+
+        if st.session_state.get("cfg_open_modal_localizacoes", False):
+            self._open_catalog_item_dialog("localizacoes")
+
+        if localizacoes:
+            filtradas = (
+                [v for v in localizacoes if filtro_loc.strip().lower() in v.lower()]
+                if filtro_loc.strip() else localizacoes
+            )
+            if filtro_loc.strip():
+                st.caption(f"{len(filtradas)} de {len(localizacoes)} registro(s) encontrado(s)")
+
+            if filtradas:
+                st.markdown("**Remover registro**")
+                for idx, valor in enumerate(filtradas):
+                    c1, c2 = st.columns([11, 1])
+                    with c1:
+                        st.write(valor)
+                    with c2:
+                        if st.button("❌", key=f"cfg_del_localizacao_{idx}", help=f"Remover {valor}"):
+                            st.session_state.cadastro_localizacoes = [v for v in localizacoes if v != valor]
+                            self._save_catalogos()
+                            st.toast("Localização removida.", icon="✅")
+                            st.rerun()
+            else:
+                st.info("Nenhum resultado para o filtro aplicado.")
         else:
             st.info("Nenhuma localização cadastrada.")
 
     def _render_catalogo_insumos(self):
-        st.markdown("### 📦 Cadastro de insumos")
+        st.markdown("### Cadastro de Insumos")
         insumos = st.session_state.get("cadastro_insumos", [])
 
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            novo_insumo = st.text_input("Novo insumo", key="cfg_novo_insumo", placeholder="Ex: Clínquer")
-        with c2:
-            if st.button("➕ Adicionar", key="cfg_add_insumo", use_container_width=True):
-                valor = (novo_insumo or "").strip()
-                if not valor:
-                    st.warning("Informe um insumo válido.")
-                elif valor in insumos:
-                    st.info("insumo já cadastrado.")
-                else:
-                    st.session_state.cadastro_insumos = sorted(insumos + [valor])
-                    self._save_catalogos()
-                    st.toast("insumo cadastrado.", icon="✅")
-                    st.rerun()
+        if st.button("➕ Novo insumo", key="cfg_add_insumo_modal", use_container_width=True):
+            st.session_state["cfg_open_modal_insumos"] = True
+        filtro_ins = st.text_input(
+            "Buscar insumo",
+            key="cfg_filter_insumos",
+            placeholder="🔍 Filtrar insumos...",
+            label_visibility="collapsed",
+        )
 
-        if st.session_state.get("cadastro_insumos"):
-            remover = st.selectbox("Remover insumo", st.session_state.cadastro_insumos, key="cfg_rm_insumo")
-            if st.button("🗑️ Remover", key="cfg_del_insumo", type="secondary"):
-                st.session_state.cadastro_insumos = [v for v in st.session_state.cadastro_insumos if v != remover]
-                self._save_catalogos()
-                st.toast("insumo removido.", icon="✅")
-                st.rerun()
+        if st.session_state.get("cfg_open_modal_insumos", False):
+            self._open_catalog_item_dialog("insumos")
+
+        if insumos:
+            filtrados = (
+                [v for v in insumos if filtro_ins.strip().lower() in v.lower()]
+                if filtro_ins.strip() else insumos
+            )
+            if filtro_ins.strip():
+                st.caption(f"{len(filtrados)} de {len(insumos)} registro(s) encontrado(s)")
+
+            if filtrados:
+                st.markdown("**Remover registro**")
+                for idx, valor in enumerate(filtrados):
+                    c1, c2 = st.columns([11, 1])
+                    with c1:
+                        st.write(valor)
+                    with c2:
+                        if st.button("❌", key=f"cfg_del_insumo_{idx}", help=f"Remover {valor}"):
+                            st.session_state.cadastro_insumos = [v for v in insumos if v != valor]
+                            self._save_catalogos()
+                            st.toast("Insumo removido.", icon="✅")
+                            st.rerun()
+            else:
+                st.info("Nenhum resultado para o filtro aplicado.")
         else:
             st.info("Nenhum insumo cadastrado.")
 
     def _render_user_preferences(self):
-        """Preferências de interface e conta do usuário."""
-        st.markdown("### 🎛️ Preferências")
+        """Preferências de interface, sessão e conta do usuário."""
+        st.markdown("### Preferências")
 
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2, gap="large")
 
+        # ── Coluna 1: Sessão e Cálculo ──────────────────────────────────────
         with col1:
-            tema_atual = st.session_state.get("ui_theme_mode", "light")
-            tema_novo = st.selectbox(
-                "Tema da interface",
-                options=["light", "dark"],
-                index=0 if tema_atual == "light" else 1,
-                format_func=lambda v: "Claro" if v == "light" else "Escuro",
-                key="settings_theme_mode",
-                help="Altera o tema visual da aplicação.",
-            )
-            if tema_novo != tema_atual:
-                st.session_state.ui_theme_mode = tema_novo
-                self._atualizar_preferencias_usuario()
-                st.success("Tema atualizado.")
-                st.rerun()
+            with st.container(border=True):
+                st.markdown("**💾 Salvamento Automático**")
 
+                auto_save = st.toggle(
+                    "Ativar salvamento automático",
+                    value=st.session_state.get("auto_save_session", True),
+                    key="pref_auto_save_toggle",
+                    help="Persiste a sessão automaticamente em segundo plano.",
+                )
+                if auto_save != st.session_state.get("auto_save_session", True):
+                    st.session_state.auto_save_session = auto_save
+                    self._atualizar_preferencias_usuario()
+
+                interval_options = {20: "20 segundos", 60: "1 minuto", 300: "5 minutos"}
+                interval_atual = int(st.session_state.get("auto_save_interval", 20))
+                interval_novo = st.selectbox(
+                    "Intervalo de salvamento",
+                    options=list(interval_options.keys()),
+                    index=list(interval_options.keys()).index(interval_atual)
+                          if interval_atual in interval_options else 0,
+                    format_func=lambda v: interval_options[v],
+                    key="pref_auto_save_interval",
+                    disabled=not auto_save,
+                    help="Com que frequência a sessão é salva automaticamente.",
+                )
+                if interval_novo != interval_atual:
+                    st.session_state.auto_save_interval = interval_novo
+                    self._atualizar_preferencias_usuario()
+
+            with st.container(border=True):
+                st.markdown("**⚖️ Unidade de Massa**")
+
+                unidade_atual = normalize_unit(st.session_state.get("mass_unit", "t"))
+                unidade_nova = st.selectbox(
+                    "Unidade padrão",
+                    options=unit_keys(),
+                    index=unit_keys().index(unidade_atual),
+                    format_func=unit_label,
+                    key="settings_mass_unit",
+                    help="Aplicada em formulários, tabelas, fluxos e template de entrada.",
+                )
+                unidade_nova = normalize_unit(unidade_nova)
+                if unidade_nova != unidade_atual:
+                    self._converter_unidade_massa_global(unidade_atual, unidade_nova)
+                    st.session_state.mass_unit = unidade_nova
+                    self._atualizar_preferencias_usuario()
+                    st.success("Unidade de massa atualizada.")
+                    st.rerun()
+
+        # ── Coluna 2: Conta e Notificações ──────────────────────────────────
         with col2:
-            usuario_atual = st.session_state.get("usuario_logado", "")
-            novo_usuario = st.text_input(
-                "Alterar nome de usuário",
-                value=usuario_atual,
-                key="settings_novo_usuario",
-                help="Esse nome será usado para salvar/restaurar sua sessão.",
-            )
-            if st.button("✏️ Atualizar usuário", use_container_width=True, key="settings_update_user"):
-                self._alterar_nome_usuario(usuario_atual, novo_usuario)
+            with st.container(border=True):
+                st.markdown("**👤 Conta**")
+
+                usuario_atual = st.session_state.get("usuario_logado", "")
+                novo_usuario = st.text_input(
+                    "Nome de usuário",
+                    value=usuario_atual,
+                    key="settings_novo_usuario",
+                    help="Esse nome é usado para salvar e restaurar sua sessão.",
+                )
+                if st.button("Atualizar nome", use_container_width=True, key="settings_update_user", type="primary"):
+                    self._alterar_nome_usuario(usuario_atual, novo_usuario)
+
+                st.markdown("---")
+                if st.button("❌ Sair da conta", use_container_width=True, key="pref_logout_btn", type="secondary"):
+                    from tabs.Settings import SettingsTab as _S
+                    self._limpar_sessao()
+                    st.session_state.usuario_logado = None
+                    st.rerun()
+
+            with st.container(border=True):
+                st.markdown("**🔔 Notificações**")
+
+                show_save_toast = st.toggle(
+                    "Confirmar salvamento via notificação",
+                    value=st.session_state.get("pref_show_save_toast", True),
+                    key="pref_show_save_toast_toggle",
+                    help="Exibe um aviso flutuante quando a sessão é salva.",
+                )
+                if show_save_toast != st.session_state.get("pref_show_save_toast", True):
+                    st.session_state.pref_show_save_toast = show_save_toast
+                    self._atualizar_preferencias_usuario()
+
+                show_integrity = st.toggle(
+                    "Alertas de integridade relacional",
+                    value=st.session_state.get("pref_show_integrity_alerts", True),
+                    key="pref_integrity_alerts_toggle",
+                    help="Avisa quando existem inconsistências entre unidades e fluxos.",
+                )
+                if show_integrity != st.session_state.get("pref_show_integrity_alerts", True):
+                    st.session_state.pref_show_integrity_alerts = show_integrity
+                    self._atualizar_preferencias_usuario()
+
+    def _converter_unidade_massa_global(self, unidade_antiga: str, unidade_nova: str) -> None:
+        """Converte fatores de consumo (tecnologias e unidades) para nova unidade de massa."""
+        unidade_antiga = normalize_unit(unidade_antiga)
+        unidade_nova = normalize_unit(unidade_nova)
+        if unidade_antiga == unidade_nova:
+            return
+
+        escala = convert_mass(1.0, unidade_nova, unidade_antiga)
+
+        tecnologias = st.session_state.get("tecnologias_alternativas", [])
+        for tec in tecnologias:
+            insumos = getattr(tec, "insumos", None)
+            if isinstance(insumos, list):
+                for ins in insumos:
+                    if isinstance(ins, dict) and "fator_consumo" in ins:
+                        try:
+                            ins["fator_consumo"] = float(ins.get("fator_consumo", 0.0)) * float(escala)
+                        except (ValueError, TypeError):
+                            ins["fator_consumo"] = 0.0
+
+        unidades = st.session_state.get("unidades", [])
+        for u in unidades:
+            ce = getattr(u, "ConsumoEspecifico", None)
+            if isinstance(ce, list):
+                novo_ce = []
+                for v in ce:
+                    try:
+                        novo_ce.append(float(v) * float(escala))
+                    except (ValueError, TypeError):
+                        novo_ce.append(0.0)
+                u.ConsumoEspecifico = novo_ce
+                EmissionCalculator.calcular_emissoes(u)
+
+        try:
+            EmissionCalculator().propagar_pegada(st.session_state.get("unidades", []), st.session_state.get("edges", []))
+        except Exception:
+            pass
 
     def _alterar_nome_usuario(self, usuario_atual: str, novo_usuario: str) -> None:
         """Altera usuário logado e migra sessão persistida quando aplicável."""
@@ -408,14 +580,19 @@ class SettingsTab:
         st.rerun()
 
     def _atualizar_preferencias_usuario(self):
-        """Persiste preferências básicas no registro da sessão do usuário."""
+        """Persiste preferências do usuário no registro de sessão."""
         usuario = st.session_state.get("usuario_logado")
         if not usuario:
             return
 
         all_sessions = self._load_all_sessions()
         if usuario in all_sessions:
-            all_sessions[usuario]["ui_theme_mode"] = st.session_state.get("ui_theme_mode", "light")
+            prefs = all_sessions[usuario]
+            prefs["mass_unit"] = normalize_unit(st.session_state.get("mass_unit", "t"))
+            prefs["auto_save_session"] = bool(st.session_state.get("auto_save_session", True))
+            prefs["auto_save_interval"] = int(st.session_state.get("auto_save_interval", 20))
+            prefs["pref_show_save_toast"] = bool(st.session_state.get("pref_show_save_toast", True))
+            prefs["pref_show_integrity_alerts"] = bool(st.session_state.get("pref_show_integrity_alerts", True))
             self._save_all_sessions(all_sessions)
 
     # ──────────────────────────────────────────────────────────────
@@ -637,6 +814,7 @@ class SettingsTab:
             "anos_selecionados": list(ctx.anos_selecionados),
             "modo_comparacao": bool(ctx.modo_comparacao),
             "ui_theme_mode": st.session_state.get("ui_theme_mode", "light"),
+            "mass_unit": normalize_unit(st.session_state.get("mass_unit", "t")),
             "auto_save_session": bool(st.session_state.get("auto_save_session", False)),
             "unidades": unidades_dict,
             "conexoes": conexoes_dict,
@@ -691,7 +869,7 @@ class SettingsTab:
                     else:
                         tecnologia_obj = Tecnologia.from_dict(tecnologia_valor)
 
-                unidade = Unidadeinsumoutiva(
+                unidade = UnidadeProdutiva(
                     id_elo=u_dict["ID_ELO"], nome=u_dict["Nome"],
                     localizacao=u_dict["Localizacao"], periodo=u_dict["Periodo"],
                     input_insumo=u_dict["Input"], massa_input=u_dict["MassaInput"],
@@ -720,6 +898,7 @@ class SettingsTab:
             st.session_state.tecnologias_alternativas = tecnologias
             st.session_state.node_counter = sessao_data.get("node_counter", 1)
             st.session_state.ui_theme_mode = sessao_data.get("ui_theme_mode", st.session_state.get("ui_theme_mode", "light"))
+            st.session_state.mass_unit = normalize_unit(sessao_data.get("mass_unit", st.session_state.get("mass_unit", "t")))
             st.session_state.auto_save_session = bool(sessao_data.get("auto_save_session", st.session_state.get("auto_save_session", False)))
 
             # Restaurar contexto de ano

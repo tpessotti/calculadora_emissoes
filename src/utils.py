@@ -6,6 +6,7 @@ from datetime import datetime
 from database import UnidadeProdutiva, Tecnologia
 import calculations
 from core.calc.fatores import FatorIndex
+from core.units import convert_mass, get_default_mass_unit_from_session
 
 
 def _parse_ano_periodo(periodo):
@@ -28,6 +29,16 @@ def _resolver_fator_para_ano(nome_insumo, fatores, ano_ref):
         return 0.0, "1"
     return float(d.get("fator_emissao", 0.0)), str(d.get("escopo", "1"))
 
+
+def _resolver_unidade_consumivel(nome_insumo, fatores):
+    nome = str(nome_insumo).strip().upper()
+    for f in fatores or []:
+        if str(f.get("consumivel", "")).strip().upper() == nome:
+            unidade = str(f.get("kgCO2e_unid", "") or "").strip()
+            if unidade:
+                return unidade
+    return "unid"
+
 class UtilsUI:
     def __init__(self):
         self.db = database.DatabaseManager()
@@ -46,7 +57,11 @@ class UtilsUI:
                 with open(catalogos_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 file_localizacoes = [str(v).strip() for v in data.get("localizacoes", []) if str(v).strip()]
-                file_produtos = [str(v).strip() for v in data.get("produtos", []) if str(v).strip()]
+                file_produtos = [
+                    str(v).strip()
+                    for v in (data.get("insumos", []) or data.get("produtos", []))
+                    if str(v).strip()
+                ]
             except Exception:
                 file_localizacoes = []
                 file_produtos = []
@@ -65,6 +80,70 @@ class UtilsUI:
                 for p in [str(getattr(u, "Input", "") or ""), str(getattr(u, "Output", "") or "")]
                 if p.strip()
             }.union(file_produtos))
+
+        if "cadastro_insumos" not in st.session_state:
+            st.session_state.cadastro_insumos = list(st.session_state.get("cadastro_produtos", []))
+        if "cadastro_produtos" not in st.session_state:
+            st.session_state.cadastro_produtos = list(st.session_state.get("cadastro_insumos", []))
+
+    def _save_catalogs_to_file(self):
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        catalogos_file = os.path.join(data_dir, "catalogos.json")
+        os.makedirs(data_dir, exist_ok=True)
+        payload = {
+            "localizacoes": sorted(set(st.session_state.get("cadastro_localizacoes", []))),
+            "insumos": sorted(set(st.session_state.get("cadastro_insumos", []))),
+        }
+        with open(catalogos_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    def _add_catalog_item(self, catalog_type: str, value: str):
+        value_clean = (value or "").strip()
+        if not value_clean:
+            return False, "Valor inválido."
+
+        if catalog_type == "localizacoes":
+            key = "cadastro_localizacoes"
+            label = "Localização"
+        else:
+            key = "cadastro_insumos"
+            label = "Insumo"
+
+        current = st.session_state.get(key, [])
+        if value_clean in current:
+            return False, f"{label} já cadastrado."
+
+        st.session_state[key] = sorted(current + [value_clean])
+        if catalog_type == "insumos":
+            st.session_state.cadastro_produtos = list(st.session_state.get("cadastro_insumos", []))
+        self._save_catalogs_to_file()
+        return True, f"{label} cadastrado com sucesso."
+
+    def _render_catalog_add_dialog(self, catalog_type: str, scope_key: str):
+        label = "localização" if catalog_type == "localizacoes" else "insumo"
+
+        @st.dialog(f"➕ Novo {label}", width="small")
+        def _dialog():
+            value = st.text_input(
+                f"Nome do {label}*",
+                key=f"{scope_key}_catalog_new_{catalog_type}",
+                placeholder=f"Ex: {'São Paulo' if catalog_type == 'localizacoes' else 'Clínquer'}",
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Salvar", key=f"{scope_key}_catalog_save_{catalog_type}", type="primary", use_container_width=True):
+                    ok, msg = self._add_catalog_item(catalog_type, value)
+                    if ok:
+                        st.toast(msg, icon="✅")
+                        st.session_state[f"{scope_key}_open_catalog_{catalog_type}"] = False
+                        st.rerun()
+                    st.warning(msg)
+            with c2:
+                if st.button("Cancelar", key=f"{scope_key}_catalog_cancel_{catalog_type}", use_container_width=True):
+                    st.session_state[f"{scope_key}_open_catalog_{catalog_type}"] = False
+                    st.rerun()
+
+        _dialog()
 
     def render_tecnologia_form(self, tecnologia=None, key_prefix="tec_form", read_only=False, 
                                show_save_buttons=True, on_save_callback=None):
@@ -96,8 +175,9 @@ class UtilsUI:
         else:
             expander_title = "➕ Criar Nova Tecnologia"
         
-        with st.expander(expander_title, expanded=False):
+        with st.expander(expander_title, expanded=True):
             col1, col2 = st.columns(2)
+            mass_unit = get_default_mass_unit_from_session(st.session_state)
             
             with col1:
                 tec_id = st.text_input(
@@ -147,7 +227,7 @@ class UtilsUI:
                                 1.0
                             )
                         st.number_input(
-                            f"Fator de Consumo: {nome}",
+                            f"Fator de Consumo: {nome} ({_resolver_unidade_consumivel(nome, fatores)}/{mass_unit})",
                             min_value=0.0,
                             value=valor_atual,
                             step=0.01,
@@ -456,7 +536,8 @@ class UtilsUI:
             return
 
         localizacoes = st.session_state.get("cadastro_localizacoes", [])
-        produtos = st.session_state.get("cadastro_produtos", [])
+        produtos = st.session_state.get("cadastro_insumos", st.session_state.get("cadastro_produtos", []))
+        mass_unit = get_default_mass_unit_from_session(st.session_state)
         anos_disponiveis = [str(ano) for ano in range(2017, 2100)]
         ano_corrente = str(datetime.now().year)
         ano_default = ano_corrente if ano_corrente in anos_disponiveis else anos_disponiveis[0]
@@ -467,12 +548,18 @@ class UtilsUI:
             id_elo = self.db.next_unidade_id()
             st.text_input("ID ELO*", value=id_elo, disabled=True, key="create_id_elo")
             nome = st.text_input("Nome*")
-            localizacao = st.selectbox(
-                "Localização*",
-                options=[""] + localizacoes,
-                format_func=lambda v: "Selecione..." if v == "" else v,
-                key="create_localizacao",
-            )
+            c_loc, c_loc_btn = st.columns([6, 1])
+            with c_loc:
+                localizacao = st.selectbox(
+                    "Localização*",
+                    options=[""] + localizacoes,
+                    format_func=lambda v: "Selecione..." if v == "" else v,
+                    key="create_localizacao",
+                )
+            with c_loc_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("➕", key="create_add_localizacao", help="Cadastrar nova localização"):
+                    st.session_state["create_open_catalog_localizacoes"] = True
             periodo = st.selectbox(
                 "Período*",
                 options=anos_disponiveis,
@@ -482,21 +569,39 @@ class UtilsUI:
             taxacao_local = st.checkbox("Taxação Local")
 
         with col2:
-            input_insumo = st.selectbox(
-                "Insumo Entrada",
-                options=[""] + produtos,
-                format_func=lambda v: "Não informado" if v == "" else v,
-                key="create_input_insumo",
-            )
-            output_insumo = st.selectbox(
-                "Insumo Saída",
-                options=[""] + produtos,
-                format_func=lambda v: "Não informado" if v == "" else v,
-                key="create_output_insumo",
-            )
-            massa_input = st.number_input("Massa de Entrada (t)", value=0.0)
-            massa_output = st.number_input("Massa de Saída (t)", value=0.0)
+            c_in, c_in_btn = st.columns([6, 1])
+            with c_in:
+                input_insumo = st.selectbox(
+                    "Insumo Entrada",
+                    options=[""] + produtos,
+                    format_func=lambda v: "Não informado" if v == "" else v,
+                    key="create_input_insumo",
+                )
+            with c_in_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("➕", key="create_add_insumo_in", help="Cadastrar novo insumo"):
+                    st.session_state["create_open_catalog_insumos"] = True
+
+            c_out, c_out_btn = st.columns([6, 1])
+            with c_out:
+                output_insumo = st.selectbox(
+                    "Insumo Saída",
+                    options=[""] + produtos,
+                    format_func=lambda v: "Não informado" if v == "" else v,
+                    key="create_output_insumo",
+                )
+            with c_out_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("➕", key="create_add_insumo_out", help="Cadastrar novo insumo"):
+                    st.session_state["create_open_catalog_insumos"] = True
+            massa_input = st.number_input(f"Massa de Entrada ({mass_unit})", value=0.0)
+            massa_output = st.number_input(f"Massa de Saída ({mass_unit})", value=0.0)
             taxacao_fronteira = st.checkbox("Taxação na Fronteira")
+
+        if st.session_state.get("create_open_catalog_localizacoes", False):
+            self._render_catalog_add_dialog("localizacoes", "create")
+        if st.session_state.get("create_open_catalog_insumos", False):
+            self._render_catalog_add_dialog("insumos", "create")
 
         st.divider()
 
@@ -518,9 +623,9 @@ class UtilsUI:
                     localizacao=localizacao,
                     periodo=periodo,
                     input_insumo=input_insumo,
-                    massa_input=massa_input,
+                    massa_input=convert_mass(massa_input, mass_unit, "t"),
                     output_insumo=output_insumo,
-                    massa_output=massa_output,
+                    massa_output=convert_mass(massa_output, mass_unit, "t"),
                     consumiveis=consumiveis,
                     consumo_especifico=consumo_especifico,
                     taxacao_fronteira=taxacao_fronteira,
@@ -598,10 +703,11 @@ class UtilsUI:
 
     def render_table(self, unidades, edges, editar_callback=None, remover_callback=None):
         """Renderiza a tabela de unidades com opções de editar e remover"""
+        mass_unit = get_default_mass_unit_from_session(st.session_state)
         col_widths = [1.2, 2.0, 1.0, 1.1, 1.1, 1.1, 1.1, 1.9, 2.2, 0.9, 0.9]
         col_header = st.columns(col_widths)
         header_labels = [
-            "ID", "Nome", "Ano", "Entrada", "Saída", "Massa In", "Massa Out",
+            "ID", "Nome", "Ano", "Entrada", "Saída", f"Massa In ({mass_unit})", f"Massa Out ({mass_unit})",
             "Emissões Totais (tCO₂e)", "Destino", "Editar", "Remover"
         ]
 
@@ -625,8 +731,10 @@ class UtilsUI:
             with cols[2]: st.markdown(f"<div style='{style}'>{getattr(u, 'Periodo', '')}</div>", unsafe_allow_html=True)
             with cols[3]: st.markdown(f"<div style='{style}'>{u.Input}</div>", unsafe_allow_html=True)
             with cols[4]: st.markdown(f"<div style='{style}'>{u.Output}</div>", unsafe_allow_html=True)
-            with cols[5]: st.markdown(f"<div style='{style}'>{u.MassaInput:.1f}</div>", unsafe_allow_html=True)
-            with cols[6]: st.markdown(f"<div style='{style}'>{u.MassaOutput:.1f}</div>", unsafe_allow_html=True)
+            massa_in_disp = convert_mass(u.MassaInput, "t", mass_unit)
+            massa_out_disp = convert_mass(u.MassaOutput, "t", mass_unit)
+            with cols[5]: st.markdown(f"<div style='{style}'>{massa_in_disp:.1f}</div>", unsafe_allow_html=True)
+            with cols[6]: st.markdown(f"<div style='{style}'>{massa_out_disp:.1f}</div>", unsafe_allow_html=True)
 
             emissao_total = u.IntensidadeEmissao * u.MassaOutput
             with cols[7]: st.markdown(f"<div style='{style}'>{emissao_total:.2f}</div>", unsafe_allow_html=True)
@@ -645,7 +753,8 @@ class UtilsUI:
         self._ensure_catalog_inputs()
 
         localizacoes = st.session_state.get("cadastro_localizacoes", [])
-        produtos = st.session_state.get("cadastro_produtos", [])
+        produtos = st.session_state.get("cadastro_insumos", st.session_state.get("cadastro_produtos", []))
+        mass_unit = get_default_mass_unit_from_session(st.session_state)
         localizacao_atual = str(unidade.Localizacao or "").strip()
         input_atual = str(unidade.Input or "").strip()
         output_atual = str(unidade.Output or "").strip()
@@ -670,21 +779,38 @@ class UtilsUI:
 
         with col1:
             nome = st.text_input("Nome*", value=unidade.Nome, key=f"edit_{unidade.ID_ELO}_nome")
-            localizacao = st.selectbox(
-                "Localização*",
-                options=[""] + localizacoes,
-                index=([""] + localizacoes).index(localizacao_atual) if localizacao_atual in ([""] + localizacoes) else 0,
-                format_func=lambda v: "Selecione..." if v == "" else v,
-                key=f"edit_{unidade.ID_ELO}_loc",
+            c_loc, c_loc_btn = st.columns([6, 1])
+            with c_loc:
+                localizacao = st.selectbox(
+                    "Localização*",
+                    options=[""] + localizacoes,
+                    index=([""] + localizacoes).index(localizacao_atual) if localizacao_atual in ([""] + localizacoes) else 0,
+                    format_func=lambda v: "Selecione..." if v == "" else v,
+                    key=f"edit_{unidade.ID_ELO}_loc",
+                )
+            with c_loc_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("➕", key=f"edit_{unidade.ID_ELO}_add_localizacao", help="Cadastrar nova localização"):
+                    st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_localizacoes"] = True
+
+            c_in, c_in_btn = st.columns([6, 1])
+            with c_in:
+                input_insumo = st.selectbox(
+                    "Insumo Entrada",
+                    options=[""] + produtos,
+                    index=([""] + produtos).index(input_atual) if input_atual in ([""] + produtos) else 0,
+                    format_func=lambda v: "Não informado" if v == "" else v,
+                    key=f"edit_{unidade.ID_ELO}_input",
+                )
+            with c_in_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("➕", key=f"edit_{unidade.ID_ELO}_add_insumo_in", help="Cadastrar novo insumo"):
+                    st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_insumos"] = True
+            massa_input = st.number_input(
+                f"Massa de Entrada ({mass_unit})",
+                value=float(convert_mass(unidade.MassaInput, "t", mass_unit)),
+                key=f"edit_{unidade.ID_ELO}_massa_in",
             )
-            input_insumo = st.selectbox(
-                "Insumo Entrada",
-                options=[""] + produtos,
-                index=([""] + produtos).index(input_atual) if input_atual in ([""] + produtos) else 0,
-                format_func=lambda v: "Não informado" if v == "" else v,
-                key=f"edit_{unidade.ID_ELO}_input",
-            )
-            massa_input = st.number_input("Massa de Entrada (t)", value=unidade.MassaInput, key=f"edit_{unidade.ID_ELO}_massa_in")
             tax_local = st.checkbox("Taxação Local", value=unidade.TaxacaoLocal, key=f"edit_{unidade.ID_ELO}_tax_local")
 
         with col2:
@@ -694,15 +820,30 @@ class UtilsUI:
                 index=anos_disponiveis.index(periodo_atual) if periodo_atual in anos_disponiveis else anos_disponiveis.index(ano_default),
                 key=f"edit_{unidade.ID_ELO}_periodo",
             )
-            output_insumo = st.selectbox(
-                "Insumo Saída",
-                options=[""] + produtos,
-                index=([""] + produtos).index(output_atual) if output_atual in ([""] + produtos) else 0,
-                format_func=lambda v: "Não informado" if v == "" else v,
-                key=f"edit_{unidade.ID_ELO}_output",
+            c_out, c_out_btn = st.columns([6, 1])
+            with c_out:
+                output_insumo = st.selectbox(
+                    "Insumo Saída",
+                    options=[""] + produtos,
+                    index=([""] + produtos).index(output_atual) if output_atual in ([""] + produtos) else 0,
+                    format_func=lambda v: "Não informado" if v == "" else v,
+                    key=f"edit_{unidade.ID_ELO}_output",
+                )
+            with c_out_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("➕", key=f"edit_{unidade.ID_ELO}_add_insumo_out", help="Cadastrar novo insumo"):
+                    st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_insumos"] = True
+            massa_output = st.number_input(
+                f"Massa de Saída ({mass_unit})",
+                value=float(convert_mass(unidade.MassaOutput, "t", mass_unit)),
+                key=f"edit_{unidade.ID_ELO}_massa_out",
             )
-            massa_output = st.number_input("Massa de Saída (t)", value=unidade.MassaOutput, key=f"edit_{unidade.ID_ELO}_massa_out")
             tax_fronteira = st.checkbox("Taxação na Fronteira", value=unidade.TaxacaoFronteira, key=f"edit_{unidade.ID_ELO}_tax_front")
+
+        if st.session_state.get(f"edit_{unidade.ID_ELO}_open_catalog_localizacoes", False):
+            self._render_catalog_add_dialog("localizacoes", f"edit_{unidade.ID_ELO}")
+        if st.session_state.get(f"edit_{unidade.ID_ELO}_open_catalog_insumos", False):
+            self._render_catalog_add_dialog("insumos", f"edit_{unidade.ID_ELO}")
 
         st.divider()
         
@@ -733,9 +874,9 @@ class UtilsUI:
                 localizacao=localizacao,
                 periodo=periodo,
                 input_insumo=input_insumo,
-                massa_input=massa_input,
+                massa_input=convert_mass(massa_input, mass_unit, "t"),
                 output_insumo=output_insumo,
-                massa_output=massa_output,
+                massa_output=convert_mass(massa_output, mass_unit, "t"),
                 consumiveis=consumiveis,
                 consumo_especifico=consumo_especifico,
                 taxacao_fronteira=tax_fronteira,
