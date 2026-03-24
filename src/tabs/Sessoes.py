@@ -1,8 +1,9 @@
 import streamlit as st
-from typing import Dict
+from typing import Dict, Any
 import json
 import os
 import sys
+import tempfile
 
 _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _root_dir = os.path.dirname(_src_dir)
@@ -105,7 +106,6 @@ class SessoesTab:
                 if st.button("🗑️ Resetar Sessão", use_container_width=True, type="secondary", key="ses_reset"):
                     st.session_state._confirm_reset = True
                 if st.button("❌ Abandonar Sessão", use_container_width=True, type="secondary", key="ses_logout"):
-                    self._limpar_sessao()
                     st.session_state.usuario_logado = None
                     st.rerun()
 
@@ -140,6 +140,7 @@ class SessoesTab:
         if is_admin:
             st.divider()
             st.markdown("### 🔧 Funcionalidades Administrativas")
+            self._render_admin_panel()
             
         st.markdown(
             f"<div style='text-align:center;color:#888;font-size:0.85em;margin-top:1rem;'>"
@@ -327,6 +328,9 @@ class SessoesTab:
             "ui_theme_mode": st.session_state.get("ui_theme_mode", "light"),
             "mass_unit": normalize_unit(st.session_state.get("mass_unit", "t")),
             "auto_save_session": bool(st.session_state.get("auto_save_session", False)),
+            "auto_save_interval": int(st.session_state.get("auto_save_interval", 20)),
+            "pref_show_save_toast": bool(st.session_state.get("pref_show_save_toast", True)),
+            "pref_show_integrity_alerts": bool(st.session_state.get("pref_show_integrity_alerts", True)),
             "unidades": unidades_dict,
             "conexoes": conexoes_dict,
             "edges": st.session_state.get("edges", []),
@@ -358,6 +362,11 @@ class SessoesTab:
             )
             conexoes.append(conexao)
 
+        # Definir fatores ANTES do loop de unidades para que calcular_emissoes
+        # possa fazer lookup ao vivo mesmo durante a primeira restauração.
+        fatores_emissao = sessao_data.get("fatores_emissao", [])
+        st.session_state.fatores_emissao = fatores_emissao
+
         unidades_dict = sessao_data.get("unidades", [])
         unidades = []
         for u_dict in unidades_dict:
@@ -381,6 +390,21 @@ class SessoesTab:
                 else:
                     tecnologia_obj = Tecnologia.from_dict(tecnologia_valor)
 
+            # ── Re-construir Consumiveis a partir da tecnologia ──────────────
+            from database import _rebuild_consumiveis_from_tech, _parse_ano_periodo_db
+            from calculations import EmissionCalculator
+            ano_ref_u = _parse_ano_periodo_db(u_dict.get("Periodo"))
+            if tecnologia_obj and getattr(tecnologia_obj, "insumos", None):
+                consumiveis_u, consumo_especifico_u = _rebuild_consumiveis_from_tech(
+                    tecnologia_obj, fatores_emissao, ano_ref_u
+                )
+                ce_saved = u_dict.get("ConsumoEspecifico", [])
+                if len(ce_saved) == len(consumiveis_u):
+                    consumo_especifico_u = ce_saved
+            else:
+                consumiveis_u = u_dict.get("Consumiveis", [])
+                consumo_especifico_u = u_dict.get("ConsumoEspecifico", [])
+
             unidade = UnidadeProdutiva(
                 id_elo=u_dict["ID_ELO"],
                 nome=u_dict["Nome"],
@@ -390,22 +414,18 @@ class SessoesTab:
                 massa_input=u_dict["MassaInput"],
                 output_insumo=u_dict["Output"],
                 massa_output=u_dict["MassaOutput"],
-                consumiveis=u_dict["Consumiveis"],
-                consumo_especifico=u_dict["ConsumoEspecifico"],
+                consumiveis=consumiveis_u,
+                consumo_especifico=consumo_especifico_u,
                 taxacao_fronteira=u_dict.get("TaxacaoFronteira", False),
                 taxacao_local=u_dict.get("TaxacaoLocal", False),
                 tecnologia=tecnologia_obj,
                 conexao=conexao,
             )
-            unidade.IntensidadeEmissao = u_dict.get("IntensidadeEmissao", 0.0)
-            unidade.IntensidadeEmissaoEscopo1 = u_dict.get("IntensidadeEmissaoEscopo1", 0.0)
-            unidade.IntensidadeEmissaoEscopo2 = u_dict.get("IntensidadeEmissaoEscopo2", 0.0)
-            unidade.IntensidadeEmissaoEscopo3 = u_dict.get("IntensidadeEmissaoEscopo3", 0.0)
-            unidade.Pegada = u_dict.get("Pegada", 0.0)
-            unidade.PegadaEscopo1 = u_dict.get("PegadaEscopo1", 0.0)
-            unidade.PegadaEscopo2 = u_dict.get("PegadaEscopo2", 0.0)
-            unidade.PegadaEscopo3 = u_dict.get("PegadaEscopo3", 0.0)
             unidade.ConfigOperacional = u_dict.get("ConfigOperacional", "Padrão")
+
+            # Recalcula com consumíveis e fatores atualizados
+            EmissionCalculator.calcular_emissoes(unidade)
+
             unidades.append(unidade)
 
         st.session_state.unidades = unidades
@@ -418,6 +438,15 @@ class SessoesTab:
         st.session_state.mass_unit = normalize_unit(sessao_data.get("mass_unit", st.session_state.get("mass_unit", "t")))
         st.session_state.auto_save_session = bool(
             sessao_data.get("auto_save_session", st.session_state.get("auto_save_session", False))
+        )
+        st.session_state.auto_save_interval = int(
+            sessao_data.get("auto_save_interval", st.session_state.get("auto_save_interval", 20))
+        )
+        st.session_state.pref_show_save_toast = bool(
+            sessao_data.get("pref_show_save_toast", st.session_state.get("pref_show_save_toast", True))
+        )
+        st.session_state.pref_show_integrity_alerts = bool(
+            sessao_data.get("pref_show_integrity_alerts", st.session_state.get("pref_show_integrity_alerts", True))
         )
 
         try:
@@ -441,7 +470,80 @@ class SessoesTab:
 
         if "openrouter_api_key" in sessao_data:
             st.session_state.openrouter_api_key = sessao_data.get("openrouter_api_key", "")
+
+        # Propagar pegada encadeada após restaurar todas as unidades
+        try:
+            import database as _db
+            _db.DatabaseManager().propagar_pegada()
+        except Exception:
+            pass
+
         st.session_state.refresh_canvas = True
+
+    # ════════════════════════════════════════════════════════════════
+    #  PAINEL ADMINISTRATIVO
+    # ════════════════════════════════════════════════════════════════
+    def _render_admin_panel(self):
+        """Painel exclusivo para admin: listar e excluir sessões de outros usuários."""
+        all_sessions = self._load_all_sessions()
+        usuario_admin = st.session_state.get("usuario_logado", "")
+
+        outros_usuarios = [u for u in all_sessions if u.lower() != usuario_admin.lower()]
+
+        st.markdown(
+            f"**Usuários com sessão salva:** {len(all_sessions)} "
+            f"({len(outros_usuarios)} além do admin)"
+        )
+
+        if not outros_usuarios:
+            st.info("Nenhum outro usuário com sessão salva.")
+            return
+
+        # Confirmação de exclusão pendente
+        pending = st.session_state.get("_admin_delete_pending")
+        if pending and pending in all_sessions:
+            st.warning(
+                f"⚠️ Tem certeza que deseja excluir a sessão de **{pending}**? "
+                "Esta ação não pode ser desfeita."
+            )
+            ca, cb, _ = st.columns([1, 1, 4])
+            if ca.button("✅ Confirmar exclusão", type="primary", key="_admin_delete_confirm"):
+                all_sessions.pop(pending, None)
+                self._save_all_sessions(all_sessions)
+                st.session_state.pop("_admin_delete_pending", None)
+                st.toast(f"Sessão de '{pending}' excluída.", icon="🗑️")
+                st.rerun()
+            if cb.button("Cancelar", key="_admin_delete_cancel"):
+                st.session_state.pop("_admin_delete_pending", None)
+                st.rerun()
+            return
+
+        # Tabela de usuários
+        for usuario in sorted(outros_usuarios):
+            sessao = all_sessions[usuario]
+            data_save = sessao.get("data_exportacao", "—")
+            n_unidades = len(sessao.get("unidades", []))
+            n_conexoes = len(sessao.get("conexoes", []))
+
+            with st.container(border=True):
+                c1, c2 = st.columns([5, 1])
+                with c1:
+                    st.markdown(f"**👤 {usuario}**")
+                    st.caption(
+                        f"🗓️ Salvo em: {data_save}  |  "
+                        f"🏭 {n_unidades} unidades  |  "
+                        f"🔗 {n_conexoes} conexões"
+                    )
+                with c2:
+                    if st.button(
+                        "🗑️ Excluir",
+                        key=f"_admin_del_{usuario}",
+                        use_container_width=True,
+                        type="secondary",
+                        help=f"Excluir sessão de {usuario}",
+                    ):
+                        st.session_state["_admin_delete_pending"] = usuario
+                        st.rerun()
 
     def _limpar_sessao(self):
         keys_to_clear = [
@@ -472,12 +574,69 @@ class SessoesTab:
                 return {}
         return {}
 
-    def _save_all_sessions(self, sessions: Dict):
+    # ────────────────────────────────────────────────────────────
+    #  Serialização segura
+    # ────────────────────────────────────────────────────────────
+    @staticmethod
+    def _to_jsonable(value: Any) -> Any:
+        """Converte recursivamente qualquer valor para um tipo JSON-serializável."""
+        if value is None or isinstance(value, (bool, int, float, str)):
+            return value
+        if isinstance(value, dict):
+            return {str(k): SessoesTab._to_jsonable(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple, set, frozenset)):
+            return [SessoesTab._to_jsonable(v) for v in value]
+        if isinstance(value, datetime):
+            return value.isoformat()
+        # numpy scalars (float64, int64, bool_…) – converter via .item()
         try:
-            with open(self.sessions_file, "w", encoding="utf-8") as f:
-                json.dump(sessions, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            st.error(f"Erro ao salvar sessões: {e}")
+            import numpy as np  # noqa: F401
+            if isinstance(value, np.generic):
+                return value.item()
+        except ImportError:
+            pass
+        if hasattr(value, "to_dict"):
+            try:
+                return SessoesTab._to_jsonable(value.to_dict())
+            except Exception:
+                pass
+        if hasattr(value, "__dict__"):
+            try:
+                return SessoesTab._to_jsonable(vars(value))
+            except Exception:
+                pass
+        return str(value)
+
+    def _save_all_sessions(self, sessions: Dict):
+        """Persiste o dict de sessões de forma atômica.
+
+        Usa tempfile + os.replace para garantir que o arquivo original
+        neveŕ é truncado antes do novo conteúdo estar completo no disco.
+        Aplica _to_jsonable para sanitizar quaisquer tipos não-serializáveis.
+        Lança exceção em caso de falha para que o chamador possa tratar.
+        """
+        safe = SessoesTab._to_jsonable(sessions)
+        content = json.dumps(safe, indent=2, ensure_ascii=False)
+
+        directory = os.path.dirname(self.sessions_file)
+        os.makedirs(directory, exist_ok=True)
+
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=".tmp_sessions_", suffix=".json", dir=directory
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.sessions_file)
+        except Exception:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            raise
 
     def _save_user_session(self):
         usuario = st.session_state.get("usuario_logado")
@@ -487,7 +646,7 @@ class SessoesTab:
             sessao_data = self._exportar_sessao()
             all_sessions = self._load_all_sessions()
             all_sessions[usuario] = sessao_data
-            self._save_all_sessions(all_sessions)
+            self._save_all_sessions(all_sessions)  # lança em caso de erro
             try:
                 ctx = AppContext.get()
                 db_data = export_session_to_database(ano=ctx.ano_ativo)

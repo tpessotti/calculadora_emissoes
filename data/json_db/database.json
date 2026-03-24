@@ -1,10 +1,10 @@
 {
   "schema_version": "1.2.0",
-  "created_at": "2026-02-24T22:22:25.707583",
-  "updated_at": "2026-02-24T22:22:25.707796",
+  "created_at": "2026-02-26T16:01:07.238337",
+  "updated_at": "2026-02-26T16:01:07.238648",
   "source": "session_export",
   "anos_disponiveis": [
-    2025
+    2026
   ],
   "fatores_emissao": [
     {
@@ -137,37 +137,37 @@
       "grupo_consumivel": "ELECTRICITY",
       "consumivel": "ELECTRICITY",
       "escopo": "SCOPE 2",
-      "fator_emissao": 0.0,
+      "ano": 2023,
+      "fator_emissao": 62.672,
       "kgCO2e_unid": "MWH",
-      "data_importacao": "2026-02-24 17:11:34",
-      "ano": 2023
+      "data_importacao": "2026-02-24 17:11:34"
     },
     {
       "grupo_consumivel": "ELECTRICITY",
       "consumivel": "ELECTRICITY",
       "escopo": "SCOPE 3",
+      "ano": 2023,
       "fator_emissao": 67.78,
       "kgCO2e_unid": "MWH",
-      "data_importacao": "2026-02-24 17:11:34",
-      "ano": 2023
+      "data_importacao": "2026-02-24 17:11:34"
     },
     {
       "grupo_consumivel": "ELECTRICITY",
       "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
       "escopo": "SCOPE 2",
+      "ano": 2023,
       "fator_emissao": 60.672,
       "kgCO2e_unid": "MWH",
-      "data_importacao": "2026-02-24 17:11:34",
-      "ano": 2023
+      "data_importacao": "2026-02-24 17:11:34"
     },
     {
       "grupo_consumivel": "ELECTRICITY",
       "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
       "escopo": "SCOPE 2",
+      "ano": 2024,
       "fator_emissao": 62.524,
       "kgCO2e_unid": "MWH",
-      "data_importacao": "2026-02-24 17:11:34",
-      "ano": 2024
+      "data_importacao": "2026-02-24 17:11:34"
     },
     {
       "grupo_consumivel": "INPUTS",
@@ -548,7 +548,106 @@
       "ano": 2023
     }
   ],
-  "unidades": [],
-  "conexoes": [],
-  "tecnologias": []
+  "unidades": [
+    {
+      "ID_ELO": "E000",
+      "Nome": "Panificadora",
+      "Localizacao": "Brasil",
+      "Periodo": "2026",
+      "Input": "Trigo; Água; Fermento",
+      "MassaInput": 0.001,
+      "Output": "Massa",
+      "MassaOutput": 0.001,
+      "Consumiveis": [
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator": 0.0,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        1.0
+      ],
+      "IntensidadeEmissao": 0.0,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 0.0,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "T000",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    },
+    {
+      "ID_ELO": "E001",
+      "Nome": "Fornaria",
+      "Localizacao": "Brasil",
+      "Periodo": "2026",
+      "Input": "Massa",
+      "MassaInput": 0.001,
+      "Output": "Pão",
+      "MassaOutput": 0.0009,
+      "Consumiveis": [
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator": 0.0,
+          "escopo": "SCOPE 1"
+        }
+      ],
+      "ConsumoEspecifico": [
+        100.0
+      ],
+      "IntensidadeEmissao": 0.0,
+      "IntensidadeEmissaoEscopo1": 0.0,
+      "IntensidadeEmissaoEscopo2": 0.0,
+      "IntensidadeEmissaoEscopo3": 0.0,
+      "Pegada": 0.0,
+      "PegadaEscopo1": 0.0,
+      "PegadaEscopo2": 0.0,
+      "PegadaEscopo3": 0.0,
+      "TaxacaoFronteira": false,
+      "TaxacaoLocal": false,
+      "Tecnologia": "T001",
+      "ConfigOperacional": "Padrão",
+      "Conexao": null
+    }
+  ],
+  "conexoes": [
+    {
+      "origem": "E000",
+      "destino": "E001",
+      "id": "F000",
+      "massa": 0.001,
+      "label": "Fluxo",
+      "periodo": "2026"
+    }
+  ],
+  "tecnologias": [
+    {
+      "id": "T000",
+      "nome": "Batedeira",
+      "insumos": [
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator_consumo": 1.0
+        }
+      ],
+      "unidades": []
+    },
+    {
+      "id": "T001",
+      "nome": "Forno",
+      "insumos": [
+        {
+          "nome": "ELECTRICITY SERRA LESTE AND EFC",
+          "fator_consumo": 100.0
+        }
+      ],
+      "unidades": []
+    }
+  ]
 }

@@ -13,6 +13,7 @@ if _root_dir not in sys.path:
 
 from core.context import AppContext
 from core.io.json_io import load_fatores_emissao, save_fatores_emissao
+from core.units import co2e_label
 from core.periodos import parse_periodo, PeriodoError
 
 
@@ -208,12 +209,14 @@ class FatoresEmissaoTab:
 
         if not df_editado.equals(df_filtrado):
             if st.button("💾 **Salvar Alterações**", type="primary"):
-                ids_originais = df_filtrado.index
+                # i from iterrows() is already the original list position (index label
+                # inherited from df_filtrado), so use it directly — positional lookup
+                # via ids_originais[i] would fail when i > len(filtered)-1.
                 for i, row in df_editado.iterrows():
                     row_dict = row.to_dict()
                     row_dict["ano"] = _normalizar_ano_fator(row_dict.get("ano"))
                     row_dict.pop("periodo", None)
-                    st.session_state.fatores_emissao[ids_originais[i]] = row_dict
+                    st.session_state.fatores_emissao[i] = row_dict
 
                 save_fatores_emissao(self.CAMINHO_JSON, st.session_state.fatores_emissao)
 
@@ -290,7 +293,7 @@ class FatoresEmissaoTab:
                     consumivel = st.text_input("Nome do Consumível*", placeholder="Ex: Diesel")
                     escopo = st.selectbox("Escopo*", ["1", "2", "3"])
                 with col2:
-                    fator_emissao = st.number_input("Fator de Emissão (kgCO₂e)", step=0.001, format="%.6f")
+                    fator_emissao = st.number_input(f"Fator de Emissão ({co2e_label('kg')})", step=0.001, format="%.6f")
                     unidade = st.text_input("Unidade de consumo*", placeholder="Ex: litro")
                     periodo = st.text_input("Período (opcional)", placeholder="Ex: 2023 ou 2020-2024, 2026")
 

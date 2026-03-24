@@ -10,7 +10,7 @@ if _root_dir not in sys.path:
 from utils import UtilsUI
 from core.context import AppContext
 from core.validation.relational import validar_integridade_relacional, formatar_relatorio_markdown
-from core.units import convert_mass, get_default_mass_unit_from_session
+from core.units import convert_mass, get_default_mass_unit_from_session, co2e_label
 
 class UnidadesTab:
     """Classe para gerenciar a aba de Unidades e Fluxos no Streamlit."""
@@ -376,7 +376,8 @@ class UnidadesTab:
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Unidades", estatisticas["total_unidades"])
         col2.metric("Total Conexões", estatisticas["total_conexoes"])
-        col3.metric("Emissão Total", f"{estatisticas['emissao_total']:,.2f} CO₂")
+        _mu = get_default_mass_unit_from_session(st.session_state)
+        col3.metric("Emissão Total", f"{estatisticas['emissao_total']:,.2f} {co2e_label(_mu)}")
 
         edges = self.utils_ui.db.get_edges_for_graph()
         filtro_ano = filtros_sidebar.get("ano", "Todos")

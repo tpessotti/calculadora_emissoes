@@ -506,7 +506,7 @@ class HomeTab:
         st.markdown("")
 
         # ── Como usar a ferramenta ────────────────────────────────
-        st.markdown('<div class="section-heading">🗺️ Como usar a ferramenta</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-heading">Como usar a ferramenta</div>', unsafe_allow_html=True)
 
         st.markdown("""
         <div style="font-family:'Poppins',sans-serif; color:#444; line-height:1.9; margin-bottom:1.5rem;">
@@ -520,15 +520,15 @@ class HomeTab:
         """, unsafe_allow_html=True)
 
         # ── Navegação rápida ──────────────────────────────────────
-        st.markdown('<div class="section-heading">🚀 Navegação rápida</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-heading">Navegação rápida</div>', unsafe_allow_html=True)
 
         nav_items = [
-            ("📐 Unidades & Fluxos", "Cadastre e gerencie as unidades produtivas da cadeia.", "Unidades & Fluxos"),
-            ("🔀 Diagrama de Fluxo", "Visualize e edite o grafo interativo das conexões.", "Diagrama de Fluxo"),
-            ("⚡ Fatores de Emissão", "Gerencie os fatores de conversão por consumível.", "Fatores de Emissão"),
-            ("🔬 Tecnologias", "Simule o impacto de tecnologias alternativas.", "Tecnologias"),
-            ("📊 Análise de Emissões", "Relatórios, gráficos e comparações detalhadas.", "Análise de Emissões"),
-            ("💬 Assistente IA", "Converse com a IA para insights sobre seus dados.", "Assistente IA"),
+            ("Unidades & Fluxos", "Cadastre e gerencie as unidades produtivas da cadeia.", "Unidades & Fluxos"),
+            ("Diagrama de Fluxo", "Visualize e edite o grafo interativo das conexões.", "Diagrama de Fluxo"),
+            ("Fatores de Emissão", "Gerencie os fatores de conversão por consumível.", "Fatores de Emissão"),
+            ("Tecnologias", "Simule o impacto de tecnologias alternativas.", "Tecnologias"),
+            ("Análise de Emissões", "Relatórios, gráficos e comparações detalhadas.", "Análise de Emissões"),
+            ("Assistente IA", "Converse com a IA para insights sobre seus dados.", "Assistente IA"),
         ]
 
         cols = st.columns(3)
@@ -540,7 +540,7 @@ class HomeTab:
                     <div class="nav-card-text">{desc}</div>
                 </div>
                 """, unsafe_allow_html=True)
-                if st.button(f"Ir para {title.split(' ', 1)[1]}", key=f"_nav_{idx}", use_container_width=True):
+                if st.button(f"Ir para {title}", key=f"_nav_{idx}", use_container_width=True):
                     st.session_state["_nav_target"] = target
                     st.rerun()
 
@@ -773,7 +773,7 @@ class HomeTab:
         return {}
 
     def _importar_sessao(self, sessao_data: Dict):
-        """Importa dados de sessão para o session_state"""
+        """Importa dados de sessão para o session_state, recalculando emissões."""
         try:
             tecnologias_dict = sessao_data.get("tecnologias_alternativas", [])
             tecnologias = []
@@ -796,6 +796,11 @@ class HomeTab:
                 )
                 conexoes.append(conexao)
 
+            # Definir fatores ANTES do loop de unidades para que calcular_emissoes
+            # possa fazer lookup ao vivo mesmo durante a primeira restauração.
+            fatores_emissao = sessao_data.get("fatores_emissao", [])
+            st.session_state.fatores_emissao = fatores_emissao
+
             unidades_dict = sessao_data.get("unidades", [])
             unidades = []
             for u_dict in unidades_dict:
@@ -817,26 +822,40 @@ class HomeTab:
                     else:
                         tecnologia_obj = Tecnologia.from_dict(tecnologia_valor)
 
+                # ── Re-construir Consumiveis a partir da tecnologia ──────────
+                # Garante que nomes de consumíveis e fatores reflitam o banco atual,
+                # corrigindo sessões salvas com dados desatualizados.
+                from database import _rebuild_consumiveis_from_tech, _parse_ano_periodo_db
+                from calculations import EmissionCalculator
+                ano_ref_u = _parse_ano_periodo_db(u_dict.get("Periodo"))
+                if tecnologia_obj and getattr(tecnologia_obj, "insumos", None):
+                    consumiveis_u, consumo_especifico_u = _rebuild_consumiveis_from_tech(
+                        tecnologia_obj, fatores_emissao, ano_ref_u
+                    )
+                    # Preserva ConsumoEspecifico salvo (o usuário pode tê-lo ajustado)
+                    ce_saved = u_dict.get("ConsumoEspecifico", [])
+                    if len(ce_saved) == len(consumiveis_u):
+                        consumo_especifico_u = ce_saved
+                else:
+                    consumiveis_u = u_dict.get("Consumiveis", [])
+                    consumo_especifico_u = u_dict.get("ConsumoEspecifico", [])
+
                 unidade = UnidadeProdutiva(
                     id_elo=u_dict["ID_ELO"], nome=u_dict["Nome"],
                     localizacao=u_dict["Localizacao"], periodo=u_dict["Periodo"],
                     input_insumo=u_dict["Input"], massa_input=u_dict["MassaInput"],
                     output_insumo=u_dict["Output"], massa_output=u_dict["MassaOutput"],
-                    consumiveis=u_dict["Consumiveis"],
-                    consumo_especifico=u_dict["ConsumoEspecifico"],
+                    consumiveis=consumiveis_u,
+                    consumo_especifico=consumo_especifico_u,
                     taxacao_fronteira=u_dict.get("TaxacaoFronteira", False),
                     taxacao_local=u_dict.get("TaxacaoLocal", False),
                     tecnologia=tecnologia_obj, conexao=conexao,
                 )
-                unidade.IntensidadeEmissao = u_dict.get("IntensidadeEmissao", 0.0)
-                unidade.IntensidadeEmissaoEscopo1 = u_dict.get("IntensidadeEmissaoEscopo1", 0.0)
-                unidade.IntensidadeEmissaoEscopo2 = u_dict.get("IntensidadeEmissaoEscopo2", 0.0)
-                unidade.IntensidadeEmissaoEscopo3 = u_dict.get("IntensidadeEmissaoEscopo3", 0.0)
-                unidade.Pegada = u_dict.get("Pegada", 0.0)
-                unidade.PegadaEscopo1 = u_dict.get("PegadaEscopo1", 0.0)
-                unidade.PegadaEscopo2 = u_dict.get("PegadaEscopo2", 0.0)
-                unidade.PegadaEscopo3 = u_dict.get("PegadaEscopo3", 0.0)
                 unidade.ConfigOperacional = u_dict.get("ConfigOperacional", "Padrão")
+
+                # Recalcula emissões com consumíveis e fatores atualizados
+                EmissionCalculator.calcular_emissoes(unidade)
+
                 unidades.append(unidade)
 
             st.session_state.unidades = unidades
@@ -848,6 +867,15 @@ class HomeTab:
             st.session_state.ui_theme_mode = sessao_data.get("ui_theme_mode", st.session_state.get("ui_theme_mode", "light"))
             st.session_state.mass_unit = normalize_unit(sessao_data.get("mass_unit", st.session_state.get("mass_unit", "t")))
             st.session_state.auto_save_session = bool(sessao_data.get("auto_save_session", st.session_state.get("auto_save_session", False)))
+            st.session_state.auto_save_interval = int(
+                sessao_data.get("auto_save_interval", st.session_state.get("auto_save_interval", 20))
+            )
+            st.session_state.pref_show_save_toast = bool(
+                sessao_data.get("pref_show_save_toast", st.session_state.get("pref_show_save_toast", True))
+            )
+            st.session_state.pref_show_integrity_alerts = bool(
+                sessao_data.get("pref_show_integrity_alerts", st.session_state.get("pref_show_integrity_alerts", True))
+            )
 
             # Restaurar contexto de ano
             try:
@@ -871,6 +899,14 @@ class HomeTab:
 
             if "openrouter_api_key" in sessao_data:
                 st.session_state.openrouter_api_key = sessao_data.get("openrouter_api_key", "")
+
+            # Propagar pegada encadeada após restaurar todas as unidades
+            try:
+                import database as _db
+                _db.DatabaseManager().propagar_pegada()
+            except Exception:
+                pass
+
             st.session_state.refresh_canvas = True
         except Exception as e:
             st.error(f"Erro ao importar sessão: {e}")

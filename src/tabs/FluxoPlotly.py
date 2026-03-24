@@ -6,7 +6,8 @@ from config import CANVAS_CONFIG
 from utils import UtilsUI
 from core.io.excel_io import exportar_sessao_excel
 from core.context import AppContext
-from core.units import normalize_unit
+from core.units import normalize_unit, co2e_label, co2e_intensity_label, convert_co2e, get_default_mass_unit_from_session, convert_mass
+from calculations import EmissionCalculator
 import base64
 from io import BytesIO
 
@@ -42,9 +43,6 @@ class FluxoTab:
     def __init__(self):
         self.utils_ui = UtilsUI()
 
-    def _set_painel_lateral_aberto(self, aberto: bool):
-        st.session_state.painel_lateral_aberto = bool(aberto)
-
     def _on_painel_dropdown_change(self):
         """Sincroniza seleção do dropdown com o grafo e abre edição."""
         label = st.session_state.get("busca_unidade_painel")
@@ -69,9 +67,10 @@ class FluxoTab:
             "selected_edges": [],
             "selected_edge": None,
             "unidade_editando_fluxo": None,
-            "painel_lateral_aberto": True,
             "confirmar_exclusao": False,
             "nodes_para_excluir": [],
+            "_criar_fluxo_nodes": [],
+            "_open_criar_fluxo_dialog": False,
         }
         for k, v in _defaults.items():
             if k not in st.session_state:
@@ -91,37 +90,34 @@ class FluxoTab:
             or (not e.get("periodo") and e["source"] in ids_filtrados and e["target"] in ids_filtrados)
         ]
 
-        # Guardar listas filtradas para uso nos renders
         st.session_state["_fluxo_unidades"] = unidades_filtradas
         st.session_state["_fluxo_edges"] = edges_filtrados
 
         self.utils_ui.ec.propagar_pegada(todas_unidades, todos_edges)
-        self._render_sidebar()
+        self._render_sidebar(unidades_filtradas, edges_filtrados)
+        self._render_kpi_bar(unidades_filtradas, edges_filtrados)
 
-        # ── Layout principal: grafo à esquerda, painel à direita ──
-        # Mantemos sempre a coluna da direita para o botão Abrir/Fechar
-        # ficar no mesmo lugar e com o mesmo tamanho.
-        col_graph, col_panel = st.columns([3, 1], gap="medium")
-
+        col_graph, col_panel = st.columns([5, 2])
         with col_graph:
-            self._render_graph()
-
+            live_sel = self._render_graph()  # retorna {"nodes": [...], "edges": [...]}
         with col_panel:
-            self._render_side_panel()
+            with st.container(height=735, border=False):
+                self._render_selection_panel(live_sel)
 
-        # ── Painel de ações abaixo do grafo (edição, conexão, etc.) ──
         self._render_interaction_panel()
 
-        # ── Diálogo de confirmação de exclusão ──
         if st.session_state.confirmar_exclusao:
             self._render_confirm_delete_dialog()
+
+        if st.session_state.get("_open_criar_fluxo_dialog"):
+            self._render_criar_fluxo_dialog()
 
     # ════════════════════════════════════════════════════════════════
     #  SIDEBAR
     # ════════════════════════════════════════════════════════════════
-    def _render_sidebar(self):
+    def _render_sidebar(self, unidades_filtradas, edges_filtrados):
         with st.sidebar:
-            st.markdown("### 📊 Diagrama de Fluxo")
+            st.markdown("### Diagrama de Fluxo")
 
             # ── Filtro de ano ──
             ctx = AppContext.get()
@@ -139,23 +135,11 @@ class FluxoTab:
                 ctx.set_ano(ano_filtro)
                 st.rerun()
 
-            st.markdown("---")
-
-            # ── Status de seleção ──
-            n_sel = len(st.session_state.selected_nodes)
-            if n_sel:
-                st.info(f"🔵 {n_sel} unidade(s) selecionada(s)")
-            if st.session_state.selected_edge:
-                st.info("🔗 1 fluxo selecionado")
-
-            if n_sel or st.session_state.selected_edge:
-                if st.button("🧹 Limpar Seleção", use_container_width=True, key="clear_sel"):
-                    self._clear_selection()
-                    st.rerun()
-
-            st.markdown("---")
+            # ── Busca e preview de unidades ──
+            self._render_sidebar_unit_search()
 
             # ── Exportar ──
+            st.markdown("---")
             with st.expander("📤 Exportar"):
                 if st.button("Gerar JSON", use_container_width=True, key="exp_json"):
                     json_data = self.utils_ui.db.export_to_json()
@@ -168,7 +152,7 @@ class FluxoTab:
 
                 st.markdown("---")
 
-                ctx = AppContext.get()
+                _ctx = AppContext.get()
                 if st.button("Gerar Excel", use_container_width=True, key="exp_xlsx"):
                     try:
                         xlsx_data = exportar_sessao_excel(
@@ -176,12 +160,12 @@ class FluxoTab:
                             conexoes=list(st.session_state.get("conexoes", [])),
                             tecnologias=list(st.session_state.get("tecnologias_alternativas", [])),
                             fatores_emissao=list(st.session_state.get("fatores_emissao", [])),
-                            ano=ctx.ano_ativo,
+                            ano=_ctx.ano_ativo,
                             massa_unidade=normalize_unit(st.session_state.get("mass_unit", "t")),
                         )
                         st.download_button(
                             "⬇️ Baixar Excel", data=xlsx_data,
-                            file_name=f"sessao_emissoes_{ctx.ano_ativo}.xlsx",
+                            file_name=f"sessao_emissoes_{_ctx.ano_ativo}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             key="dl_xlsx",
                             use_container_width=True,
@@ -193,27 +177,12 @@ class FluxoTab:
             with st.expander("⚙️ Layout"):
                 st.slider("Espaçamento horizontal", 150, 800, 350, 50, key="esp_x")
                 st.slider("Espaçamento vertical", 100, 500, 200, 50, key="esp_y")
-                layout_opt = st.selectbox(
+                st.selectbox(
                     "Algoritmo de layout",
                     ["Hierárquico (Sugiyama)", "Árvore simples", "Forças (Spring)"],
                     index=0, key="layout_algo",
                 )
                 st.caption("O layout Sugiyama minimiza cruzamentos de arestas.")
-
-            # ── Detalhamento dos rótulos ──
-            with st.expander("🏷️ Rótulos dos nós"):
-                st.selectbox(
-                    "Nível de detalhe",
-                    ["Compacto", "Médio", "Detalhado"],
-                    index=1,
-                    key="label_mode",
-                    help=(
-                        "**Compacto**: apenas ID. "
-                        "**Médio**: nome + pegada (padrão). "
-                        "**Detalhado**: nome + I/O + escopos."
-                    ),
-                )
-                st.caption("O tooltip (hover) sempre mostra todas as informações.")
 
     # ════════════════════════════════════════════════════════════════
     #  LAYOUT / POSICIONAMENTO
@@ -348,33 +317,11 @@ class FluxoTab:
         return posicoes
 
     # ════════════════════════════════════════════════════════════════
-    #  PAINEL LATERAL (busca / seleção de unidades)
+    #  SIDEBAR – busca e preview de unidades
     # ════════════════════════════════════════════════════════════════
-    def _render_side_panel(self):
-        """Painel colapsável à direita do grafo com busca e preview."""
-        painel_aberto = bool(st.session_state.get("painel_lateral_aberto", True))
-
-        # Botão Abrir/Fechar sempre no topo do painel direito
-        if painel_aberto:
-            st.button(
-                "◀ Fechar painel de unidades",
-                key="toggle_painel",
-                type="secondary",
-                use_container_width=True,
-                on_click=self._set_painel_lateral_aberto,
-                args=(False,),
-            )
-        else:
-            st.button(
-                "▶ Abrir painel de unidades",
-                key="toggle_painel",
-                type="secondary",
-                use_container_width=True,
-                on_click=self._set_painel_lateral_aberto,
-                args=(True,),
-            )
-            return
-
+    def _render_sidebar_unit_search(self):
+        """Seção da sidebar: busca, seleção e preview de unidades."""
+        st.markdown("---")
         st.markdown("#### 🔍 Unidades")
 
         if not st.session_state.unidades:
@@ -388,14 +335,13 @@ class FluxoTab:
             opcoes[label] = u.ID_ELO
             lista.append(label)
 
-        # Sincronizar dropdown com seleção do grafo (apenas quando 1 nó está selecionado)
+        # Sincronizar dropdown com seleção do grafo (1 nó selecionado)
         if len(st.session_state.selected_nodes) == 1:
             nid = st.session_state.selected_nodes[0]
             target_label = next((lbl for lbl in lista if opcoes[lbl] == nid), None)
             if target_label and st.session_state.get("busca_unidade_painel") != target_label:
                 st.session_state["busca_unidade_painel"] = target_label
 
-        # Determinar índice baseado na seleção atual
         default_idx = 0
         current_label = st.session_state.get("busca_unidade_painel")
         if current_label in lista:
@@ -407,29 +353,58 @@ class FluxoTab:
             index=default_idx,
             key="busca_unidade_painel",
             on_change=self._on_painel_dropdown_change,
+            label_visibility="collapsed",
         )
 
-        sel_id = opcoes.get(sel_label)
+    # ════════════════════════════════════════════════════════════════
+    #  KPI BAR + TOOLBAR
+    # ════════════════════════════════════════════════════════════════
+    def _render_kpi_bar(self, unidades_filtradas, edges_filtrados):
+        """Faixa de KPIs do ano ativo: unidades, fluxos, emissão, intensidade média."""
+        if not unidades_filtradas:
+            return
+        ctx = AppContext.get()
+        _mu = normalize_unit(st.session_state.get("mass_unit", "t"))
+        sel_nodes = st.session_state.get("selected_nodes")
+        ids_sel = set(sel_nodes) if sel_nodes else None
+        totais = EmissionCalculator.calcular_totais_display(
+            unidades_filtradas, mass_unit=_mu, ids_selecionados=ids_sel
+        )
+        n_taxacao = sum(1 for u in unidades_filtradas if u.TaxacaoFronteira or u.TaxacaoLocal)
 
-        # Preview da unidade selecionada
-        if sel_id:
-            u = self.utils_ui.db.get_unidade_by_id(sel_id)
-            if u:
-                st.markdown("---")
-                st.caption(f"📍 {u.Localizacao} | 📅 {u.Periodo}")
-                st.metric("Input", f"{u.Input} ({u.MassaInput:.1f} t)")
-                st.metric("Output", f"{u.Output} ({u.MassaOutput:.1f} t)")
-                st.metric("Pegada", f"{u.Pegada:.4f} tCO₂/t")
-
-                if u.TaxacaoFronteira:
-                    st.error("🔴 Taxação de fronteira", icon="🔴")
-                if u.TaxacaoLocal:
-                    st.warning("🟡 Taxação local", icon="🟡")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("📅 Ano", ctx.ano_ativo)
+        c2.metric("🏭 Unidades", len(unidades_filtradas))
+        c3.metric("🔗 Fluxos", len(edges_filtrados))
+        c4.metric(
+            "🌍 Emissão total",
+            f"{totais['total']:,.1f} {totais['co2e_lbl']}",
+            help="Soma de emissões próprias × output (unidades visíveis; filtra seleção se ativa)",
+        )
+        c5.metric(
+            "⚡ Intensidade média",
+            f"{totais['intensidade_media']:.4f} {totais['int_lbl']}",
+            help="Média aritmética da intensidade de emissão entre as unidades visíveis",
+        )
+        if n_taxacao:
+            st.warning(
+                f"⚠️ {n_taxacao} unidade(s) com taxação ativa (fronteira ou local)",
+                icon="⚠️",
+            )
+        st.divider()
 
     # ════════════════════════════════════════════════════════════════
     #  CRIAÇÃO DO GRÁFICO PLOTLY
     # ════════════════════════════════════════════════════════════════
     def _render_graph(self):
+        """Renderiza o gráfico Plotly e retorna a seleção live parseada.
+
+        Returns:
+            dict com chaves "nodes" (list[str]) e "edges" (list[dict]).
+            Se não houver seleção nova, retorna listas vazias.
+        """
+        empty_sel = {"nodes": [], "edges": []}
+
         unidades = st.session_state.get("_fluxo_unidades", st.session_state.unidades)
         edges = st.session_state.get("_fluxo_edges", st.session_state.edges)
 
@@ -437,7 +412,7 @@ class FluxoTab:
             ctx = AppContext.get()
             st.info(f"Nenhuma unidade encontrada para o ano **{ctx.ano_ativo}**. "
                     "Adicione unidades ou selecione outro ano.")
-            return
+            return empty_sel
 
         posicoes = self._organize_nodes(
             unidades,
@@ -471,16 +446,26 @@ class FluxoTab:
             selection_mode=("points", "box", "lasso"),
         )
 
-        # Legenda de controles (abaixo do grafo)
-        st.caption(
-            "Controles: Clique no nó = selecionar (cliques sucessivos adicionam/removem). "
-            "Ctrl/Cmd+clique pode adicionar à seleção (dependendo do navegador/Plotly). "
-            "Box/Lasso = seleção múltipla. Scroll = zoom. Use a barra do Plotly para Pan/Reset."
-        )
+        # Parsear evento Plotly → seleção live
+        live_sel = self._parse_plotly_event(event)
 
-        # Processar clique/seleção no gráfico
-        if event and "selection" in event:
-            self._handle_graph_selection(event["selection"])
+        # Sincronizar session_state (para highlighting no próximo render
+        # e para ações disparadas por botões do painel).
+        # Só atualizamos se houve seleção real; seleção vazia gerada por
+        # re-render não limpa o estado anterior.
+        if live_sel["nodes"] or live_sel["edges"]:
+            st.session_state.selected_nodes = live_sel["nodes"]
+            st.session_state.selected_edges = live_sel["edges"]
+            st.session_state.selected_edge = (
+                live_sel["edges"][0] if live_sel["edges"] else None
+            )
+            # Auto-editar se 1 nó
+            if len(live_sel["nodes"]) == 1:
+                st.session_state.unidade_editando_fluxo = live_sel["nodes"][0]
+            else:
+                st.session_state.unidade_editando_fluxo = None
+
+        return live_sel
 
     def _create_figure(self, posicoes):
         """Monta a figura completa com cards de nó, arestas curvas e setas."""
@@ -488,7 +473,15 @@ class FluxoTab:
         G = self._build_nx_graph()
 
         sel_nodes = set(st.session_state.selected_nodes or [])
-        sel_edge = st.session_state.selected_edge  # dict {source, target} ou None
+        # Unificar seleção de arestas em um set (source, target)
+        _sel_edge  = st.session_state.get("selected_edge")
+        _sel_edges = st.session_state.get("selected_edges") or []
+        sel_edges_set: set = set()
+        if _sel_edge:
+            sel_edges_set.add((_sel_edge.get("source", ""), _sel_edge.get("target", "")))
+        for _se in _sel_edges:
+            if isinstance(_se, dict):
+                sel_edges_set.add((_se.get("source", ""), _se.get("target", "")))
 
         unidade_map = {u.ID_ELO: u for u in st.session_state.unidades}
 
@@ -499,7 +492,7 @@ class FluxoTab:
             x0, y0 = posicoes[src]["x"], posicoes[src]["y"]
             x1, y1 = posicoes[tgt]["x"], posicoes[tgt]["y"]
 
-            is_sel = (sel_edge and sel_edge.get("source") == src and sel_edge.get("target") == tgt)
+            is_sel = (src, tgt) in sel_edges_set
 
             edge_traces = self._make_edge_traces(x0, y0, x1, y1, src, tgt, is_sel, unidade_map)
             traces.extend(edge_traces)
@@ -641,7 +634,7 @@ class FluxoTab:
             plot_bgcolor=COLORS["bg"],
             paper_bgcolor="#ffffff",
             height=700,
-            dragmode="select",
+            dragmode=False,
             clickmode="event+select",
             annotations=annotations,
         )
@@ -671,6 +664,13 @@ class FluxoTab:
         elif is_sel:
             status = "✅ <b>Selecionado</b><br>"
 
+        _mu  = get_default_mass_unit_from_session(st.session_state)
+        _lbl = co2e_label(_mu)
+        _int = co2e_intensity_label(_mu)
+        c2e  = lambda v: convert_co2e(v, "t")     # intensidade: sempre ÷1000
+        c2t  = lambda v: convert_co2e(v, _mu)      # emissão total
+        cm   = lambda v: convert_mass(v, "t", _mu)
+
         consumos = ""
         if u.Consumiveis and u.ConsumoEspecifico:
             items = [f"  • {c['nome']}: {e:.2f}" for c, e in zip(u.Consumiveis, u.ConsumoEspecifico)]
@@ -681,22 +681,22 @@ class FluxoTab:
             f"<b>{u.ID_ELO} – {u.Nome}</b><br>"
             f"📍 {u.Localizacao} | 📅 {u.Periodo}<br>"
             f"<br>"
-            f"📥 Input: {u.Input} ({u.MassaInput:.2f} t)<br>"
-            f"📤 Output: {u.Output} ({u.MassaOutput:.2f} t)<br>"
+            f"📥 Input: {u.Input} ({cm(u.MassaInput):.2f} {_mu})<br>"
+            f"📤 Output: {u.Output} ({cm(u.MassaOutput):.2f} {_mu})<br>"
         )
         if consumos:
             hover += f"<br>🛢️ Insumos:<br>{consumos}<br>"
         hover += (
             f"<br>"
-            f"💨 Intensidade: {u.IntensidadeEmissao:.4f} tCO₂/t<br>"
-            f"   E1: {u.IntensidadeEmissaoEscopo1:.4f} | "
-            f"E2: {u.IntensidadeEmissaoEscopo2:.4f} | "
-            f"E3: {u.IntensidadeEmissaoEscopo3:.4f}<br>"
+            f"💨 Intensidade: {c2e(u.IntensidadeEmissao):.4f} {_int}<br>"
+            f"   E1: {c2e(u.IntensidadeEmissaoEscopo1):.4f} | "
+            f"E2: {c2e(u.IntensidadeEmissaoEscopo2):.4f} | "
+            f"E3: {c2e(u.IntensidadeEmissaoEscopo3):.4f}<br>"
             f"<br>"
-            f"🌍 Pegada: {u.Pegada:.4f} tCO₂/t<br>"
-            f"   E1: {u.PegadaEscopo1:.4f} | "
-            f"E2: {u.PegadaEscopo2:.4f} | "
-            f"E3: {u.PegadaEscopo3:.4f}<br>"
+            f"🌍 Pegada: {c2t(u.Pegada * u.MassaOutput):.4f} {_lbl}<br>"
+            f"   E1: {c2e(u.PegadaEscopo1):.4f} | "
+            f"E2: {c2e(u.PegadaEscopo2):.4f} | "
+            f"E3: {c2e(u.PegadaEscopo3):.4f}<br>"
         )
         if u.TaxacaoFronteira:
             hover += "<br>🔴 <b>Sujeito a taxação de fronteira</b>"
@@ -778,8 +778,9 @@ class FluxoTab:
         # ── Label de massa no meio da aresta ──
         u_src = unidade_map.get(src)
         if u_src:
-            massa = u_src.MassaOutput
-            label_text = f"{massa:.1f} t"
+            _mu_e = get_default_mass_unit_from_session(st.session_state)
+            massa_disp = convert_mass(u_src.MassaOutput, "t", _mu_e)
+            label_text = f"{massa_disp:.1f} {_mu_e}"
             traces.append(go.Scatter(
                 x=[cx], y=[cy - 8],
                 mode="text",
@@ -788,129 +789,127 @@ class FluxoTab:
                 hoverinfo="skip", showlegend=False,
             ))
 
+        # ── Marcador invisível e clicável no centro da aresta ──
+        # Permite que o usuário selecione o fluxo com um clique.
+        traces.append(go.Scatter(
+            x=[cx], y=[cy],
+            mode="markers",
+            marker=dict(
+                size=24,
+                opacity=0.01,
+                color="rgba(100,116,139,0.05)",
+                symbol="circle",
+            ),
+            customdata=[f"edge:{src}\u2192{tgt}"],
+            text=[f"\U0001f517 Fluxo: {src} \u2192 {tgt}"],
+            hoverinfo="text",
+            hoverlabel=dict(
+                bgcolor="#475569",
+                bordercolor="#334155",
+                font=dict(color="white", size=11),
+            ),
+            showlegend=False,
+            name="",
+        ))
+
         return traces
 
     def _make_legend_annotations(self, posicoes):
-        """Cria legenda visual no canto do gráfico."""
-        if not posicoes:
-            return []
-        
-        # Encontrar canto superior direito
-        max_x = max(p["x"] for p in posicoes.values())
-        min_y = min(p["y"] for p in posicoes.values())
-
-        legend_x = max_x + 80
-        legend_y = min_y - 20
-
+        """Cria legenda visual fixada no canto inferior direito do gráfico."""
         return [dict(
-            x=legend_x, y=legend_y,
-            xref="x", yref="y",
+            x=0.99, y=0.02,
+            xref="paper", yref="paper",
+            xanchor="right", yanchor="bottom",
             text=(
                 "<b>Legenda</b><br>"
                 f"<span style='color:{COLORS['node_default']}'>●</span> Normal<br>"
                 f"<span style='color:{COLORS['node_taxacao']}'>●</span> Taxação fronteira<br>"
                 f"<span style='color:{COLORS['node_selected']}'>●</span> Selecionado<br>"
                 f"<span style='color:{COLORS['accent']}'>●</span> Editando<br>"
+                f"<span style='color:{COLORS['edge_selected']}'>—</span> Fluxo selecionado<br>"
                 "<span style='font-size:10px'>Cor do nó varia com a pegada<br>"
                 "(azul→laranja)</span>"
             ),
             showarrow=False,
             font=dict(size=10, color=COLORS["text_primary"], family="Arial"),
             align="left",
-            bgcolor="rgba(255,255,255,0.85)",
+            bgcolor="rgba(255,255,255,0.88)",
             bordercolor="#e2e8f0",
             borderwidth=1,
             borderpad=8,
         )]
 
     # ════════════════════════════════════════════════════════════════
-    #  SELEÇÃO VIA GRÁFICO
+    #  PARSING DA SELEÇÃO PLOTLY
     # ════════════════════════════════════════════════════════════════
-    def _handle_graph_selection(self, selection):
-        """Processa seleção interativa do Plotly (clique, lasso, box)."""
+    @staticmethod
+    def _parse_plotly_event(event) -> dict:
+        """Extrai nós e arestas selecionados a partir do evento Plotly.
+
+        Robusto a diferentes formatos de ``customdata`` (str, list, array)
+        retornados pelas diversas versões de Streamlit/Plotly.
+
+        Returns:
+            {"nodes": ["ID_ELO", ...], "edges": [{"source": _, "target": _}, ...]}
+        """
+        result: dict = {"nodes": [], "edges": []}
+
+        if not event:
+            return result
+
+        # event pode ser PlotlyState (dict-like) ou dict puro
+        selection = None
         try:
-            if not selection or "points" not in selection:
-                return
-
-            points = selection.get("points", [])
-            if not points:
-                if st.session_state.selected_nodes or st.session_state.selected_edge:
-                    self._clear_selection()
-                    st.rerun()
-                return
-
-            selected_nodes = []
-            selected_edge_candidate = None
-
-            for pt in points:
-                if "customdata" in pt and pt["customdata"]:
-                    nid = pt["customdata"]
-                    if nid not in selected_nodes:
-                        selected_nodes.append(nid)
-                elif "text" in pt and "→" in str(pt.get("text", "")):
-                    parts = str(pt["text"]).split("→")
-                    if len(parts) == 2:
-                        selected_edge_candidate = {
-                            "source": parts[0].strip(),
-                            "target": parts[1].strip(),
-                        }
-
-            changed = False
-
-            # Diferenciar clique (um ponto) de box/lasso.
-            # O evento do Streamlit não expõe teclas modificadoras (Ctrl), então
-            # implementamos multi-seleção por cliques sucessivos (toggle/add).
-            is_box_or_lasso = bool(selection.get("range")) or bool(selection.get("lassoPoints"))
-
-            if not selected_edge_candidate and not is_box_or_lasso and len(selected_nodes) == 1:
-                clicked = selected_nodes[0]
-                prev = list(st.session_state.selected_nodes or [])
-
-                if clicked in prev:
-                    # Toggle: remove se já estava selecionado
-                    prev = [nid for nid in prev if nid != clicked]
-                else:
-                    # Add: adiciona ao fim
-                    prev.append(clicked)
-
-                if prev != st.session_state.selected_nodes:
-                    st.session_state.selected_nodes = prev
-                    changed = True
-            else:
-                # Box/Lasso (ou seleção múltipla nativa do Plotly) substitui
-                if selected_nodes != st.session_state.selected_nodes:
-                    st.session_state.selected_nodes = selected_nodes
-                    changed = True
-
-            if selected_edge_candidate and selected_edge_candidate != st.session_state.selected_edge:
-                st.session_state.selected_edge = selected_edge_candidate
-                changed = True
-
-            # Se estamos selecionando nós, limpar seleção de aresta
-            if st.session_state.selected_nodes and st.session_state.selected_edge and not selected_edge_candidate:
-                st.session_state.selected_edge = None
-                changed = True
-
-            # Quando 1 nó é selecionado no grafo, sincronizar o dropdown do painel direito
-            current_nodes = list(st.session_state.selected_nodes or [])
-            if current_nodes and len(current_nodes) == 1 and not selected_edge_candidate:
-                nid = current_nodes[0]
-                # Abrir sempre o form de edição
-                if st.session_state.unidade_editando_fluxo != nid:
-                    st.session_state.unidade_editando_fluxo = nid
-                    changed = True
-
-            # Seleção múltipla não abre edição
-            if len(current_nodes) != 1:
-                if st.session_state.unidade_editando_fluxo is not None:
-                    st.session_state.unidade_editando_fluxo = None
-                    changed = True
-
-            if changed:
-                st.rerun()
-
+            selection = event.get("selection") if hasattr(event, "get") else None
         except Exception:
-            pass
+            return result
+        if not selection:
+            return result
+
+        points = []
+        try:
+            points = selection.get("points") or []
+        except Exception:
+            points = selection if isinstance(selection, list) else []
+
+        if not points:
+            return result
+
+        valid_ids = {
+            u.ID_ELO for u in st.session_state.get("unidades", [])
+        }
+
+        for pt in points:
+            # ---- extrair customdata ----
+            cd_raw = pt.get("customdata") if isinstance(pt, dict) else None
+            if cd_raw is None:
+                continue
+            # customdata pode vir como str, list[str] ou numpy array
+            if isinstance(cd_raw, (list, tuple)):
+                cd_str = str(cd_raw[0]) if cd_raw else ""
+            else:
+                cd_str = str(cd_raw)
+
+            if not cd_str:
+                continue
+
+            # ---- aresta ----
+            if cd_str.startswith("edge:"):
+                parts = cd_str[5:].split("\u2192")
+                if len(parts) == 2:
+                    edge_d = {
+                        "source": parts[0].strip(),
+                        "target": parts[1].strip(),
+                    }
+                    if edge_d not in result["edges"]:
+                        result["edges"].append(edge_d)
+                continue
+
+            # ---- nó ----
+            if cd_str in valid_ids and cd_str not in result["nodes"]:
+                result["nodes"].append(cd_str)
+
+        return result
 
     def _clear_selection(self):
         st.session_state.selected_nodes = []
@@ -919,6 +918,202 @@ class FluxoTab:
         st.session_state.unidade_editando_fluxo = None
         st.session_state.confirmar_exclusao = False
         st.session_state.nodes_para_excluir = []
+
+    # ════════════════════════════════════════════════════════════════
+    #  PAINEL DE SELEÇÃO (coluna direita do diagrama)
+    # ════════════════════════════════════════════════════════════════
+    def _render_selection_panel(self, live_sel=None):
+        """Painel lateral direito: mostra nós/fluxos selecionados e ação rápida.
+
+        Usa ``live_sel`` (resultado direto do evento Plotly da renderização
+        atual) quando disponível, com fallback para session_state.
+        """
+        # Definir seleção efetiva
+        if live_sel and (live_sel.get("nodes") or live_sel.get("edges")):
+            sel_nodes = list(live_sel.get("nodes", []))
+            sel_edges = list(live_sel.get("edges", []))
+        else:
+            sel_nodes = list(st.session_state.selected_nodes or [])
+            sel_edge_ = st.session_state.get("selected_edge")
+            sel_edges = list(st.session_state.get("selected_edges") or [])
+            if sel_edge_:
+                key = (sel_edge_.get("source"), sel_edge_.get("target"))
+                if not any((se.get("source"), se.get("target")) == key for se in sel_edges):
+                    sel_edges = [sel_edge_] + sel_edges
+
+        st.markdown("#### 📌 Seleção")
+
+        if not sel_nodes and not sel_edges:
+            st.caption("Nada selecionado.")
+            st.markdown("---")
+            st.caption(
+                "**Dicas:**\n"
+                "- Clique num nó: selecionar / toggle\n"
+                "- Clique no rótulo do fluxo: selecionar fluxo\n"
+                "- Box / Lasso: selecionar vários\n"
+                "- 2 nós desconectados: criar fluxo"
+            )
+            return
+
+        _mu = get_default_mass_unit_from_session(st.session_state)
+
+        # ── Nós selecionados ──────────────────────────────────────
+        if sel_nodes:
+            n = len(sel_nodes)
+            st.markdown(f"**🏭 Nós ({n})**")
+            for idx, nid in enumerate(sel_nodes):
+                u = next(
+                    (un for un in st.session_state.unidades if un.ID_ELO == nid),
+                    None,
+                )
+                if u:
+                    with st.container(border=True):
+                        hdr_cols = st.columns([5, 1])
+                        hdr_cols[0].markdown(f"**{u.ID_ELO}** – {u.Nome}")
+                        if hdr_cols[1].button("✕", key=f"_desel_node_{idx}_{nid}",
+                                              help=f"Desselecionar {nid}"):
+                            new_nodes = [x for x in st.session_state.selected_nodes if x != nid]
+                            st.session_state.selected_nodes = new_nodes
+                            if st.session_state.get("unidade_editando_fluxo") == nid:
+                                st.session_state.unidade_editando_fluxo = None
+                            st.rerun()
+                        st.caption(f"📍 {u.Localizacao or '—'} | 🗓️ {u.Periodo}")
+                        ca, cb = st.columns(2)
+                        ca.metric("Output", f"{convert_mass(u.MassaOutput, 't', _mu):.1f} {_mu}")
+                        cb.metric(
+                            "Pegada",
+                            f"{convert_co2e(u.Pegada, _mu):.2f} {co2e_label(_mu)}",
+                        )
+                else:
+                    st.caption(f"⚠️ `{nid}` — não encontrado")
+
+            # ── 2 nós → criar fluxo? ──────────────────────────────
+            if n == 2:
+                a, b = sel_nodes
+                ja_existe = any(
+                    (e["source"] == a and e["target"] == b)
+                    or (e["source"] == b and e["target"] == a)
+                    for e in st.session_state.edges
+                )
+                st.markdown("---")
+                if ja_existe:
+                    st.info("🔗 Fluxo já existe entre estas unidades.", icon="🔗")
+                else:
+                    if st.button(
+                        "➕ Criar Fluxo",
+                        use_container_width=True,
+                        type="primary",
+                        key="btn_criar_fluxo_panel",
+                        help=f"Criar conexão entre {a} e {b}",
+                    ):
+                        st.session_state["_criar_fluxo_nodes"] = [a, b]
+                        st.session_state["_open_criar_fluxo_dialog"] = True
+                        st.rerun()
+
+        # ── Fluxos selecionados ───────────────────────────────────
+        if sel_edges:
+            st.markdown(f"**🔗 Fluxos ({len(sel_edges)})**")
+            for idx_e, se in enumerate(sel_edges):
+                src_e = se.get("source", "?")
+                tgt_e = se.get("target", "?")
+                u_se = next(
+                    (un for un in st.session_state.unidades if un.ID_ELO == src_e),
+                    None,
+                )
+                with st.container(border=True):
+                    hdr_cols = st.columns([5, 1])
+                    hdr_cols[0].markdown(f"**{src_e}** → **{tgt_e}**")
+                    if hdr_cols[1].button("✕", key=f"_desel_edge_{idx_e}_{src_e}_{tgt_e}",
+                                          help=f"Desselecionar fluxo {src_e}→{tgt_e}"):
+                        new_edges = [
+                            x for x in st.session_state.selected_edges
+                            if not (x.get("source") == src_e and x.get("target") == tgt_e)
+                        ]
+                        st.session_state.selected_edges = new_edges
+                        cur = st.session_state.get("selected_edge")
+                        if cur and cur.get("source") == src_e and cur.get("target") == tgt_e:
+                            st.session_state.selected_edge = new_edges[0] if new_edges else None
+                        st.rerun()
+                    if u_se:
+                        st.caption(f"Massa: {convert_mass(u_se.MassaOutput, 't', _mu):.2f} {_mu}")
+
+        st.markdown("---")
+        if st.button("🧹 Limpar seleção", use_container_width=True, key="btn_limpar_sel_panel"):
+            self._clear_selection()
+            st.rerun()
+
+    # ════════════════════════════════════════════════════════════════
+    #  DIÁLOGO – CRIAR FLUXO (pop-up)
+    # ════════════════════════════════════════════════════════════════
+    def _render_criar_fluxo_dialog(self):
+        """Abre o formulário pop-up de criação de fluxo entre 2 nós selecionados."""
+        nodes = st.session_state.get("_criar_fluxo_nodes", [])
+        if len(nodes) != 2:
+            st.session_state["_open_criar_fluxo_dialog"] = False
+            return
+
+        a, b = nodes
+        _self = self
+
+        @st.dialog("🔗 Criar Fluxo", width="small")
+        def _dlg():
+            u_a = _self.utils_ui.db.get_unidade_by_id(a)
+            u_b = _self.utils_ui.db.get_unidade_by_id(b)
+            nome_a = f"{a} – {u_a.Nome}" if u_a else a
+            nome_b = f"{b} – {u_b.Nome}" if u_b else b
+
+            st.markdown("**Escolha a direção do fluxo:**")
+            direcao = st.radio(
+                "Direção",
+                options=[f"{nome_a}  →  {nome_b}", f"{nome_b}  →  {nome_a}"],
+                key="dlg_fluxo_dir",
+                label_visibility="collapsed",
+            )
+
+            fwd     = direcao.startswith(nome_a)
+            origem  = a if fwd else b
+            destino = b if fwd else a
+            u_orig  = u_a if fwd else u_b
+
+            _mu_dlg = get_default_mass_unit_from_session(st.session_state)
+            st.info(f"**{origem}** → **{destino}**", icon="🔗")
+            if u_orig:
+                st.caption(f"Output disponível da origem: **{convert_mass(u_orig.MassaOutput, 't', _mu_dlg):.2f} {_mu_dlg}**")
+
+            default_m = convert_mass(float(u_orig.MassaOutput), "t", _mu_dlg) if u_orig and u_orig.MassaOutput else 1.0
+            massa_usr = st.number_input(
+                f"Massa transferida ({_mu_dlg})",
+                min_value=0.01,
+                value=default_m,
+                step=0.1,
+                key="dlg_fluxo_massa",
+            )
+
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("✅ Criar Fluxo", type="primary",
+                             use_container_width=True, key="dlg_criar_ok"):
+                    try:
+                        if not _self._validate_edge(origem, destino):
+                            return
+                        u_src = _self.utils_ui.db.get_unidade_by_id(origem)
+                        periodo = str(u_src.Periodo) if u_src else ""
+                        massa_int = convert_mass(massa_usr, _mu_dlg, "t")
+                        _self.utils_ui.db.add_edge(origem, destino, massa_int, periodo=periodo)
+                        st.session_state.edges = _self.utils_ui.db.get_edges_for_graph()
+                        st.session_state["_open_criar_fluxo_dialog"] = False
+                        st.session_state.pop("_criar_fluxo_nodes", None)
+                        _self._clear_selection()
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Erro ao criar fluxo: {exc}")
+            with c2:
+                if st.button("❌ Cancelar", use_container_width=True, key="dlg_criar_cancel"):
+                    st.session_state["_open_criar_fluxo_dialog"] = False
+                    st.session_state.pop("_criar_fluxo_nodes", None)
+                    st.rerun()
+
+        _dlg()
 
     # ════════════════════════════════════════════════════════════════
     #  PAINEL DE INTERAÇÃO (abaixo do gráfico)
@@ -962,8 +1157,9 @@ class FluxoTab:
 
         # ═══ Nenhuma seleção → dica ═══
         st.caption(
-            "💡 Use o painel à direita ou clique no diagrama para selecionar unidades. "
-            "Selecione 2 nós para criar conexão. Use Lasso/Box para seleção múltipla."
+            "💡 Clique em uma unidade no diagrama para editá-la. "
+            "Selecione 2 nós para ver opções de conexão no painel direito. "
+            "Use Lasso / Box para seleção múltipla."
         )
 
     def _render_edit_panel(self, unidade):
@@ -977,11 +1173,12 @@ class FluxoTab:
                 st.rerun()
 
         # Métricas rápidas
+        _mu_pan = get_default_mass_unit_from_session(st.session_state)
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Localização", unidade.Localizacao)
-        c2.metric("Massa Input", f"{unidade.MassaInput:.2f} t")
-        c3.metric("Massa Output", f"{unidade.MassaOutput:.2f} t")
-        c4.metric("Pegada", f"{unidade.Pegada:.4f} tCO₂/t")
+        c2.metric("Massa Input", f"{convert_mass(unidade.MassaInput, 't', _mu_pan):.2f} {_mu_pan}")
+        c3.metric("Massa Output", f"{convert_mass(unidade.MassaOutput, 't', _mu_pan):.2f} {_mu_pan}")
+        c4.metric("Pegada", f"{convert_co2e(unidade.Pegada, _mu_pan):.4f} {co2e_label(_mu_pan)}")
 
         # Conexões da unidade
         edges_in = [e for e in st.session_state.edges if e["target"] == unidade.ID_ELO]
@@ -994,13 +1191,13 @@ class FluxoTab:
                     for e in edges_in:
                         u_src = self.utils_ui.db.get_unidade_by_id(e["source"])
                         nome_src = u_src.Nome if u_src else "?"
-                        st.markdown(f"  ← {e['source']} ({nome_src}) — {e.get('massa', 0):.1f} t")
+                        st.markdown(f"  ← {e['source']} ({nome_src}) — {convert_mass(e.get('massa', 0), 't', _mu_pan):.1f} {_mu_pan}")
                 if edges_out:
                     st.markdown("**Saídas:**")
                     for e in edges_out:
                         u_tgt = self.utils_ui.db.get_unidade_by_id(e["target"])
                         nome_tgt = u_tgt.Nome if u_tgt else "?"
-                        st.markdown(f"  → {e['target']} ({nome_tgt}) — {e.get('massa', 0):.1f} t")
+                        st.markdown(f"  → {e['target']} ({nome_tgt}) — {convert_mass(e.get('massa', 0), 't', _mu_pan):.1f} {_mu_pan}")
 
         st.markdown("---")
 
@@ -1026,10 +1223,11 @@ class FluxoTab:
 
         st.markdown(f"### 📌 2 unidades selecionadas: **{src}** e **{tgt}**")
 
+        _mu_2n = get_default_mass_unit_from_session(st.session_state)
         if u_src and u_tgt:
             c1, c2, c3 = st.columns([2, 1, 2])
             with c1:
-                st.info(f"**{src}** – {u_src.Nome}\nOutput: {u_src.MassaOutput:.2f} t")
+                st.info(f"**{src}** – {u_src.Nome}\nOutput: {convert_mass(u_src.MassaOutput, 't', _mu_2n):.2f} {_mu_2n}")
             with c2:
                 if conexao_existe:
                     st.markdown("<h3 style='text-align:center'>🔗</h3>", unsafe_allow_html=True)
@@ -1038,7 +1236,7 @@ class FluxoTab:
                     st.markdown("<h3 style='text-align:center'>⬌</h3>", unsafe_allow_html=True)
                     st.caption("Sem conexão")
             with c3:
-                st.info(f"**{tgt}** – {u_tgt.Nome}\nInput: {u_tgt.MassaInput:.2f} t")
+                st.info(f"**{tgt}** – {u_tgt.Nome}\nInput: {convert_mass(u_tgt.MassaInput, 't', _mu_2n):.2f} {_mu_2n}")
 
         st.markdown("**Ações disponíveis:**")
 
@@ -1106,7 +1304,8 @@ class FluxoTab:
 
         u_src = self.utils_ui.db.get_unidade_by_id(edge["source"])
         if u_src:
-            st.caption(f"Massa transferida: {u_src.MassaOutput:.2f} t")
+            _mu_ea = get_default_mass_unit_from_session(st.session_state)
+            st.caption(f"Massa transferida: {convert_mass(u_src.MassaOutput, 't', _mu_ea):.2f} {_mu_ea}")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -1121,55 +1320,43 @@ class FluxoTab:
     #  DIÁLOGO DE CONFIRMAÇÃO DE EXCLUSÃO
     # ════════════════════════════════════════════════════════════════
     def _render_confirm_delete_dialog(self):
-        """Popup de confirmação para exclusão de unidade(s)."""
+        """Diálogo modal de confirmação de exclusão."""
         nodes = st.session_state.nodes_para_excluir
         if not nodes:
             st.session_state.confirmar_exclusao = False
             return
 
-        n = len(nodes)
-        # Usar um container destacado como "dialog"
-        with st.container():
-            st.markdown(
-                "<div style='background:#FEF2F2; border:2px solid #EF4444; "
-                "border-radius:12px; padding:20px; margin:10px 0;'>",
-                unsafe_allow_html=True,
-            )
+        _nodes = list(nodes)
+        _self = self
 
-            st.markdown(f"### ⚠️ Confirmar Exclusão")
-
+        @st.dialog("⚠️ Confirmar Exclusão", width="small")
+        def _dialog():
+            n = len(_nodes)
             if n == 1:
-                u = self.utils_ui.db.get_unidade_by_id(nodes[0])
-                nome = f"{nodes[0]} – {u.Nome}" if u else nodes[0]
-                st.markdown(f"Tem certeza que deseja excluir a unidade **{nome}**?")
+                u = _self.utils_ui.db.get_unidade_by_id(_nodes[0])
+                nome = f"{_nodes[0]} – {u.Nome}" if u else _nodes[0]
+                st.markdown(f"Excluir a unidade **{nome}**?")
             else:
-                st.markdown(f"Tem certeza que deseja excluir **{n} unidades**?")
-                for nid in nodes:
-                    u = self.utils_ui.db.get_unidade_by_id(nid)
+                st.markdown(f"Excluir **{n} unidades**?")
+                for nid in _nodes:
+                    u = _self.utils_ui.db.get_unidade_by_id(nid)
                     nome = f"{nid} – {u.Nome}" if u else nid
                     st.markdown(f"  - {nome}")
 
-            st.warning("⚠️ Esta ação é irreversível. Todas as conexões associadas também serão removidas.")
+            st.warning("⚠️ Irreversível — todas as conexões associadas também serão removidas.")
 
             col1, col2 = st.columns(2)
             with col1:
-                if st.button(
-                    f"🗑️ Sim, excluir {n} unidade(s)",
-                    type="primary", use_container_width=True,
-                    key="confirm_delete_yes",
-                ):
-                    self._execute_delete(nodes)
+                if st.button(f"🗑️ Confirmar", type="primary",
+                             use_container_width=True, key="confirm_delete_yes"):
+                    _self._execute_delete(_nodes)
             with col2:
-                if st.button(
-                    "↩️ Cancelar",
-                    use_container_width=True,
-                    key="confirm_delete_no",
-                ):
+                if st.button("↩️ Cancelar", use_container_width=True, key="confirm_delete_no"):
                     st.session_state.confirmar_exclusao = False
                     st.session_state.nodes_para_excluir = []
                     st.rerun()
 
-            st.markdown("</div>", unsafe_allow_html=True)
+        _dialog()
 
     def _execute_delete(self, node_ids):
         """Executa a exclusão confirmada."""
@@ -1210,9 +1397,8 @@ class FluxoTab:
             unidade_existente.TaxacaoLocal = kwargs.get("taxacao_local", unidade_existente.TaxacaoLocal)
             unidade_existente.Tecnologia = kwargs.get("tecnologia", unidade_existente.Tecnologia)
 
-            from calculations import EmissionCalculator
             EmissionCalculator.calcular_emissoes(unidade_existente)
-            self.utils_ui.ec.propagar_pegada(st.session_state.unidades, st.session_state.edges)
+            EmissionCalculator.propagar_pegada(st.session_state.unidades, st.session_state.edges)
 
             st.success("✅ Unidade atualizada com sucesso!")
             self._clear_selection()
@@ -1290,66 +1476,76 @@ class FluxoTab:
     def _get_node_label(self, unidade):
         """Retorna o label do nó respeitando o modo selecionado (para painéis externos)."""
         mode = st.session_state.get("label_mode", "Médio")
+        _mu  = get_default_mass_unit_from_session(st.session_state)
+        _lbl = co2e_label(_mu)
+        _int = co2e_intensity_label(_mu)
+        c2e  = lambda v: convert_co2e(v, "t")   # intensidade: sempre ÷1000
+        c2t  = lambda v: convert_co2e(v, _mu)     # emissão total
+        cm   = lambda v: convert_mass(v, "t", _mu)
         if mode == "Compacto":
             return f"<b>{unidade.ID_ELO}</b>"
         elif mode == "Detalhado":
             consumos = ", ".join([
-                f"{c['nome']}: {e:.2f} t"
+                f"{c['nome']}: {cm(e):.2f} {_mu}"
                 for c, e in zip(unidade.Consumiveis, unidade.ConsumoEspecifico)
             ]) if unidade.Consumiveis and unidade.ConsumoEspecifico else "-"
             return (
                 f"<b>{unidade.ID_ELO} - {unidade.Nome}</b><br>"
                 f"📍 {unidade.Localizacao} | 📅 {unidade.Periodo}<br>"
-                f"📥 Input: {unidade.Input} ({unidade.MassaInput:.2f} t)<br>"
-                f"📤 Output: {unidade.Output} ({unidade.MassaOutput:.2f} t)<br>"
+                f"📥 Input: {unidade.Input} ({cm(unidade.MassaInput):.2f} {_mu})<br>"
+                f"📤 Output: {unidade.Output} ({cm(unidade.MassaOutput):.2f} {_mu})<br>"
                 f"🛢️ Insumos: {consumos}<br>"
-                f"💨 Intensidade: {unidade.IntensidadeEmissao:.2f} tCO₂/t<br>"
-                f"  E1: {unidade.IntensidadeEmissaoEscopo1:.4f} | "
-                f"E2: {unidade.IntensidadeEmissaoEscopo2:.4f} | "
-                f"E3: {unidade.IntensidadeEmissaoEscopo3:.4f}<br>"
-                f"📊 Pegada Total: {unidade.Pegada:.2f} tCO₂"
+                f"💨 Intensidade: {c2e(unidade.IntensidadeEmissao):.2f} {_int}<br>"
+                f"  E1: {c2e(unidade.IntensidadeEmissaoEscopo1):.4f} | "
+                f"E2: {c2e(unidade.IntensidadeEmissaoEscopo2):.4f} | "
+                f"E3: {c2e(unidade.IntensidadeEmissaoEscopo3):.4f}<br>"
+                f"📊 Pegada Total: {c2t(unidade.Pegada * unidade.MassaOutput):.2f} {_lbl}"
             )
         else:  # Médio (default)
             return (
                 f"<b>{unidade.ID_ELO} - {unidade.Nome}</b><br>"
                 f"📍 {unidade.Localizacao} | 📅 {unidade.Periodo}<br>"
-                f"📥 Input: {unidade.Input} ({unidade.MassaInput:.2f} t)<br>"
-                f"📤 Output: {unidade.Output} ({unidade.MassaOutput:.2f} t)<br>"
-                f"💨 Intensidade: {unidade.IntensidadeEmissao:.2f} tCO₂/t<br>"
-                f"📊 Pegada Total: {unidade.Pegada:.2f} tCO₂"
+                f"📥 Input: {unidade.Input} ({cm(unidade.MassaInput):.2f} {_mu})<br>"
+                f"📤 Output: {unidade.Output} ({cm(unidade.MassaOutput):.2f} {_mu})<br>"
+                f"💨 Intensidade: {c2e(unidade.IntensidadeEmissao):.2f} {_int}<br>"
+                f"📊 Pegada Total: {c2t(unidade.Pegada * unidade.MassaOutput):.2f} {_lbl}"
             )
 
     def _build_card_text(self, u):
         """Gera o texto do card (annotation) abaixo do nó conforme label_mode."""
         mode = st.session_state.get("label_mode", "Médio")
         sec_color = COLORS['text_secondary']
+        _mu  = get_default_mass_unit_from_session(st.session_state)
+        _int = co2e_intensity_label(_mu)
+        c2e  = lambda v: convert_co2e(v, "t")
+        cm   = lambda v: convert_mass(v, "t", _mu)
 
         if mode == "Compacto":
             return (
                 f"<b>{u.Nome}</b><br>"
                 f"<span style='font-size:10px;color:{sec_color}'>"
-                f"💨 {u.Pegada:.2f} tCO₂/t</span>"
+                f"💨 {c2e(u.Pegada):.2f} {_int}</span>"
             )
         elif mode == "Detalhado":
             esc_line = (
-                f"E1: {u.IntensidadeEmissaoEscopo1:.4f} | "
-                f"E2: {u.IntensidadeEmissaoEscopo2:.4f} | "
-                f"E3: {u.IntensidadeEmissaoEscopo3:.4f}"
+                f"E1: {c2e(u.IntensidadeEmissaoEscopo1):.4f} | "
+                f"E2: {c2e(u.IntensidadeEmissaoEscopo2):.4f} | "
+                f"E3: {c2e(u.IntensidadeEmissaoEscopo3):.4f}"
             )
             return (
                 f"<b>{u.Nome}</b><br>"
                 f"<span style='font-size:10px;color:{sec_color}'>"
                 f"📍 {u.Localizacao} | 📅 {u.Periodo}<br>"
-                f"📥 {u.MassaInput:.1f}t → 📤 {u.MassaOutput:.1f}t<br>"
-                f"💨 Int: {u.IntensidadeEmissao:.4f} tCO₂/t<br>"
+                f"📥 {cm(u.MassaInput):.1f}{_mu} → 📤 {cm(u.MassaOutput):.1f}{_mu}<br>"
+                f"💨 Int: {c2e(u.IntensidadeEmissao):.4f} {_int}<br>"
                 f"   {esc_line}<br>"
-                f"🌍 Pegada: {u.Pegada:.4f} tCO₂/t</span>"
+                f"🌍 Pegada: {c2e(u.Pegada):.4f} {_int}</span>"
             )
         else:  # Médio
             return (
                 f"<b>{u.Nome}</b><br>"
                 f"<span style='font-size:10px;color:{sec_color}'>"
                 f"📍 {u.Localizacao}<br>"
-                f"📥 {u.MassaInput:.1f}t → 📤 {u.MassaOutput:.1f}t<br>"
-                f"💨 {u.Pegada:.2f} tCO₂/t</span>"
+                f"📥 {cm(u.MassaInput):.1f}{_mu} → 📤 {cm(u.MassaOutput):.1f}{_mu}<br>"
+                f"💨 {c2e(u.Pegada):.2f} {_int}</span>"
             )

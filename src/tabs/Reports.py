@@ -15,6 +15,19 @@ if _root_dir not in sys.path:
     sys.path.insert(0, _root_dir)
 
 from core.context import AppContext
+from core.units import (
+    normalize_unit as _norm_unit, co2e_label, co2e_intensity_label,
+    convert_co2e, get_default_mass_unit_from_session,
+)
+from calculations import EmissionCalculator
+from tabs.report_exports import (
+    render_report_config, get_report_config, init_report_config,
+    generate_md_painel_geral, generate_md_inventario, generate_md_ifrs,
+    generate_md_analise_unidade, generate_md_comparativo,
+    generate_pdf_painel_geral, generate_pdf_analise_unidade, generate_pdf_comparativo,
+    render_download_bar, REPORTLAB_AVAILABLE as _RL_AVAIL,
+    _pdf_safe, _fmt_num,
+)
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -146,20 +159,38 @@ class ReportsTab:
     # ════════════════════════════════════════════════════════════════
     def _render(self):
         self._init_questionario()
-        st.markdown(
-            "<h1 style='margin-bottom:0'>📊 Análises & Reportes</h1>"
-            "<p style='color:#64748B;margin-top:0'>Visualização de emissões e reportes alinhados "
-            "aos padrões internacionais IFRS S1/S2</p>",
-            unsafe_allow_html=True,
-        )
+        init_report_config()
+
+        # ── Header ──
+        col_title, col_badge = st.columns([4, 1])
+        with col_title:
+            st.markdown(
+                "<h1 style='margin-bottom:0'>📊 Análises & Reportes</h1>"
+                "<p style='color:#64748B;margin-top:0'>Visualização de emissões e reportes alinhados "
+                "aos padrões internacionais IFRS S1/S2</p>",
+                unsafe_allow_html=True,
+            )
+        with col_badge:
+            cfg = get_report_config()
+            if cfg.get("rpt_confidencial"):
+                st.markdown("<div style='background:#DC2626;color:white;padding:4px 12px;"
+                            "border-radius:6px;text-align:center;margin-top:18px;"
+                            "font-weight:600;font-size:0.8rem'>🔒 CONFIDENCIAL</div>",
+                            unsafe_allow_html=True)
+            tema = cfg.get("rpt_tema", "Padrão")
+            if tema != "Padrão":
+                st.caption(f"Tema: {tema}")
+
+        # ── Customization panel ──
+        render_report_config()
 
         if not st.session_state.unidades:
             st.info("Adicione unidades na aba **Unidades & Fluxos** para visualizar análises.", icon="ℹ️")
             self._render_ifrs_info_only()
             return
 
-        from calculations import EmissionCalculator
-        EmissionCalculator().propagar_pegada(st.session_state.unidades, st.session_state.edges)
+        from calculations import EmissionCalculator  # keep for reload safety
+        EmissionCalculator.propagar_pegada(st.session_state.unidades, st.session_state.edges)
 
         tabs = st.tabs([
             "📈 Painel Geral",
@@ -477,7 +508,7 @@ class ReportsTab:
                 v = st.checkbox("Utiliza preço interno de carbono?", value=self._q("q_add_preco_interno"), key="_q_add_preco")
                 self._q_set("q_add_preco_interno", v)
                 if self._q("q_add_preco_interno"):
-                    v = st.number_input("Preço interno (€/tCO₂e)", 0, 500, self._q("q_add_preco_valor"), key="_q_add_preco_val")
+                    v = st.number_input(f"Preço interno (€/{co2e_label(_norm_unit(st.session_state.get('mass_unit', 't')))})", 0, 500, self._q("q_add_preco_valor"), key="_q_add_preco_val")
                     self._q_set("q_add_preco_valor", v)
 
             v = st.text_area("Notas ou observações adicionais", value=self._q("q_add_notas"),
@@ -513,6 +544,10 @@ class ReportsTab:
 
         unidades = st.session_state.unidades
         edges = st.session_state.edges
+        _mu = _norm_unit(st.session_state.get("mass_unit", "t"))
+        co2e_lbl = co2e_label(_mu)
+        int_lbl = co2e_intensity_label(_mu)
+        c2e = lambda v: convert_co2e(v, _mu)
         has_q = self._q_preenchido()
         empresa = self._q("q_empresa_nome") or "Entidade Reportante"
         ano = datetime.now().year
@@ -540,11 +575,11 @@ class ReportsTab:
 
             resumo_unidades.append({
                 "ID": u.ID_ELO, "Nome": u.Nome, "Localização": u.Localizacao or "—",
-                "Escopo 1 (tCO₂e)": round(e1_total, 4),
-                "Escopo 2 (tCO₂e)": round(e2_total, 4),
-                "Escopo 3 (tCO₂e)": round(e3_total, 4),
-                "Total (tCO₂e)": round(e_total, 4),
-                "Intensidade (tCO₂e/t)": round(u.IntensidadeEmissao, 6),
+                "Escopo 1 (tCO₂e)": round(convert_co2e(e1_total, "t"), 4),
+                "Escopo 2 (tCO₂e)": round(convert_co2e(e2_total, "t"), 4),
+                "Escopo 3 (tCO₂e)": round(convert_co2e(e3_total, "t"), 4),
+                "Total (tCO₂e)": round(convert_co2e(e_total, "t"), 4),
+                "Intensidade (tCO₂e/t)": round(convert_co2e(u.IntensidadeEmissao, "t"), 6),
                 "Massa Output (t)": round(u.MassaOutput, 2),
             })
 
@@ -566,10 +601,10 @@ class ReportsTab:
                         "Fonte de Emissão": nome_c,
                         "Gás": gas,
                         "Fator de Emissão": round(fator, 6),
-                        "Unid. Fator": c.get("unidade_fator", "tCO₂e/t consumível"),
+                        "Unid. Fator": c.get("unidade_fator", "kgCO₂e/unidade"),
                         "Consumo Específico": round(ce, 6),
                         "Massa Output (t)": round(u.MassaOutput, 2),
-                        "Emissão (tCO₂e)": round(emissao, 4),
+                        "Emissão (tCO₂e)": round(convert_co2e(emissao, "t"), 4),
                     }
 
                     if "1" in escopo_raw:
@@ -582,35 +617,36 @@ class ReportsTab:
                         row["Categoria GHG"] = "Cadeia de valor (upstream/downstream)"
                         fontes_escopo3.append(row)
 
-        # ── Totais ──
-        total_e1 = sum(r["Emissão (tCO₂e)"] for r in fontes_escopo1)
-        total_e2 = sum(r["Emissão (tCO₂e)"] for r in fontes_escopo2)
-        total_e3 = sum(r["Emissão (tCO₂e)"] for r in fontes_escopo3)
-        total_gee = total_e1 + total_e2 + total_e3
-        massa_total = sum(u.MassaOutput for u in unidades)
+        # ── Totais (centralizados em EmissionCalculator — kgCO₂e / t) ──
+        _totais = EmissionCalculator.calcular_totais(unidades)
+        total_e1 = _totais["escopo1"]
+        total_e2 = _totais["escopo2"]
+        total_e3 = _totais["escopo3"]
+        total_gee = _totais["total"]
+        massa_total = _totais["massa_total"]
 
         # ── KPIs ──
         st.markdown("#### Resumo do Inventário")
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("🔴 Escopo 1", f"{total_e1:,.2f} tCO₂e")
-        c2.metric("🟡 Escopo 2", f"{total_e2:,.2f} tCO₂e")
-        c3.metric("🔵 Escopo 3", f"{total_e3:,.2f} tCO₂e")
-        c4.metric("📊 Total GEE", f"{total_gee:,.2f} tCO₂e")
-        c5.metric("📉 Intensidade", f"{total_gee / massa_total:,.4f} tCO₂e/t" if massa_total > 0 else "—")
+        c1.metric("🔴 Escopo 1", f"{c2e(total_e1):,.2f} {co2e_lbl}")
+        c2.metric("🟡 Escopo 2", f"{c2e(total_e2):,.2f} {co2e_lbl}")
+        c3.metric("🔵 Escopo 3", f"{c2e(total_e3):,.2f} {co2e_lbl}")
+        c4.metric("📊 Total GEE", f"{c2e(total_gee):,.2f} {co2e_lbl}")
+        c5.metric("📉 Intensidade", f"{total_gee / massa_total:,.4f} {int_lbl}" if massa_total > 0 else "—")
 
         # ── Tabela‑resumo GHG Protocol ──
         st.markdown("---")
         st.markdown("#### Tabela-Resumo – GHG Protocol Corporate Standard")
         pct = lambda v: f"{v / total_gee * 100:.1f}%" if total_gee > 0 else "0%"
         st.markdown(f"""
-| Categoria GHG Protocol | tCO₂e | % do Total | Fontes |
+| Categoria GHG Protocol | {co2e_lbl} | % do Total | Fontes |
 |------------------------|------:|:----------:|-------:|
-| **Escopo 1** – Emissões diretas de GEE | {total_e1:,.4f} | {pct(total_e1)} | {len(fontes_escopo1)} |
-| **Escopo 2** – Emissões indiretas de energia | {total_e2:,.4f} | {pct(total_e2)} | {len(fontes_escopo2)} |
-| **Escopo 3** – Outras emissões indiretas | {total_e3:,.4f} | {pct(total_e3)} | {len(fontes_escopo3)} |
-| **Total de Emissões** | **{total_gee:,.4f}** | **100%** | **{len(fontes_escopo1)+len(fontes_escopo2)+len(fontes_escopo3)}** |
-| Escopo 1 + 2 (operacional) | {total_e1+total_e2:,.4f} | {pct(total_e1+total_e2)} | |
-| Intensidade média | {total_gee/massa_total:,.6f} | tCO₂e/t | |
+| **Escopo 1** – Emissões diretas de GEE | {c2e(total_e1):,.4f} | {pct(total_e1)} | {len(fontes_escopo1)} |
+| **Escopo 2** – Emissões indiretas de energia | {c2e(total_e2):,.4f} | {pct(total_e2)} | {len(fontes_escopo2)} |
+| **Escopo 3** – Outras emissões indiretas | {c2e(total_e3):,.4f} | {pct(total_e3)} | {len(fontes_escopo3)} |
+| **Total de Emissões** | **{c2e(total_gee):,.4f}** | **100%** | **{len(fontes_escopo1)+len(fontes_escopo2)+len(fontes_escopo3)}** |
+| Escopo 1 + 2 (operacional) | {c2e(total_e1+total_e2):,.4f} | {pct(total_e1+total_e2)} | |
+| Intensidade média | {total_gee/massa_total:,.6f} | {int_lbl} | |
 """)
 
         # ── Gráficos ──
@@ -618,7 +654,7 @@ class ReportsTab:
         with col_pie:
             fig_pie = go.Figure(go.Pie(
                 labels=["Escopo 1", "Escopo 2", "Escopo 3"],
-                values=[total_e1, total_e2, total_e3],
+                values=[c2e(total_e1), c2e(total_e2), c2e(total_e3)],
                 marker_colors=[_COLORS["scope1"], _COLORS["scope2"], _COLORS["scope3"]],
                 hole=0.45, textinfo="label+percent+value",
                 texttemplate="%{label}<br>%{value:,.2f}<br>(%{percent})",
@@ -642,10 +678,10 @@ class ReportsTab:
             for idx, (lbl, clr) in enumerate([("Escopo 1", _COLORS["scope1"]),
                                                ("Escopo 2", _COLORS["scope2"]),
                                                ("Escopo 3", _COLORS["scope3"])]):
-                fig_loc.add_trace(go.Bar(x=locs_sorted, y=[loc_data[l][idx] for l in locs_sorted],
+                fig_loc.add_trace(go.Bar(x=locs_sorted, y=[c2e(loc_data[l][idx]) for l in locs_sorted],
                                          name=lbl, marker_color=clr))
             fig_loc.update_layout(barmode="stack", title="Emissões por Localização",
-                                  yaxis_title="tCO₂e", height=350,
+                                  yaxis_title=co2e_lbl, height=350,
                                   margin=dict(l=20, r=20, t=40, b=30), plot_bgcolor="white",
                                   legend=dict(orientation="h", y=1.12, x=0.5, xanchor="center"))
             st.plotly_chart(fig_loc, use_container_width=True)
@@ -662,7 +698,7 @@ class ReportsTab:
             total_scope = sum(r["Emissão (tCO₂e)"] for r in scope_rows)
             with st.expander(
                 f"{'🔴' if scope_n==1 else '🟡' if scope_n==2 else '🔵'} "
-                f"{scope_lbl} — {total_scope:,.4f} tCO₂e ({len(scope_rows)} fontes)",
+                f"{scope_lbl} — {c2e(total_scope):,.4f} {co2e_lbl} ({len(scope_rows)} fontes)",
                 expanded=scope_n == 1
             ):
                 if scope_n == 1:
@@ -677,19 +713,20 @@ class ReportsTab:
 
                 if scope_rows:
                     df_scope = pd.DataFrame(scope_rows)
+                    df_scope[f"Emissão ({co2e_lbl})"] = df_scope["Emissão (tCO₂e)"].apply(c2e)
                     display_cols = ["Unidade", "Fonte de Emissão", "Gás", "Fator de Emissão",
-                                    "Consumo Específico", "Massa Output (t)", "Emissão (tCO₂e)"]
+                                    "Consumo Específico", "Massa Output (t)", f"Emissão ({co2e_lbl})"]
                     st.dataframe(df_scope[display_cols], use_container_width=True, hide_index=True)
 
                     # Top fontes dentro do escopo
                     top = df_scope.nlargest(5, "Emissão (tCO₂e)")
                     fig_top = go.Figure(go.Bar(
                         y=top["Unidade"] + " — " + top["Fonte de Emissão"],
-                        x=top["Emissão (tCO₂e)"], orientation="h",
-                        marker_color=scope_clr, text=top["Emissão (tCO₂e)"].apply(lambda v: f"{v:,.3f}"),
+                        x=top[f"Emissão ({co2e_lbl})"], orientation="h",
+                        marker_color=scope_clr, text=top[f"Emissão ({co2e_lbl})"].apply(lambda v: f"{v:,.3f}"),
                         textposition="outside"
                     ))
-                    fig_top.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="tCO₂e",
+                    fig_top.update_layout(yaxis=dict(autorange="reversed"), xaxis_title=co2e_lbl,
                                           height=max(200, len(top)*45+80),
                                           margin=dict(l=120, r=60, t=10, b=20), plot_bgcolor="white")
                     st.plotly_chart(fig_top, use_container_width=True)
@@ -702,7 +739,19 @@ class ReportsTab:
         df_resumo = pd.DataFrame(resumo_unidades)
         if not df_resumo.empty:
             df_resumo = df_resumo.sort_values("Total (tCO₂e)", ascending=False)
-            st.dataframe(df_resumo, use_container_width=True, hide_index=True)
+            _col_map = {
+                "Escopo 1 (tCO₂e)": f"Escopo 1 ({co2e_lbl})",
+                "Escopo 2 (tCO₂e)": f"Escopo 2 ({co2e_lbl})",
+                "Escopo 3 (tCO₂e)": f"Escopo 3 ({co2e_lbl})",
+                "Total (tCO₂e)": f"Total ({co2e_lbl})",
+                "Intensidade (tCO₂e/t)": f"Intensidade ({int_lbl})",
+            }
+            df_disp = df_resumo.rename(columns=_col_map)
+            for col in [f"Escopo 1 ({co2e_lbl})", f"Escopo 2 ({co2e_lbl})",
+                        f"Escopo 3 ({co2e_lbl})", f"Total ({co2e_lbl})"]:
+                if col in df_disp.columns:
+                    df_disp[col] = df_disp[col].apply(c2e)
+            st.dataframe(df_disp, use_container_width=True, hide_index=True)
 
         # ── Metodologia ──
         with st.expander("📖 Nota Metodológica"):
@@ -740,33 +789,39 @@ adequado de todos os consumíveis e fatores de emissão.
             "fontes_escopo2": fontes_escopo2,
             "fontes_escopo3": fontes_escopo3,
             "resumo_unidades": resumo_unidades,
-            "totais": {"escopo1": total_e1, "escopo2": total_e2, "escopo3": total_e3,
-                       "total": total_gee, "massa": massa_total},
+            "totais": {"escopo1": convert_co2e(total_e1, "t"),
+                       "escopo2": convert_co2e(total_e2, "t"),
+                       "escopo3": convert_co2e(total_e3, "t"),
+                       "total": convert_co2e(total_gee, "t"),
+                       "massa": massa_total},
         }
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            if OPENPYXL_AVAILABLE:
-                excel_bytes = self._gerar_excel_inventario(inv_data, empresa, periodo)
-                st.download_button("📊 Excel (XLSX)", data=excel_bytes,
-                                   file_name=f"Inventario_GEE_{empresa.replace(' ','_')}_{ano}.xlsx",
-                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                   use_container_width=True)
-            else:
-                st.button("📊 Excel (instale openpyxl)", disabled=True, use_container_width=True)
-        with c2:
-            if REPORTLAB_AVAILABLE:
-                pdf_bytes = self._gerar_pdf_inventario(inv_data, empresa, periodo)
-                st.download_button("📄 PDF Inventário", data=pdf_bytes,
-                                   file_name=f"Inventario_GEE_{empresa.replace(' ','_')}_{ano}.pdf",
-                                   mime="application/pdf", use_container_width=True)
-            else:
-                st.button("📄 PDF (instale reportlab)", disabled=True, use_container_width=True)
-        with c3:
-            json_inv = json.dumps(inv_data, indent=2, ensure_ascii=False, default=str)
-            st.download_button("⬇️ JSON", data=json_inv,
-                               file_name=f"Inventario_GEE_{empresa.replace(' ','_')}_{ano}.json",
-                               mime="application/json", use_container_width=True)
+        # Gerar dados extras para exportação
+        inv_data["empresa"] = empresa
+        inv_data["periodo"] = periodo
+        inv_data["consolidacao"] = self._q("q_consolidacao")
+
+        cfg = get_report_config()
+        md_inv = generate_md_inventario(inv_data, cfg)
+        pdf_inv = self._gerar_pdf_inventario(inv_data, empresa, periodo) if REPORTLAB_AVAILABLE else None
+        fname = f"Inventario_GEE_{empresa.replace(' ','_')}_{ano}"
+
+        extra_dl = {}
+        if OPENPYXL_AVAILABLE:
+            excel_bytes = self._gerar_excel_inventario(inv_data, empresa, periodo)
+            extra_dl["📊 Excel (XLSX)"] = {
+                "data": excel_bytes,
+                "filename": f"{fname}.xlsx",
+                "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            }
+        json_inv = json.dumps(inv_data, indent=2, ensure_ascii=False, default=str)
+        extra_dl["⬇️ JSON"] = {
+            "data": json_inv,
+            "filename": f"{fname}.json",
+            "mime": "application/json",
+        }
+
+        render_download_bar("inventario", md_inv, pdf_inv, extra_dl, fname)
 
     # ── Geração de Excel do Inventário ──
     def _gerar_excel_inventario(self, inv_data, empresa, periodo):
@@ -980,7 +1035,12 @@ adequado de todos os consumíveis e fatores de emissão.
                                 rightIndent=15, spaceAfter=8, fontName='Helvetica-Oblique', leading=11)
 
         def _tbl(data, widths, header_color='#0F766E', alt_color='#F8FAFC'):
-            tbl = Table(data, colWidths=widths)
+            # Sanitize string cells (CO₂ → CO2 for Helvetica)
+            clean = [
+                [_pdf_safe(c) if isinstance(c, str) else c for c in row]
+                for row in data
+            ]
+            tbl = Table(clean, colWidths=widths)
             style = [
                 ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor(header_color)),
                 ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.whitesmoke),
@@ -1033,13 +1093,13 @@ adequado de todos os consumíveis e fatores de emissão.
         sum_data = [
             ['RESUMO DE EMISSÕES', '', ''],
             ['Categoria', 'tCO₂e', '% Total'],
-            ['Escopo 1 – Emissões diretas', f"{t['escopo1']:,.4f}", pct_fn(t['escopo1'])],
-            ['Escopo 2 – Energia indireta', f"{t['escopo2']:,.4f}", pct_fn(t['escopo2'])],
-            ['Escopo 3 – Cadeia de valor', f"{t['escopo3']:,.4f}", pct_fn(t['escopo3'])],
-            ['Total GEE', f"{t['total']:,.4f}", '100%'],
-            ['Escopo 1+2 (operacional)', f"{t['escopo1']+t['escopo2']:,.4f}", pct_fn(t['escopo1']+t['escopo2'])],
-            ['Intensidade', f"{t['total']/t['massa']:.6f}" if t['massa']>0 else '—', 'tCO₂e/t'],
-            ['Massa produzida', f"{t['massa']:,.1f}", 't'],
+            ['Escopo 1 – Emissões diretas', _fmt_num(t['escopo1'], 4), pct_fn(t['escopo1'])],
+            ['Escopo 2 – Energia indireta', _fmt_num(t['escopo2'], 4), pct_fn(t['escopo2'])],
+            ['Escopo 3 – Cadeia de valor', _fmt_num(t['escopo3'], 4), pct_fn(t['escopo3'])],
+            ['Total GEE', _fmt_num(t['total'], 4), '100%'],
+            ['Escopo 1+2 (operacional)', _fmt_num(t['escopo1']+t['escopo2'], 4), pct_fn(t['escopo1']+t['escopo2'])],
+            ['Intensidade', _fmt_num(t['total']/t['massa'], 6) if t['massa']>0 else '—', 'tCO₂e/t'],
+            ['Massa produzida', _fmt_num(t['massa'], 1), 't'],
         ]
         tbl_s = _tbl(sum_data, [7*cm, 5*cm, 4.5*cm])
         tbl_s.setStyle(TableStyle([
@@ -1088,8 +1148,8 @@ adequado de todos os consumíveis e fatores de emissão.
 
             if fontes:
                 total_scope = sum(f["Emissão (tCO₂e)"] for f in fontes)
-                story.append(Paragraph(f"<b>Total Escopo {scope_n}: {total_scope:,.4f} tCO₂e "
-                                        f"({len(fontes)} fontes)</b>", s_body))
+                story.append(Paragraph(_pdf_safe(f"<b>Total Escopo {scope_n}: {_fmt_num(total_scope, 4)} tCO₂e "
+                                        f"({len(fontes)} fontes)</b>"), s_body))
                 story.append(Spacer(1, 0.2*cm))
 
                 # Tabela de fontes
@@ -1100,12 +1160,12 @@ adequado de todos os consumíveis e fatores de emissão.
                         f["Unidade"],
                         Paragraph(f["Fonte de Emissão"][:30], s_body),
                         f.get("Gás", "CO₂e"),
-                        f"{f['Fator de Emissão']:.4f}",
-                        f"{f['Consumo Específico']:.4f}",
-                        f"{f['Massa Output (t)']:.1f}",
-                        f"{f['Emissão (tCO₂e)']:.4f}",
+                        _fmt_num(f['Fator de Emissão'], 4),
+                        _fmt_num(f['Consumo Específico'], 4),
+                        _fmt_num(f['Massa Output (t)'], 1),
+                        _fmt_num(f['Emissão (tCO₂e)'], 4),
                     ])
-                rows_tbl.append(['TOTAL', '', '', '', '', '', f"{total_scope:,.4f}"])
+                rows_tbl.append(['TOTAL', '', '', '', '', '', _fmt_num(total_scope, 4)])
                 tbl_f = _tbl(rows_tbl, [2.2*cm, 4*cm, 1.5*cm, 2*cm, 2*cm, 2*cm, 2.8*cm], scope_clr)
                 tbl_f.setStyle(TableStyle([
                     ('FONTNAME', (0, len(rows_tbl)-1), (-1, len(rows_tbl)-1), 'Helvetica-Bold'),
@@ -1129,18 +1189,18 @@ adequado de todos os consumíveis e fatores de emissão.
             u_rows.append([
                 u["ID"], Paragraph(str(u["Nome"])[:22], s_body),
                 str(u["Localização"])[:12],
-                f"{u['Escopo 1 (tCO₂e)']:.2f}",
-                f"{u['Escopo 2 (tCO₂e)']:.2f}",
-                f"{u['Escopo 3 (tCO₂e)']:.2f}",
-                f"{u['Total (tCO₂e)']:.2f}",
-                f"{u['Intensidade (tCO₂e/t)']:.4f}",
+                _fmt_num(u['Escopo 1 (tCO₂e)'], 2),
+                _fmt_num(u['Escopo 2 (tCO₂e)'], 2),
+                _fmt_num(u['Escopo 3 (tCO₂e)'], 2),
+                _fmt_num(u['Total (tCO₂e)'], 2),
+                _fmt_num(u['Intensidade (tCO₂e/t)'], 4),
             ])
         tbl_u = _tbl(u_rows, [2*cm, 3.2*cm, 2*cm, 2*cm, 2*cm, 2*cm, 2*cm, 2.3*cm], '#334155')
         tbl_u.setStyle(TableStyle([('ALIGN', (3, 1), (-1, -1), 'RIGHT')]))
         story.append(tbl_u)
-        story.append(Paragraph(
+        story.append(Paragraph(_pdf_safe(
             f"<i>Top {len(sorted_units)} unidades por emissão total (tCO₂e). "
-            f"Total de unidades: {len(inv_data['resumo_unidades'])}.</i>", s_note))
+            f"Total de unidades: {len(inv_data['resumo_unidades'])}.</i>"), s_note))
 
         # ═══ METODOLOGIA ═══
         story.append(Spacer(1, 0.8*cm))
@@ -1150,7 +1210,7 @@ adequado de todos os consumíveis e fatores de emissão.
             "GHG Protocol – Corporate Value Chain (Scope 3) Accounting and Reporting Standard",
             "ISO 14064-1:2018 – Quantificação e reporte de emissões e remoções de GEE",
             f"Abordagem de consolidação: {self._q('q_consolidacao')}",
-            "Gases incluídos: CO₂, CH₄, N₂O e outros (expressos em CO₂ equivalente – GWP AR5/AR6)",
+            _pdf_safe("Gases incluídos: CO₂, CH₄, N₂O e outros (expressos em CO₂ equivalente – GWP AR5/AR6)"),
             "Fatores de emissão: conforme bases IPCC, DEFRA, EPA, Programa Brasileiro GHG Protocol",
             f"Período: {periodo}",
         ]
@@ -1220,6 +1280,13 @@ adequado de todos os consumíveis e fatores de emissão.
         high_int = [u for u in unidades if u.IntensidadeEmissao > intensidade_media * 2]
         low_int = [u for u in unidades if 0 < u.IntensidadeEmissao < intensidade_media * 0.5]
 
+        # ── Unidades de exibição ──
+        _mu = _norm_unit(st.session_state.get("mass_unit", "t"))
+        co2e_lbl = co2e_label(_mu)
+        int_lbl = co2e_intensity_label(_mu)
+        c2e = lambda v: convert_co2e(v, _mu)
+        c2i = lambda v: convert_co2e(v, "t")  # intensidade: sempre ÷1000
+
         # ── 1. GOVERNANÇA ──
         with st.expander("🏛️ 1. Governança (IFRS S2 §5-12)", expanded=True):
             if has_q and self._q("q_gov_orgao"):
@@ -1250,7 +1317,7 @@ adequado de todos os consumíveis e fatores de emissão.
                 riscos.append({
                     "tipo": "Transição – Regulatório",
                     "descricao": f"Taxação de carbono: {len(unidades_tf)} unidade(s) sob CBAM e {len(unidades_tl)} sob taxação local.",
-                    "exposicao": f"{em_tf + em_tl:,.2f} tCO₂e ({pct_taxada:.1f}%)",
+                    "exposicao": f"{c2e(em_tf + em_tl):,.2f} {co2e_lbl} ({pct_taxada:.1f}%)",
                     "horizonte": self._q("q_est_horizonte_curto") or "Curto prazo",
                 })
             if unidades:
@@ -1261,14 +1328,14 @@ adequado de todos os consumíveis e fatores de emissão.
                     riscos.append({
                         "tipo": "Transição – Concentração",
                         "descricao": f"Unidade {top1.ID_ELO} concentra {top1_pct:.1f}% das emissões totais.",
-                        "exposicao": f"{top1.IntensidadeEmissao * top1.MassaOutput:,.2f} tCO₂e",
+                        "exposicao": f"{c2e(top1.IntensidadeEmissao * top1.MassaOutput):,.2f} {co2e_lbl}",
                         "horizonte": self._q("q_est_horizonte_medio") or "Médio prazo",
                     })
             if high_int:
                 riscos.append({
                     "tipo": "Transição – Tecnológico",
-                    "descricao": f"{len(high_int)} unidade(s) com intensidade >2× a média ({intensidade_media:.4f} tCO₂e/t).",
-                    "exposicao": f"{sum(u.IntensidadeEmissao * u.MassaOutput for u in high_int):,.2f} tCO₂e",
+                    "descricao": f"{len(high_int)} unidade(s) com intensidade >2× a média ({c2i(intensidade_media):.4f} {int_lbl}).",
+                    "exposicao": f"{c2e(sum(u.IntensidadeEmissao * u.MassaOutput for u in high_int)):,.2f} {co2e_lbl}",
                     "horizonte": self._q("q_est_horizonte_medio") or "Médio prazo",
                 })
 
@@ -1292,7 +1359,7 @@ adequado de todos os consumíveis e fatores de emissão.
                 red_pot = sum(u.IntensidadeEmissao * u.MassaOutput for u in high_int) if high_int else 0
                 oportunidades.append({
                     "tipo": "Eficiência de Recursos",
-                    "descricao": f"{len(low_int)} unidade(s) benchmark (<50% média). Potencial de replicação para reduzir {red_pot:,.2f} tCO₂e.",
+                    "descricao": f"{len(low_int)} unidade(s) benchmark (<50% média). Potencial de replicação para reduzir {c2e(red_pot):,.2f} {co2e_lbl}.",
                 })
             untaxed = [u for u in unidades if not u.TaxacaoFronteira and not u.TaxacaoLocal]
             if untaxed and (unidades_tf or unidades_tl):
@@ -1322,13 +1389,13 @@ adequado de todos os consumíveis e fatores de emissão.
 
             st.markdown("##### 💰 Simulação de Custo de Carbono")
             default_price = self._q("q_add_preco_valor") if self._q("q_add_preco_interno") else 50
-            preco_co2 = st.slider("Preço do carbono (€/tCO₂e)", 0, 200, max(0, default_price), 5, key="preco_co2_v3")
+            preco_co2 = st.slider(f"Preço do carbono (€/{co2e_lbl})", 0, 200, max(0, default_price), 5, key="preco_co2_v3")
             moeda = self._q("q_moeda").split(" ")[0] if has_q else "EUR"
             simbolo = {"BRL": "R$", "USD": "$", "EUR": "€", "GBP": "£"}.get(moeda, "€")
             c1, c2, c3 = st.columns(3)
-            c1.metric(f"Custo Total", f"{simbolo} {total_ghg * preco_co2:,.0f}")
-            c2.metric(f"Custo CBAM/Fronteira", f"{simbolo} {em_tf * preco_co2:,.0f}")
-            c3.metric(f"Custo Local", f"{simbolo} {em_tl * preco_co2:,.0f}")
+            c1.metric(f"Custo Total", f"{simbolo} {c2e(total_ghg) * preco_co2:,.0f}")
+            c2.metric(f"Custo CBAM/Fronteira", f"{simbolo} {c2e(em_tf) * preco_co2:,.0f}")
+            c3.metric(f"Custo Local", f"{simbolo} {c2e(em_tl) * preco_co2:,.0f}")
 
             if self._q("q_est_cenarios"):
                 st.markdown(f"**Cenários climáticos utilizados (§22):** {self._q('q_est_cenarios_detalhes')}")
@@ -1357,11 +1424,11 @@ adequado de todos os consumíveis e fatores de emissão.
             st.markdown(f"""
 | Métrica | Valor | Unidade | Padrão |
 |---------|------:|---------|--------|
-| **Escopo 1** – Emissões diretas | {esc1:,.2f} | tCO₂e | GHG Protocol |
-| **Escopo 2** – Energia (localização) | {esc2:,.2f} | tCO₂e | GHG Protocol |
-| **Escopo 3** – Cadeia de valor | {esc3:,.2f} | tCO₂e | GHG Protocol |
-| **Total GEE** | **{total_ghg:,.2f}** | **tCO₂e** | |
-| Intensidade de emissão | {intensidade_media:,.4f} | tCO₂e/t produto | IFRS S2 §29(d) |
+| **Escopo 1** – Emissões diretas | {c2e(esc1):,.2f} | {co2e_lbl} | GHG Protocol |
+| **Escopo 2** – Energia (localização) | {c2e(esc2):,.2f} | {co2e_lbl} | GHG Protocol |
+| **Escopo 3** – Cadeia de valor | {c2e(esc3):,.2f} | {co2e_lbl} | GHG Protocol |
+| **Total GEE** | **{c2e(total_ghg):,.2f}** | **{co2e_lbl}** | |
+| Intensidade de emissão | {c2i(intensidade_media):,.4f} | {int_lbl} produto | IFRS S2 §29(d) |
 | Massa total produzida | {massa_total:,.1f} | t | |
 | Abordagem de consolidação | {self._q('q_consolidacao')} | | IFRS S1 §B25 |
 """)
@@ -1371,8 +1438,8 @@ adequado de todos os consumíveis e fatores de emissão.
 | Métrica | Valor | Ref. |
 |---------|------:|------|
 | GEE sob regulação de preço | {pct_taxada:.1f}% | §29(b) |
-| Emissões sob CBAM/fronteira | {em_tf:,.2f} tCO₂e | §29(b) |
-| Emissões sob taxação local | {em_tl:,.2f} tCO₂e | §29(b) |
+| Emissões sob CBAM/fronteira | {c2e(em_tf):,.2f} {co2e_lbl} | §29(b) |
+| Emissões sob taxação local | {c2e(em_tl):,.2f} {co2e_lbl} | §29(b) |
 | Unidades de alto risco | {len(high_int)} | §29(f) |
 """)
 
@@ -1381,15 +1448,15 @@ adequado de todos os consumíveis e fatores de emissão.
                 orientation="v",
                 measure=["relative", "relative", "relative", "total"],
                 x=["Escopo 1", "Escopo 2", "Escopo 3", "Total GEE"],
-                y=[esc1, esc2, esc3, 0],
+                y=[c2e(esc1), c2e(esc2), c2e(esc3), 0],
                 connector={"line": {"color": _COLORS["muted"]}},
                 decreasing={"marker": {"color": _COLORS["scope3"]}},
                 increasing={"marker": {"color": _COLORS["scope1"]}},
                 totals={"marker": {"color": _COLORS["primary"]}},
-                text=[f"{esc1:,.1f}", f"{esc2:,.1f}", f"{esc3:,.1f}", f"{total_ghg:,.1f}"],
+                text=[f"{c2e(esc1):,.1f}", f"{c2e(esc2):,.1f}", f"{c2e(esc3):,.1f}", f"{c2e(total_ghg):,.1f}"],
                 textposition="outside",
             ))
-            fig_wf.update_layout(yaxis_title="tCO₂e", height=320, margin=dict(l=20, r=20, t=30, b=20), plot_bgcolor="white")
+            fig_wf.update_layout(yaxis_title=co2e_lbl, height=320, margin=dict(l=20, r=20, t=30, b=20), plot_bgcolor="white")
             st.plotly_chart(fig_wf, use_container_width=True)
 
             # Metas
@@ -1407,8 +1474,8 @@ adequado de todos os consumíveis e fatores de emissão.
                 c4.metric("Redução", f"{meta_red}%")
 
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Emissão Atual", f"{total_ghg:,.2f} tCO₂e")
-                c2.metric("Emissão-Meta", f"{emissao_meta:,.2f} tCO₂e")
+                c1.metric("Emissão Atual", f"{c2e(total_ghg):,.2f} {co2e_lbl}")
+                c2.metric("Emissão-Meta", f"{c2e(emissao_meta):,.2f} {co2e_lbl}")
                 c3.metric("Validação SBTi", "✅ Sim" if self._q("q_meta_sbti") else "❌ Não")
 
                 if self._q("q_meta_net_zero_ano"):
@@ -1419,15 +1486,15 @@ adequado de todos os consumíveis e fatores de emissão.
                 # Trajetória
                 anos = list(range(ano_base, int(ano_alvo) + 1))
                 n = len(anos)
-                traj = [total_ghg - (total_ghg - emissao_meta) * i / (n - 1) for i in range(n)] if n > 1 else [total_ghg]
+                traj = [c2e(total_ghg) - (c2e(total_ghg) - c2e(emissao_meta)) * i / (n - 1) for i in range(n)] if n > 1 else [c2e(total_ghg)]
                 fig_t = go.Figure()
                 fig_t.add_trace(go.Scatter(x=anos, y=traj, mode="lines+markers", name="Trajetória",
                                            line=dict(color=_COLORS["primary"], width=3), marker=dict(size=7)))
-                fig_t.add_trace(go.Scatter(x=[ano_base], y=[total_ghg], mode="markers", name="Atual",
+                fig_t.add_trace(go.Scatter(x=[ano_base], y=[c2e(total_ghg)], mode="markers", name="Atual",
                                            marker=dict(color=_COLORS["danger"], size=14, symbol="diamond")))
-                fig_t.add_hline(y=emissao_meta, line_dash="dash", line_color=_COLORS["success"],
-                                annotation_text=f"Meta {ano_alvo}: {emissao_meta:,.0f}")
-                fig_t.update_layout(yaxis_title="tCO₂e", xaxis_title="Ano", height=320,
+                fig_t.add_hline(y=c2e(emissao_meta), line_dash="dash", line_color=_COLORS["success"],
+                                annotation_text=f"Meta {ano_alvo}: {c2e(emissao_meta):,.0f}")
+                fig_t.update_layout(yaxis_title=co2e_lbl, xaxis_title="Ano", height=320,
                                     margin=dict(l=20, r=20, t=30, b=30), plot_bgcolor="white",
                                     legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"))
                 st.plotly_chart(fig_t, use_container_width=True)
@@ -1495,23 +1562,27 @@ adequado de todos os consumíveis e fatores de emissão.
             em_tf, em_tl, pct_taxada, riscos, oportunidades, unidades, empresa
         )
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.download_button("⬇️ JSON", data=json.dumps(reporte_data, indent=2, ensure_ascii=False, default=str),
-                               file_name=f"IFRS_S2_{empresa.replace(' ','_')}_{ano_reporte}.json",
-                               mime="application/json", use_container_width=True)
-        with c2:
-            df_exp = pd.DataFrame(reporte_data.get("detalhamento_unidades", []))
-            st.download_button("⬇️ CSV", data=df_exp.to_csv(index=False) if not df_exp.empty else "",
-                               file_name=f"unidades_{ano_reporte}.csv", mime="text/csv", use_container_width=True)
-        with c3:
-            if REPORTLAB_AVAILABLE:
-                pdf = self._gerar_pdf_ifrs_s2(reporte_data, riscos, oportunidades, high_int, unidades)
-                st.download_button("📄 PDF Executivo", data=pdf,
-                                   file_name=f"IFRS_S2_{empresa.replace(' ','_')}_{ano_reporte}.pdf",
-                                   mime="application/pdf", use_container_width=True)
-            else:
-                st.button("📄 PDF (instale reportlab)", disabled=True, use_container_width=True)
+        cfg = get_report_config()
+        md_ifrs = generate_md_ifrs(reporte_data, cfg)
+        pdf_ifrs = self._gerar_pdf_ifrs_s2(reporte_data, riscos, oportunidades, high_int, unidades) if REPORTLAB_AVAILABLE else None
+        fname = f"IFRS_S2_{empresa.replace(' ','_')}_{ano_reporte}"
+
+        extra_dl = {
+            "⬇️ JSON": {
+                "data": json.dumps(reporte_data, indent=2, ensure_ascii=False, default=str),
+                "filename": f"{fname}.json",
+                "mime": "application/json",
+            },
+        }
+        df_exp = pd.DataFrame(reporte_data.get("detalhamento_unidades", []))
+        if not df_exp.empty:
+            extra_dl["⬇️ CSV"] = {
+                "data": df_exp.to_csv(index=False),
+                "filename": f"unidades_{ano_reporte}.csv",
+                "mime": "text/csv",
+            }
+
+        render_download_bar("ifrs", md_ifrs, pdf_ifrs, extra_dl, fname)
 
     # ── Construir dicionário do reporte ──
     def _build_reporte_data(self, ano, e1, e2, e3, total, massa, intens, em_tf, em_tl, pct_t,
@@ -1609,7 +1680,12 @@ adequado de todos os consumíveis e fatores de emissão.
         s_bullet = ParagraphStyle('Bul', parent=s_body, leftIndent=15, bulletIndent=5)
 
         def _tbl(data, widths, header_color='#0F766E', alt_color='#F8FAFC'):
-            t = Table(data, colWidths=widths)
+            # Sanitize string cells (CO₂ → CO2 for Helvetica)
+            clean = [
+                [_pdf_safe(c) if isinstance(c, str) else c for c in row]
+                for row in data
+            ]
+            t = Table(clean, colWidths=widths)
             style = [
                 ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor(header_color)),
                 ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.whitesmoke),
@@ -1654,12 +1730,12 @@ adequado de todos os consumíveis e fatores de emissão.
         sum_data = [
             ['SUMÁRIO EXECUTIVO DE EMISSÕES', '', ''],
             ['Métrica', 'Valor', 'Unidade'],
-            ['Escopo 1 – Diretas', f"{ghg['escopo_1_tco2e']:,.2f}", 'tCO₂e'],
-            ['Escopo 2 – Energia', f"{ghg['escopo_2_tco2e']:,.2f}", 'tCO₂e'],
-            ['Escopo 3 – Cadeia de Valor', f"{ghg['escopo_3_tco2e']:,.2f}", 'tCO₂e'],
-            ['Total GEE', f"{ghg['total_tco2e']:,.2f}", 'tCO₂e'],
-            ['Intensidade', f"{ghg['intensidade_media']:,.4f}", 'tCO₂e/t produto'],
-            ['Massa Produzida', f"{ghg['massa_total_t']:,.1f}", 't'],
+            ['Escopo 1 – Diretas', _fmt_num(ghg['escopo_1_tco2e'], 2), 'tCO₂e'],
+            ['Escopo 2 – Energia', _fmt_num(ghg['escopo_2_tco2e'], 2), 'tCO₂e'],
+            ['Escopo 3 – Cadeia de Valor', _fmt_num(ghg['escopo_3_tco2e'], 2), 'tCO₂e'],
+            ['Total GEE', _fmt_num(ghg['total_tco2e'], 2), 'tCO₂e'],
+            ['Intensidade', _fmt_num(ghg['intensidade_media'], 4), 'tCO₂e/t produto'],
+            ['Massa Produzida', _fmt_num(ghg['massa_total_t'], 1), 't'],
             ['GEE sob regulação', f"{rd['exposicao_regulatoria']['pct_sob_regulacao']:.1f}%", ''],
         ]
         t = _tbl(sum_data, [6*cm, 5*cm, 5*cm])
@@ -1754,9 +1830,9 @@ adequado de todos os consumíveis e fatores de emissão.
                 story.append(Paragraph(f"• {item}", s_bullet))
         else:
             exp = rd['exposicao_regulatoria']
-            story.append(Paragraph(
-                f"A análise identifica {exp['emissao_cbam_tco2e']:,.2f} tCO₂e sob taxação de fronteira e "
-                f"{exp['emissao_local_tco2e']:,.2f} tCO₂e sob taxação local ({exp['pct_sob_regulacao']:.1f}%).", s_body))
+            story.append(Paragraph(_pdf_safe(
+                f"A análise identifica {_fmt_num(exp['emissao_cbam_tco2e'], 2)} tCO₂e sob taxação de fronteira e "
+                f"{_fmt_num(exp['emissao_local_tco2e'], 2)} tCO₂e sob taxação local ({exp['pct_sob_regulacao']:.1f}%)."), s_body))
 
         if q("q_est_cenarios"):
             story.append(Spacer(1, 0.2*cm))
@@ -1784,10 +1860,10 @@ adequado de todos os consumíveis e fatores de emissão.
             "Intensidade de emissão >2× a média do portfólio",
             "Concentração >40% das emissões em uma unidade",
             "Exposição a taxação de carbono (CBAM ou local)",
-            f"Emissões absolutas >{ghg['total_tco2e'] / n_units * 2:,.0f} tCO₂e/unidade",
+            f"Emissões absolutas >{_fmt_num(ghg['total_tco2e'] / n_units * 2, 0)} tCO₂e/unidade",
         ]
         for c in criteria:
-            story.append(Paragraph(f"• {c}", s_bullet))
+            story.append(Paragraph(_pdf_safe(f"• {c}"), s_bullet))
         story.append(Paragraph(
             f"<i>Unidades de alto risco identificadas: {len(high_intensity)}</i>", s_note))
         story.append(Spacer(1, 0.3*cm))
@@ -1798,12 +1874,12 @@ adequado de todos os consumíveis e fatores de emissão.
 
         ghg_tbl = [
             ['Métrica', 'Valor', 'Unidade', 'Padrão'],
-            ['Escopo 1 – Diretas', f"{ghg['escopo_1_tco2e']:,.2f}", 'tCO₂e', 'GHG Protocol'],
-            ['Escopo 2 – Energia (localização)', f"{ghg['escopo_2_tco2e']:,.2f}", 'tCO₂e', 'GHG Protocol'],
-            ['Escopo 3 – Cadeia de Valor', f"{ghg['escopo_3_tco2e']:,.2f}", 'tCO₂e', 'GHG Protocol'],
-            ['Total GEE', f"{ghg['total_tco2e']:,.2f}", 'tCO₂e', ''],
-            ['Intensidade', f"{ghg['intensidade_media']:,.4f}", 'tCO₂e/t', 'IFRS S2 §29(d)'],
-            ['Massa produzida', f"{ghg['massa_total_t']:,.1f}", 't', ''],
+            ['Escopo 1 – Diretas', _fmt_num(ghg['escopo_1_tco2e'], 2), 'tCO₂e', 'GHG Protocol'],
+            ['Escopo 2 – Energia (localização)', _fmt_num(ghg['escopo_2_tco2e'], 2), 'tCO₂e', 'GHG Protocol'],
+            ['Escopo 3 – Cadeia de Valor', _fmt_num(ghg['escopo_3_tco2e'], 2), 'tCO₂e', 'GHG Protocol'],
+            ['Total GEE', _fmt_num(ghg['total_tco2e'], 2), 'tCO₂e', ''],
+            ['Intensidade', _fmt_num(ghg['intensidade_media'], 4), 'tCO₂e/t', 'IFRS S2 §29(d)'],
+            ['Massa produzida', _fmt_num(ghg['massa_total_t'], 1), 't', ''],
         ]
         t = _tbl(ghg_tbl, [5.5*cm, 3.5*cm, 3*cm, 4.5*cm])
         t.setStyle(TableStyle([
@@ -1819,8 +1895,8 @@ adequado de todos os consumíveis e fatores de emissão.
         exp_tbl = [
             ['Métrica', 'Valor', 'Ref.'],
             ['GEE sob regulação de preço', f"{exp['pct_sob_regulacao']:.1f}%", '§29(b)'],
-            ['Emissões CBAM/fronteira', f"{exp['emissao_cbam_tco2e']:,.2f} tCO₂e", '§29(b)'],
-            ['Emissões taxação local', f"{exp['emissao_local_tco2e']:,.2f} tCO₂e", '§29(b)'],
+            ['Emissões CBAM/fronteira', f"{_fmt_num(exp['emissao_cbam_tco2e'], 2)} tCO₂e", '§29(b)'],
+            ['Emissões taxação local', f"{_fmt_num(exp['emissao_local_tco2e'], 2)} tCO₂e", '§29(b)'],
             ['Unidades alto risco', str(len(high_intensity)), '§29(f)'],
         ]
         story.append(_tbl(exp_tbl, [7*cm, 5.5*cm, 4*cm], '#0284C7', '#F0F9FF'))
@@ -1890,7 +1966,7 @@ adequado de todos os consumíveis e fatores de emissão.
         if q("q_add_offsets"):
             story.append(Paragraph(f"<b>Compensações de carbono:</b> {q('q_add_offsets_desc') or 'Sim'}", s_body))
         if q("q_add_preco_interno"):
-            story.append(Paragraph(f"<b>Preço interno de carbono:</b> €{q('q_add_preco_valor')}/tCO₂e", s_body))
+            story.append(Paragraph(_pdf_safe(f"<b>Preço interno de carbono:</b> €{q('q_add_preco_valor')}/tCO₂e"), s_body))
 
         story.append(PageBreak())
 
@@ -1904,16 +1980,16 @@ adequado de todos os consumíveis e fatores de emissão.
             if u.TaxacaoLocal: tax.append("Local")
             u_data.append([
                 u.ID_ELO, Paragraph(u.Nome[:25], s_body), u.Localizacao[:15] if u.Localizacao else "—",
-                f"{u.IntensidadeEmissaoEscopo1 * u.MassaOutput:.1f}",
-                f"{u.IntensidadeEmissaoEscopo2 * u.MassaOutput:.1f}",
-                f"{u.IntensidadeEmissaoEscopo3 * u.MassaOutput:.1f}",
-                f"{u.IntensidadeEmissao * u.MassaOutput:.1f}",
+                _fmt_num(u.IntensidadeEmissaoEscopo1 * u.MassaOutput, 1),
+                _fmt_num(u.IntensidadeEmissaoEscopo2 * u.MassaOutput, 1),
+                _fmt_num(u.IntensidadeEmissaoEscopo3 * u.MassaOutput, 1),
+                _fmt_num(u.IntensidadeEmissao * u.MassaOutput, 1),
                 ", ".join(tax) or "—",
             ])
         story.append(_tbl(u_data, [1.8*cm, 3.2*cm, 2*cm, 2*cm, 2*cm, 2*cm, 2*cm, 1.5*cm], '#334155'))
-        story.append(Paragraph(
+        story.append(Paragraph(_pdf_safe(
             f"<i>Listagem das {len(sorted_units)} maiores unidades por emissão total. "
-            f"Valores em tCO₂e. Total de unidades no modelo: {len(unidades)}.</i>", s_note))
+            f"Valores em tCO₂e. Total de unidades no modelo: {len(unidades)}.</i>"), s_note))
 
         # ═══ DISCLAIMER ═══
         story.append(Spacer(1, 1*cm))
@@ -1978,6 +2054,13 @@ adequado de todos os consumíveis e fatores de emissão.
         anos = ctx.anos_selecionados
         st.caption(f"Comparando: **{format_periodo(anos)}**")
 
+        # ── Unidades de exibição ──
+        _mu = _norm_unit(st.session_state.get("mass_unit", "t"))
+        co2e_lbl = co2e_label(_mu)
+        int_lbl = co2e_intensity_label(_mu)
+        c2e = lambda v: convert_co2e(v, _mu)
+        c2i = lambda v: convert_co2e(v, "t")
+
         # --- Resumo geral ---
         resumo = resumo_comparativo(unidades, anos)
         if not resumo.get("dados"):
@@ -1989,7 +2072,7 @@ adequado de todos os consumíveis e fatores de emissão.
         for i, ano in enumerate(sorted(anos)):
             dados_ano = resumo["dados"].get(ano, {})
             with cols[i]:
-                st.metric(f"Ano {ano}", f"{dados_ano.get('emissao_total', 0):,.4f} tCO₂e")
+                st.metric(f"Ano {ano}", f"{c2e(dados_ano.get('emissao_total', 0)):,.4f} {co2e_lbl}")
                 st.caption(
                     f"Unidades: {dados_ano.get('total_unidades', 0)} · "
                     f"Massa: {dados_ano.get('massa_total', 0):,.1f} t"
@@ -2004,7 +2087,7 @@ adequado de todos os consumíveis e fatores de emissão.
                 arrow = "🔺" if delta_val > 0 else "🔻" if delta_val < 0 else "➖"
                 st.markdown(
                     f"**{d['de']} → {d['para']}**: {arrow} "
-                    f"Δ = {delta_val:+,.4f} tCO₂e ({pct_val:+.2f}%)"
+                    f"Δ = {c2e(delta_val):+,.4f} {co2e_lbl} ({pct_val:+.2f}%)"
                 )
 
         st.markdown("---")
@@ -2020,7 +2103,7 @@ adequado de todos os consumíveis e fatores de emissão.
                 "Pegada",
             ],
             format_func=lambda x: {
-                "IntensidadeEmissao": "Intensidade Total (tCO₂/t)",
+                "IntensidadeEmissao": f"Intensidade Total ({int_lbl})",
                 "IntensidadeEscopo1": "Intensidade Escopo 1",
                 "IntensidadeEscopo2": "Intensidade Escopo 2",
                 "IntensidadeEscopo3": "Intensidade Escopo 3",
@@ -2049,7 +2132,7 @@ adequado de todos os consumíveis e fatores de emissão.
                     ))
                 fig_bar.update_layout(
                     barmode="group",
-                    yaxis_title="tCO₂/t",
+                    yaxis_title=int_lbl,
                     height=400,
                     margin=dict(l=20, r=20, t=30, b=40),
                     plot_bgcolor="white",
@@ -2076,7 +2159,7 @@ adequado de todos os consumíveis e fatores de emissão.
                     ))
                 fig_line.update_layout(
                     xaxis_title="Ano",
-                    yaxis_title="tCO₂/t",
+                    yaxis_title=int_lbl,
                     height=400,
                     margin=dict(l=20, r=20, t=30, b=40),
                     plot_bgcolor="white",
@@ -2103,7 +2186,7 @@ adequado de todos os consumíveis e fatores de emissão.
                     ))
                 fig_esc.update_layout(
                     barmode="group",
-                    yaxis_title="tCO₂e",
+                    yaxis_title=co2e_lbl,
                     height=400,
                     margin=dict(l=20, r=20, t=30, b=40),
                     plot_bgcolor="white",
@@ -2144,6 +2227,30 @@ adequado de todos os consumíveis e fatores de emissão.
                     use_container_width=True,
                 )
 
+        # ── Download bar ──
+        comp_data = {
+            "anos": list(anos),
+            "resumo": resumo.get("dados", {}),
+            "deltas": resumo.get("deltas", []),
+        }
+        # Build pivot MD representation
+        if not pivot_df.empty:
+            lines = []
+            cols = ["Unidade"] + [str(c) for c in pivot_df.columns]
+            lines.append("| " + " | ".join(cols) + " |")
+            lines.append("| " + " | ".join([":-"] + ["-:"] * (len(cols) - 1)) + " |")
+            for idx, row in pivot_df.iterrows():
+                vals = [str(idx)] + [f"{v:.4f}" for v in row]
+                lines.append("| " + " | ".join(vals) + " |")
+            comp_data["pivot_md"] = "\n".join(lines) + "\n"
+        else:
+            comp_data["pivot_md"] = ""
+
+        cfg = get_report_config()
+        md_comp = generate_md_comparativo(comp_data, cfg)
+        pdf_comp = generate_pdf_comparativo(comp_data, cfg)
+        render_download_bar("comparativo", md_comp, pdf_comp, filename_base="Comparativo_MultiAno")
+
     # ════════════════════════════════════════════════════════════════
     #  PAINEL GERAL (mantido)
     # ════════════════════════════════════════════════════════════════
@@ -2160,10 +2267,17 @@ adequado de todos os consumíveis e fatores de emissão.
         unidades_taxadas = sum(1 for u in unidades if u.TaxacaoFronteira or u.TaxacaoLocal)
         pct_taxadas = (unidades_taxadas / total_unidades * 100) if total_unidades else 0
 
+        # ── Unit helpers (values are in kgCO₂e internally) ──
+        _mu = get_default_mass_unit_from_session(st.session_state)
+        co2e_lbl = co2e_label(_mu)
+        int_lbl = co2e_intensity_label(_mu)
+        c2e = lambda v: convert_co2e(v, _mu)
+        c2i = lambda v: convert_co2e(v, "t")  # intensity always ÷1000
+
         st.markdown("### Indicadores-Chave")
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("Emissão Total", f"{emissao_total:,.2f} tCO₂e")
-        c2.metric("Intensidade Média", f"{intensidade_media:,.4f} tCO₂e/t")
+        c1.metric("Emissão Total", f"{c2e(emissao_total):,.2f} {co2e_lbl}")
+        c2.metric("Intensidade Média", f"{c2i(intensidade_media):,.4f} {int_lbl}")
         c3.metric("Massa Produzida", f"{massa_total_output:,.1f} t")
         c4.metric("Unidades", total_unidades)
         c5.metric("Taxadas", f"{unidades_taxadas} ({pct_taxadas:.0f}%)")
@@ -2173,22 +2287,22 @@ adequado de todos os consumíveis e fatores de emissão.
         col_chart, col_table = st.columns([2, 1])
         with col_chart:
             fig = go.Figure(go.Bar(
-                x=["Escopo 1", "Escopo 2", "Escopo 3"], y=[esc1, esc2, esc3],
+                x=["Escopo 1", "Escopo 2", "Escopo 3"], y=[c2e(esc1), c2e(esc2), c2e(esc3)],
                 marker_color=[_COLORS["scope1"], _COLORS["scope2"], _COLORS["scope3"]],
-                text=[f"{v:,.2f}" for v in [esc1, esc2, esc3]], textposition="outside",
+                text=[f"{c2e(v):,.2f}" for v in [esc1, esc2, esc3]], textposition="outside",
             ))
-            fig.update_layout(yaxis_title="tCO₂e", height=350, margin=dict(l=20,r=20,t=30,b=20), plot_bgcolor="white")
+            fig.update_layout(yaxis_title=co2e_lbl, height=350, margin=dict(l=20,r=20,t=30,b=20), plot_bgcolor="white")
             st.plotly_chart(fig, use_container_width=True)
         with col_table:
             total_e = esc1 + esc2 + esc3
             pct = lambda v: f"{v/total_e*100:.1f}%" if total_e > 0 else "0%"
             st.markdown(f"""
-| Escopo | tCO₂e | % |
+| Escopo | {co2e_lbl} | % |
 |--------|------:|:-:|
-| 🔴 Escopo 1 | {esc1:,.2f} | {pct(esc1)} |
-| 🟡 Escopo 2 | {esc2:,.2f} | {pct(esc2)} |
-| 🔵 Escopo 3 | {esc3:,.2f} | {pct(esc3)} |
-| **Total** | **{total_e:,.2f}** | **100%** |
+| 🔴 Escopo 1 | {c2e(esc1):,.2f} | {pct(esc1)} |
+| 🟡 Escopo 2 | {c2e(esc2):,.2f} | {pct(esc2)} |
+| 🔵 Escopo 3 | {c2e(esc3):,.2f} | {pct(esc3)} |
+| **Total** | **{c2e(total_e):,.2f}** | **100%** |
 """)
 
         st.markdown("---")
@@ -2197,11 +2311,11 @@ adequado de todos os consumíveis e fatores de emissão.
             st.markdown("#### 🏭 Top 5 Emissores")
             top5 = sorted(unidades, key=lambda x: x.IntensidadeEmissao * x.MassaOutput, reverse=True)[:5]
             fig_t = go.Figure(go.Bar(
-                y=[u.ID_ELO for u in top5], x=[u.IntensidadeEmissao*u.MassaOutput for u in top5],
+                y=[u.ID_ELO for u in top5], x=[c2e(u.IntensidadeEmissao*u.MassaOutput) for u in top5],
                 orientation="h", marker_color=_COLORS["primary"],
-                text=[f"{u.IntensidadeEmissao*u.MassaOutput:,.2f}" for u in top5], textposition="outside",
+                text=[f"{c2e(u.IntensidadeEmissao*u.MassaOutput):,.2f}" for u in top5], textposition="outside",
             ))
-            fig_t.update_layout(xaxis_title="tCO₂e", height=300, margin=dict(l=60,r=40,t=10,b=20),
+            fig_t.update_layout(xaxis_title=co2e_lbl, height=300, margin=dict(l=60,r=40,t=10,b=20),
                                yaxis=dict(autorange="reversed"), plot_bgcolor="white")
             st.plotly_chart(fig_t, use_container_width=True)
         with col_dist:
@@ -2209,7 +2323,7 @@ adequado de todos os consumíveis e fatores de emissão.
             loc_d = {}
             for u in unidades:
                 l = u.Localizacao or "Sem local"
-                loc_d[l] = loc_d.get(l, 0) + u.IntensidadeEmissao * u.MassaOutput
+                loc_d[l] = loc_d.get(l, 0) + c2e(u.IntensidadeEmissao * u.MassaOutput)
             if loc_d:
                 fig_p = go.Figure(go.Pie(labels=list(loc_d.keys()), values=list(loc_d.values()), hole=0.4,
                                          textinfo="label+percent", marker_colors=px.colors.qualitative.Set2))
@@ -2221,22 +2335,52 @@ adequado de todos os consumíveis e fatores de emissão.
         sorted_all = sorted(unidades, key=lambda x: x.IntensidadeEmissao*x.MassaOutput, reverse=True)
         fig_s = go.Figure()
         for lbl, clr, acc in [
-            ("Escopo 1", _COLORS["scope1"], lambda u: u.IntensidadeEmissaoEscopo1*u.MassaOutput),
-            ("Escopo 2", _COLORS["scope2"], lambda u: u.IntensidadeEmissaoEscopo2*u.MassaOutput),
-            ("Escopo 3", _COLORS["scope3"], lambda u: u.IntensidadeEmissaoEscopo3*u.MassaOutput),
+            ("Escopo 1", _COLORS["scope1"], lambda u: c2e(u.IntensidadeEmissaoEscopo1*u.MassaOutput)),
+            ("Escopo 2", _COLORS["scope2"], lambda u: c2e(u.IntensidadeEmissaoEscopo2*u.MassaOutput)),
+            ("Escopo 3", _COLORS["scope3"], lambda u: c2e(u.IntensidadeEmissaoEscopo3*u.MassaOutput)),
         ]:
             fig_s.add_trace(go.Bar(x=[u.ID_ELO for u in sorted_all], y=[acc(u) for u in sorted_all],
                                    name=lbl, marker_color=clr))
-        fig_s.update_layout(barmode="stack", yaxis_title="tCO₂e", height=400,
+        fig_s.update_layout(barmode="stack", yaxis_title=co2e_lbl, height=400,
                             margin=dict(l=20,r=20,t=30,b=40), plot_bgcolor="white",
                             legend=dict(orientation="h", y=1.02, x=0.5, xanchor="center"))
         st.plotly_chart(fig_s, use_container_width=True)
+
+        # ── Download bar ──
+        painel_data = {
+            "emissao_total": emissao_total,
+            "intensidade_media": intensidade_media,
+            "massa_total": massa_total_output,
+            "total_unidades": total_unidades,
+            "unidades_taxadas": unidades_taxadas,
+            "pct_taxadas": pct_taxadas,
+            "esc1": esc1, "esc2": esc2, "esc3": esc3,
+            "top5": [{"id": u.ID_ELO, "emissao": u.IntensidadeEmissao * u.MassaOutput} for u in top5],
+            "por_localizacao": loc_d,
+            "todas_unidades": [
+                {
+                    "id": u.ID_ELO,
+                    "e1": u.IntensidadeEmissaoEscopo1 * u.MassaOutput,
+                    "e2": u.IntensidadeEmissaoEscopo2 * u.MassaOutput,
+                    "e3": u.IntensidadeEmissaoEscopo3 * u.MassaOutput,
+                    "total": u.IntensidadeEmissao * u.MassaOutput,
+                }
+                for u in sorted_all
+            ],
+        }
+        cfg = get_report_config()
+        md_painel = generate_md_painel_geral(painel_data, cfg)
+        pdf_painel = generate_pdf_painel_geral(painel_data, cfg)
+        render_download_bar("painel", md_painel, pdf_painel, filename_base="Painel_Geral_Emissoes")
 
     # ════════════════════════════════════════════════════════════════
     #  DIAGRAMA SANKEY (mantido)
     # ════════════════════════════════════════════════════════════════
     def _render_sankey_diagram(self):
         st.markdown("### Diagrama Sankey – Fluxo de Emissões")
+        _mu_sk = get_default_mass_unit_from_session(st.session_state)
+        _co2e_lbl_sk = co2e_label(_mu_sk)
+        _c2e_sk = lambda v: convert_co2e(v, _mu_sk)
         dims = self._get_dimensoes_disponiveis()
         with st.expander("⚙️ Configurações do Sankey", expanded=True):
             c1, c2 = st.columns([3, 1])
@@ -2265,18 +2409,23 @@ adequado de todos os consumíveis e fatores de emissão.
         st.plotly_chart(fig, use_container_width=True)
         c1, c2, c3 = st.columns(3)
         c1.metric("Nós", len(labels)); c2.metric("Arcos", len(val))
-        c3.metric("Emissão Total", f"{sum(val):,.2f} tCO₂e")
+        c3.metric("Emissão Total", f"{_c2e_sk(sum(val)):,.2f} {_co2e_lbl_sk}")
 
     # ════════════════════════════════════════════════════════════════
     #  MATRIZ DE RISCO (mantida)
     # ════════════════════════════════════════════════════════════════
     def _render_risk_matrix(self, unidades, intensidade_media):
         if not unidades: return
+        _mu_rm = get_default_mass_unit_from_session(st.session_state)
+        _co2e_lbl_rm = co2e_label(_mu_rm)
+        _int_lbl_rm = co2e_intensity_label(_mu_rm)
+        _c2e_rm = lambda v: convert_co2e(v, _mu_rm)
+        _c2i_rm = lambda v: convert_co2e(v, "t")
         x, y, t, sz, cl = [], [], [], [], []
         for u in unidades:
             em = u.IntensidadeEmissao * u.MassaOutput
             i = u.IntensidadeEmissao
-            x.append(em); y.append(i); t.append(u.ID_ELO)
+            x.append(_c2e_rm(em)); y.append(_c2i_rm(i)); t.append(u.ID_ELO)
             sz.append(max(10, min(50, u.MassaOutput / max(1, max(un.MassaOutput for un in unidades)) * 40 + 10)))
             tx = u.TaxacaoFronteira or u.TaxacaoLocal
             if i > intensidade_media * 2 and tx: cl.append(_COLORS["danger"])
@@ -2286,12 +2435,12 @@ adequado de todos os consumíveis e fatores de emissão.
         fig = go.Figure(go.Scatter(x=x, y=y, mode="markers+text", text=t, textposition="top center",
                                     textfont=dict(size=9), marker=dict(size=sz, color=cl, opacity=0.8,
                                     line=dict(width=1, color="white")),
-                                    hovertemplate="%{text}<br>%{x:,.2f} tCO₂e<br>%{y:,.4f} tCO₂e/t<extra></extra>"))
-        fig.add_hline(y=intensidade_media, line_dash="dash", line_color=_COLORS["muted"],
-                      annotation_text=f"Média: {intensidade_media:.4f}")
-        fig.add_hline(y=intensidade_media*2, line_dash="dot", line_color=_COLORS["danger"],
+                                    hovertemplate=f"%{{text}}<br>%{{x:,.2f}} {_co2e_lbl_rm}<br>%{{y:,.4f}} {_int_lbl_rm}<extra></extra>"))
+        fig.add_hline(y=_c2i_rm(intensidade_media), line_dash="dash", line_color=_COLORS["muted"],
+                      annotation_text=f"Média: {_c2i_rm(intensidade_media):.4f}")
+        fig.add_hline(y=_c2i_rm(intensidade_media)*2, line_dash="dot", line_color=_COLORS["danger"],
                       annotation_text="Limiar 2×")
-        fig.update_layout(xaxis_title="Emissão Total (tCO₂e)", yaxis_title="Intensidade (tCO₂e/t)",
+        fig.update_layout(xaxis_title=f"Emissão Total ({_co2e_lbl_rm})", yaxis_title=f"Intensidade ({_int_lbl_rm})",
                           height=380, margin=dict(l=20,r=20,t=30,b=20), plot_bgcolor="white")
         st.plotly_chart(fig, use_container_width=True)
         st.markdown("🔴 Alto · 🟡 Médio · 🔵 Atenção · 🟢 Baixo — *tamanho ∝ massa*")
@@ -2325,6 +2474,11 @@ Estabelece requisitos gerais de divulgação: Governança, Estratégia, Gestão 
         st.markdown("### Análise Detalhada por Unidade")
         unidades = st.session_state.unidades
         edges = st.session_state.edges
+        _mu_au = get_default_mass_unit_from_session(st.session_state)
+        _co2e_lbl_au = co2e_label(_mu_au)
+        _int_lbl_au = co2e_intensity_label(_mu_au)
+        _c2e_au = lambda v: convert_co2e(v, _mu_au)
+        _c2i_au = lambda v: convert_co2e(v, "t")
         dados = []
         for u in unidades:
             ent = sum(1 for e in edges if e["target"] == u.ID_ELO)
@@ -2334,25 +2488,39 @@ Estabelece requisitos gerais de divulgação: Governança, Estratégia, Gestão 
             if u.TaxacaoLocal: tx.append("Local")
             dados.append({"ID": u.ID_ELO, "Nome": u.Nome, "Local": u.Localizacao,
                           "Massa In (t)": round(u.MassaInput, 2), "Massa Out (t)": round(u.MassaOutput, 2),
-                          "E1 (tCO₂e)": round(u.IntensidadeEmissaoEscopo1*u.MassaOutput, 2),
-                          "E2 (tCO₂e)": round(u.IntensidadeEmissaoEscopo2*u.MassaOutput, 2),
-                          "E3 (tCO₂e)": round(u.IntensidadeEmissaoEscopo3*u.MassaOutput, 2),
-                          "Total (tCO₂e)": round(u.IntensidadeEmissao*u.MassaOutput, 2),
-                          "Intensidade": round(u.IntensidadeEmissao, 4),
-                          "Pegada": round(u.Pegada, 4),
+                          f"E1 ({_co2e_lbl_au})": round(_c2e_au(u.IntensidadeEmissaoEscopo1*u.MassaOutput), 2),
+                          f"E2 ({_co2e_lbl_au})": round(_c2e_au(u.IntensidadeEmissaoEscopo2*u.MassaOutput), 2),
+                          f"E3 ({_co2e_lbl_au})": round(_c2e_au(u.IntensidadeEmissaoEscopo3*u.MassaOutput), 2),
+                          f"Total ({_co2e_lbl_au})": round(_c2e_au(u.IntensidadeEmissao*u.MassaOutput), 2),
+                          "Intensidade": round(_c2i_au(u.IntensidadeEmissao), 4),
+                          "Pegada": round(_c2i_au(u.Pegada), 4),
                           "Taxação": ", ".join(tx) or "—", "In": ent, "Out": sai})
+        _total_col = f"Total ({_co2e_lbl_au})"
         df = pd.DataFrame(dados)
         c1, c2, c3 = st.columns(3)
         with c1: ft = st.multiselect("Taxação:", ["Fronteira","Local","—"], key="ft_v3")
-        with c2: ob = st.selectbox("Ordenar:", ["Total (tCO₂e)","Intensidade","Pegada","ID"], key="ob_v3")
+        with c2: ob = st.selectbox("Ordenar:", [_total_col,"Intensidade","Pegada","ID"], key="ob_v3")
         with c3: asc = st.checkbox("Crescente", False, key="asc_v3")
         if ft: df = df[df["Taxação"].apply(lambda x: any(f in x for f in ft))]
         if ob != "ID": df = df.sort_values(ob, ascending=asc)
         st.dataframe(df, use_container_width=True, hide_index=True, height=450)
         st.markdown("---")
         c1,c2,c3,c4 = st.columns(4)
-        c1.metric("Unidades", len(df)); c2.metric("Emissão", f"{df['Total (tCO₂e)'].sum():,.2f}")
-        c3.metric("Intens. Média", f"{df['Intensidade'].mean():,.4f}"); c4.metric("Pegada Média", f"{df['Pegada'].mean():,.4f}")
+        c1.metric("Unidades", len(df)); c2.metric("Emissão", f"{df[_total_col].sum():,.2f} {_co2e_lbl_au}")
+        c3.metric("Intens. Média", f"{df['Intensidade'].mean():,.4f} {_int_lbl_au}"); c4.metric("Pegada Média", f"{df['Pegada'].mean():,.4f}")
+
+        # ── Download bar ──
+        analise_data = {
+            "unidades": df.to_dict("records"),
+            "total": len(df),
+            "emissao_total": df[_total_col].sum(),
+            "intensidade_media": df["Intensidade"].mean(),
+            "pegada_media": df["Pegada"].mean(),
+        }
+        cfg = get_report_config()
+        md_analise = generate_md_analise_unidade(analise_data, cfg)
+        pdf_analise = generate_pdf_analise_unidade(analise_data, cfg)
+        render_download_bar("analise_unidade", md_analise, pdf_analise, filename_base="Analise_por_Unidade")
 
     # ════════════════════════════════════════════════════════════════
     #  FUNÇÕES AUXILIARES SANKEY
@@ -2411,6 +2579,9 @@ Estabelece requisitos gerais de divulgação: Governança, Estratégia, Gestão 
 
     def _build_aggregated_sankey(self, flux, val_exib, cor, units, show_u):
         dc = ["Tipo de Consumível", "Escopo do Consumível", "Intensidade do Consumível"]
+        _mu_san = get_default_mass_unit_from_session(st.session_state)
+        _co2e_lbl_san = co2e_label(_mu_san)
+        _c2e_san = lambda v: convert_co2e(v, _mu_san)
         has_dc = any(d in flux for d in dc)
         rows = []
         for u in units:
@@ -2445,7 +2616,7 @@ Estabelece requisitos gerais de divulgação: Governança, Estratégia, Gestão 
                     ol, dl = f"{a}: {r[a]}", f"{b}: {r[b]}"
                     if ol in nm and dl in nm:
                         src.append(nm[ol]); tgt.append(nm[dl]); val.append(r["valor"])
-                        hov.append(f"{ol}<br>→ {dl}<br>{r['valor']:,.2f} tCO₂e")
+                        hov.append(f"{ol}<br>→ {dl}<br>{_c2e_san(r['valor']):,.2f} {_co2e_lbl_san}")
         if show_u:
             ud = flux[-1]; gf = df.groupby([ud,"ID_ELO"])["valor"].sum().reset_index()
             for _,r in gf.iterrows():
@@ -2453,7 +2624,7 @@ Estabelece requisitos gerais de divulgação: Governança, Estratégia, Gestão 
                     ol, dl = f"{ud}: {r[ud]}", r["ID_ELO"]
                     if ol in nm and dl in nm:
                         src.append(nm[ol]); tgt.append(nm[dl]); val.append(r["valor"])
-                        hov.append(f"{ol}<br>→ {dl}<br>{r['valor']:,.2f} tCO₂e")
+                        hov.append(f"{ol}<br>→ {dl}<br>{_c2e_san(r['valor']):,.2f} {_co2e_lbl_san}")
         return nodes, src, tgt, val, ["rgba(150,150,150,0.3)"]*len(val), hov
 
     def _get_node_colors_advanced(self, labels, cor, flux):

@@ -129,37 +129,37 @@
     "grupo_consumivel": "ELECTRICITY",
     "consumivel": "ELECTRICITY",
     "escopo": "SCOPE 2",
-    "fator_emissao": 0.0,
+    "ano": 2023,
+    "fator_emissao": 62.672,
     "kgCO2e_unid": "MWH",
-    "data_importacao": "2026-02-24 17:11:34",
-    "ano": 2023
+    "data_importacao": "2026-02-24 17:11:34"
   },
   {
     "grupo_consumivel": "ELECTRICITY",
     "consumivel": "ELECTRICITY",
     "escopo": "SCOPE 3",
+    "ano": 2023,
     "fator_emissao": 67.78,
     "kgCO2e_unid": "MWH",
-    "data_importacao": "2026-02-24 17:11:34",
-    "ano": 2023
+    "data_importacao": "2026-02-24 17:11:34"
   },
   {
     "grupo_consumivel": "ELECTRICITY",
     "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
     "escopo": "SCOPE 2",
+    "ano": 2023,
     "fator_emissao": 60.672,
     "kgCO2e_unid": "MWH",
-    "data_importacao": "2026-02-24 17:11:34",
-    "ano": 2023
+    "data_importacao": "2026-02-24 17:11:34"
   },
   {
     "grupo_consumivel": "ELECTRICITY",
     "consumivel": "ELECTRICITY SERRA LESTE AND EFC",
     "escopo": "SCOPE 2",
+    "ano": 2024,
     "fator_emissao": 62.524,
     "kgCO2e_unid": "MWH",
-    "data_importacao": "2026-02-24 17:11:34",
-    "ano": 2024
+    "data_importacao": "2026-02-24 17:11:34"
   },
   {
     "grupo_consumivel": "INPUTS",

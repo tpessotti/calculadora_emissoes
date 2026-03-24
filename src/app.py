@@ -39,10 +39,34 @@ st.set_page_config(
 init_session_state()
 
 usuario_logado = st.session_state.get("usuario_logado", None)
+
+# ── sidebar: ocultar quando não autenticado ───────────────────────────────────
+if not usuario_logado:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"],
+        [data-testid="collapsedControl"] { display:none !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # ── loading screen (disparado logo após o login) ──────────────────────────────
 if st.session_state.pop("_show_loading", False) and usuario_logado:
     import time
     import streamlit.components.v1 as _cmp
+
+    # Fecha sidebar durante o carregamento
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"],
+        [data-testid="collapsedControl"] { display:none !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     escaped_user = usuario_logado.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -125,56 +149,48 @@ def page_home():
 
 def page_fluxo():
     if not usuario_logado:
-        st.warning("⚠️ Faça login para acessar esta página.")
         HomeTab()._render()
         return
     FluxoTab()._render()
 
 def page_unidades():
     if not usuario_logado:
-        st.warning("⚠️ Faça login para acessar esta página.")
         HomeTab()._render()
         return
     UnidadesTab()._render()
 
 def page_fatores():
     if not usuario_logado:
-        st.warning("⚠️ Faça login para acessar esta página.")
         HomeTab()._render()
         return
     FatoresEmissaoTab()._render()
 
 def page_tecnologias():
     if not usuario_logado:
-        st.warning("⚠️ Faça login para acessar esta página.")
         HomeTab()._render()
         return
     TecnologiasTab()._render()
 
 def page_relatorios():
     if not usuario_logado:
-        st.warning("⚠️ Faça login para acessar esta página.")
         HomeTab()._render()
         return
     ReportsTab()._render()
 
 def page_chatbot():
     if not usuario_logado:
-        st.warning("⚠️ Faça login para acessar esta página.")
         HomeTab()._render()
         return
     ChatbotTab()._render()
 
 def page_sessoes():
     if not usuario_logado:
-        st.warning("⚠️ Faça login para acessar esta página.")
         HomeTab()._render()
         return
     SessoesTab()._render()
 
 def page_configuracoes():
     if not usuario_logado:
-        st.warning("⚠️ Faça login para acessar esta página.")
         HomeTab()._render()
         return
     SettingsTab()._render()
@@ -182,6 +198,7 @@ def page_configuracoes():
 # ── navigation definition ─────────────────────────────────────────────────────
 _pages_publicas = [
     st.Page(page_home, title="Início", default=True),
+    st.Page(page_sessoes, title="Sessões"),
     st.Page(page_configuracoes,title="Configurações"),
 ]
 
@@ -192,16 +209,22 @@ _pages_autenticadas = [
     st.Page(page_tecnologias,  title="Tecnologias"),
     st.Page(page_relatorios,   title="Análise de Emissões"),
     st.Page(page_chatbot,      title="Assistente IA"),
-    st.Page(page_sessoes,      title="Sessões"),
 ]
 
 if usuario_logado:
-    nav_pages = {"": _pages_publicas, "Ferramentas": _pages_autenticadas}
+    nav_pages = {f"👤 {usuario_logado}": _pages_publicas, "----------------------------------------------": _pages_autenticadas}
 else:
     nav_pages = {"": _pages_publicas}
 
 # ── render navigation & header bar ──────────────────────────────────────────
 pg = st.navigation(nav_pages, position="sidebar", expanded=True)
+
+# Consumir pedido de navegação rápida (botões da Home)
+_all_pages = _pages_publicas + (_pages_autenticadas if usuario_logado else [])
+_pages_by_title = {p.title: p for p in _all_pages}
+_nav_target = st.session_state.pop("_nav_target", None)
+if _nav_target and _nav_target in _pages_by_title:
+    st.switch_page(_pages_by_title[_nav_target])
 
 # Header bar (usuário + auto-save) no canto superior direito
 render_header_bar(usuario_logado)

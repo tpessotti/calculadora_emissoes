@@ -4,6 +4,7 @@ Utilitários compartilhados entre todas as páginas da aplicação.
 Não contém lógica de navegação (st.switch_page / PAGE_PATHS) — a navegação
 é gerenciada inteiramente pelo st.navigation em app.py.
 """
+import json
 import os
 import sys
 import time
@@ -21,8 +22,45 @@ from core.io.json_io import load_fatores_emissao
 
 # ── Session state ─────────────────────────────────────────────────────────────
 
+def _auto_restore_session():
+    """Restaura automaticamente a sessão salva do usuário no primeiro rerun após o login.
+
+    Lê data/user_sessions.json e chama _importar_sessao (Settings) se existir
+    um registro salvo para o usuário logado.  O flag 'sessao_restaurada' evita
+    que a restauração seja disparada mais de uma vez por sessão de browser.
+    """
+    usuario = st.session_state.get("usuario_logado")
+    if not usuario:
+        return
+    if st.session_state.get("sessao_restaurada"):
+        return
+
+    # Marca imediatamente para evitar re-entrada em caso de erro
+    st.session_state.sessao_restaurada = True
+
+    sessions_file = os.path.join(_root_dir, "data", "user_sessions.json")
+    if not os.path.exists(sessions_file):
+        return
+
+    try:
+        with open(sessions_file, "r", encoding="utf-8") as f:
+            all_sessions = json.load(f)
+    except Exception:
+        return
+
+    sessao_data = all_sessions.get(usuario)
+    if not sessao_data:
+        return
+
+    try:
+        from tabs.Settings import SettingsTab  # importação local — evita ciclo
+        SettingsTab()._importar_sessao(sessao_data)
+    except Exception as e:
+        st.warning(f"⚠️ Não foi possível restaurar a sessão anterior: {e}")
+
+
 def init_session_state():
-    """Inicializa valores padrão no session_state."""
+    """Inicializa valores padrão no session_state e restaura sessão do usuário."""
     db = DatabaseManager()
     session_defaults = {
         "selected_nodes": [],
@@ -34,6 +72,7 @@ def init_session_state():
         "unidades": db.get_unidades(),
         "edges": db.get_edges_for_graph(),
         "mass_unit": "t",
+        "emission_unit": "tCO₂e",
         "auto_save_session": True,
         "auto_save_interval": 20,
         "pref_show_save_toast": True,
@@ -52,6 +91,9 @@ def init_session_state():
         else:
             st.session_state.fatores_emissao = []
             st.session_state["mostrar_aviso_fatores_emissao"] = True
+
+    # Restaura sessão salva no primeiro rerun após o login
+    _auto_restore_session()
 
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
@@ -119,5 +161,7 @@ def render_sidebar_extras(usuario_logado: str | None):
             from tabs.Sessoes import SessoesTab  # importação local para evitar ciclo
             if SessoesTab()._save_user_session():
                 st.session_state._auto_save_last_ts = now_ts
+                if st.session_state.get("pref_show_save_toast", True):
+                    st.toast("✅ Sessão salva automaticamente", icon="💾")
 
 

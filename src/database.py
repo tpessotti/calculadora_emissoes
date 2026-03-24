@@ -1,11 +1,81 @@
+from __future__ import annotations
+
 import streamlit as st
 import json
 import re
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 import pandas as pd
 #from database import Tecnologia
 from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any
+from core.units import (
+    co2e_label, co2e_intensity_label, convert_co2e,
+    get_default_mass_unit_from_session,
+)
+
+
+def _parse_ano_periodo_db(periodo) -> Optional[int]:
+    """Converte string de período em inteiro de ano (None se inválido)."""
+    try:
+        return int(float(str(periodo).strip()))
+    except (ValueError, TypeError):
+        return None
+
+
+def _rebuild_consumiveis_from_tech(tecnologia, fatores_emissao: list, ano_ref: Optional[int]):
+    """Re-constrói Consumiveis e ConsumoEspecifico a partir dos insumos da tecnologia.
+
+    Faz busca ao vivo no banco de fatores para garantir que o nome do consumível
+    e o fator de emissão estão sempre atualizados, independentemente do que estava
+    salvo nos dados da sessão anterior.
+
+    Returns:
+        tuple: (consumiveis: list[dict], consumo_especifico: list[float])
+    """
+    consumiveis: List[dict] = []
+    consumo_especifico: List[float] = []
+
+    if not tecnologia or not getattr(tecnologia, "insumos", None):
+        return consumiveis, consumo_especifico
+
+    try:
+        from core.calc.fatores import FatorIndex
+        idx = FatorIndex(fatores_emissao) if fatores_emissao else None
+    except Exception:
+        idx = None
+
+    for insumo in tecnologia.insumos:
+        nome = str(insumo.get("nome", "")).strip()
+        fator_consumo = float(insumo.get("fator_consumo", 0.0))
+
+        fator_emissao = 0.0
+        escopo = "SCOPE 1"  # default
+
+        if idx and nome:
+            fator_dict = None
+            # Busca por escopo específico + ano
+            for esc_try in ["1", "2", "3"]:
+                fator_dict = idx.get_fator_dict(nome, esc_try, ano=ano_ref)
+                if fator_dict is not None:
+                    break
+            # Fallback: busca global (sem ano)
+            if fator_dict is None:
+                for esc_try in ["1", "2", "3"]:
+                    fator_dict = idx.get_fator_dict(nome, esc_try, ano=None)
+                    if fator_dict is not None:
+                        break
+            if fator_dict is not None:
+                fator_emissao = float(fator_dict.get("fator_emissao", 0.0))
+                escopo = str(fator_dict.get("escopo", "SCOPE 1"))
+
+        consumiveis.append({
+            "nome": nome,
+            "fator": fator_emissao,
+            "escopo": escopo,
+        })
+        consumo_especifico.append(fator_consumo)
+
+    return consumiveis, consumo_especifico
 
 @dataclass
 class Conexao:
@@ -228,6 +298,9 @@ class DatabaseManager:
 
     # --- Visualização ---
     def get_unidades_df(self) -> pd.DataFrame:
+        _mu = get_default_mass_unit_from_session(st.session_state)
+        _lbl = co2e_label(_mu)
+        _int_lbl = co2e_intensity_label(_mu)
         dados = []
         for unidade in st.session_state.unidades:
             dados.append({
@@ -237,12 +310,12 @@ class DatabaseManager:
                 "Período": unidade.Periodo,
                 "Input": unidade.Input,
                 "Output": unidade.Output,
-                "Emissão (CO₂)": f"{unidade.IntensidadeEmissao * unidade.MassaOutput:,.2f}",
-                "Intensidade (tCO₂/t)": f"{unidade.IntensidadeEmissao:.2f}",
-                "Int. Escopo 1": f"{unidade.IntensidadeEmissaoEscopo1:.2f}",
-                "Int. Escopo 2": f"{unidade.IntensidadeEmissaoEscopo2:.2f}",
-                "Int. Escopo 3": f"{unidade.IntensidadeEmissaoEscopo3:.2f}",
-                "Pegada (CO₂/t produto)": f"{unidade.Pegada:.2f}",
+                f"Emissão ({_lbl})": f"{convert_co2e(unidade.IntensidadeEmissao * unidade.MassaOutput, _mu):,.2f}",
+                f"Intensidade ({_int_lbl})": f"{convert_co2e(unidade.IntensidadeEmissao, 't'):,.2f}",
+                "Int. Escopo 1": f"{convert_co2e(unidade.IntensidadeEmissaoEscopo1, 't'):,.2f}",
+                "Int. Escopo 2": f"{convert_co2e(unidade.IntensidadeEmissaoEscopo2, 't'):,.2f}",
+                "Int. Escopo 3": f"{convert_co2e(unidade.IntensidadeEmissaoEscopo3, 't'):,.2f}",
+                f"Pegada ({_int_lbl})": f"{convert_co2e(unidade.Pegada, 't'):,.2f}",
                 "Pegada Escopo 1": f"{unidade.PegadaEscopo1:.2f}",
                 "Pegada Escopo 2": f"{unidade.PegadaEscopo2:.2f}",
                 "Pegada Escopo 3": f"{unidade.PegadaEscopo3:.2f}",
@@ -252,10 +325,12 @@ class DatabaseManager:
         return pd.DataFrame(dados)
     
     def get_estatisticas(self) -> Dict:
+        _mu = get_default_mass_unit_from_session(st.session_state)
+        raw_total = sum(u.IntensidadeEmissao * u.MassaOutput for u in st.session_state.unidades)
         return {
             "total_unidades": len(st.session_state.unidades),
             "total_conexoes": len(st.session_state.conexoes),
-            "emissao_total": sum(u.IntensidadeEmissao * u.MassaOutput for u in st.session_state.unidades)
+            "emissao_total": convert_co2e(raw_total, _mu),
         }
 
     def export_to_json(self):
@@ -343,7 +418,22 @@ class DatabaseManager:
                         label=conexao_data.get("label", "Fluxo"),
                         periodo=conexao_data.get("periodo", ""),
                     )
-                
+
+                # ── Re-construir Consumiveis a partir da tecnologia (corrige nomes/fatores desatualizados) ──
+                ano_ref_u = _parse_ano_periodo_db(u_data.get("Periodo"))
+                if tecnologia and getattr(tecnologia, "insumos", None):
+                    consumiveis_u, consumo_especifico_u = _rebuild_consumiveis_from_tech(
+                        tecnologia, fatores_emissao, ano_ref_u
+                    )
+                    # Preserva ConsumoEspecifico salvo se a tecnologia não redefine os valores
+                    # (usuário pode ter ajustado os valores manualmente)
+                    ce_saved = u_data.get("ConsumoEspecifico", [])
+                    if len(ce_saved) == len(consumiveis_u):
+                        consumo_especifico_u = ce_saved
+                else:
+                    consumiveis_u = u_data.get("Consumiveis", [])
+                    consumo_especifico_u = u_data.get("ConsumoEspecifico", [])
+
                 unidade = UnidadeProdutiva(
                     id_elo=u_data["ID_ELO"],
                     nome=u_data["Nome"],
@@ -353,34 +443,17 @@ class DatabaseManager:
                     massa_input=u_data.get("MassaInput", 0.0),
                     output_insumo=u_data["Output"],
                     massa_output=u_data.get("MassaOutput", 0.0),
-                    consumiveis=u_data.get("Consumiveis", []),
-                    consumo_especifico=u_data.get("ConsumoEspecifico", []),
+                    consumiveis=consumiveis_u,
+                    consumo_especifico=consumo_especifico_u,
                     taxacao_fronteira=u_data.get("TaxacaoFronteira", False),
                     taxacao_local=u_data.get("TaxacaoLocal", False),
                     tecnologia=tecnologia,
                     conexao=conexao
                 )
 
-                # Calcular emissões da unidade
+                # Recalcula emissões com consumíveis e fatores atualizados
+                # (não restaura valores salvos — garante consistência com o banco atual)
                 EmissionCalculator.calcular_emissoes(unidade)
-
-                # Restaurar atributos calculados, se existirem (sobrescreve o cálculo acima se houver valores salvos)
-                if "IntensidadeEmissao" in u_data:
-                    unidade.IntensidadeEmissao = u_data.get("IntensidadeEmissao", 0.0)
-                if "Pegada" in u_data:
-                    unidade.Pegada = u_data.get("Pegada", 0.0)
-                if "IntensidadeEmissaoEscopo1" in u_data:
-                    unidade.IntensidadeEmissaoEscopo1 = u_data.get("IntensidadeEmissaoEscopo1", 0.0)
-                if "IntensidadeEmissaoEscopo2" in u_data:
-                    unidade.IntensidadeEmissaoEscopo2 = u_data.get("IntensidadeEmissaoEscopo2", 0.0)
-                if "IntensidadeEmissaoEscopo3" in u_data:
-                    unidade.IntensidadeEmissaoEscopo3 = u_data.get("IntensidadeEmissaoEscopo3", 0.0)
-                if "PegadaEscopo1" in u_data:
-                    unidade.PegadaEscopo1 = u_data.get("PegadaEscopo1", 0.0)
-                if "PegadaEscopo2" in u_data:
-                    unidade.PegadaEscopo2 = u_data.get("PegadaEscopo2", 0.0)
-                if "PegadaEscopo3" in u_data:
-                    unidade.PegadaEscopo3 = u_data.get("PegadaEscopo3", 0.0)
 
                 st.session_state.unidades.append(unidade)
                 
@@ -395,9 +468,7 @@ class DatabaseManager:
                         id_fluxo=conexao.id,
                     )
 
-            print(f"DEBUG import_from_json: Total de conexões a importar: {len(data.get('conexoes', []))}")  # Debug
             for c_data in data.get("conexoes", []):
-                print(f"DEBUG import_from_json: Importando conexão: {c_data}")  # Debug
                 self.add_edge(
                     c_data["origem"],
                     c_data["destino"],
@@ -406,8 +477,6 @@ class DatabaseManager:
                     label=c_data.get("label", "Fluxo"),
                     id_fluxo=c_data.get("id", ""),
                 )
-            
-            print(f"DEBUG import_from_json: Total de conexões em session_state após importação: {len(st.session_state.conexoes)}")  # Debug
             
             # Propagar a pegada após importar
             self.propagar_pegada()

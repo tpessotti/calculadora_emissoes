@@ -50,7 +50,8 @@ class TecnologiasTab:
                         key_prefix=f"tec_lista_{i}",
                         read_only=False,
                         show_save_buttons=True,
-                        on_save_callback=self._salvar_tecnologia_editada
+                        on_save_callback=self._salvar_tecnologia_editada,
+                        expanded=False  # Começar colapsado
                     )
                 
                 with col_btn:

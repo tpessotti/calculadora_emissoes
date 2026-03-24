@@ -94,6 +94,17 @@ class FatorIndex:
                     )
                 return fv
 
+            # 3. Fallback para o ano mais próximo disponível
+            if ano is not None:
+                best = self._closest_year(cons_upper, esc_norm, ano)
+                if best is not None:
+                    fv = float(best.get("fator_emissao", 0.0))
+                    logger.debug(
+                        "Fallback ano mais próximo para %s/%s ano=%d (fator=%.4f)",
+                        consumivel, escopo, ano, fv,
+                    )
+                    return fv
+
         return 0.0
 
     def get_fator_dict(
@@ -117,7 +128,31 @@ class FatorIndex:
             if key_global in self._idx:
                 return self._idx[key_global]
 
+            # 3. Fallback para o ano mais próximo disponível
+            if ano is not None:
+                best = self._closest_year(cons_upper, esc_norm, ano)
+                if best is not None:
+                    return best
+
         return None
+
+    def _closest_year(
+        self, cons_upper: str, esc_norm: str, ano: int
+    ) -> Optional[Dict[str, Any]]:
+        """Retorna o fator do ano mais próximo (≤ ano, senão o menor > ano)."""
+        candidates: List[Tuple[int, Dict[str, Any]]] = []
+        for (c, e, a), fdict in self._idx.items():
+            if c == cons_upper and e == esc_norm and a is not None:
+                candidates.append((a, fdict))
+        if not candidates:
+            return None
+        # Prefere anos <= alvo (mais recente primeiro); senão o menor > alvo
+        before = [(a, d) for a, d in candidates if a <= ano]
+        if before:
+            before.sort(key=lambda x: x[0], reverse=True)
+            return before[0][1]
+        candidates.sort(key=lambda x: x[0])
+        return candidates[0][1]
 
     def listar_anos_disponiveis(self, consumivel: str, escopo: str) -> List[int]:
         """Lista anos com fatores específicos para um consumível/escopo."""

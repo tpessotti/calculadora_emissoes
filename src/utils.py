@@ -6,7 +6,78 @@ from datetime import datetime
 from database import UnidadeProdutiva, Tecnologia
 import calculations
 from core.calc.fatores import FatorIndex
-from core.units import convert_mass, get_default_mass_unit_from_session
+from core.units import (
+    convert_mass,
+    get_default_mass_unit_from_session,
+    co2e_label,
+    co2e_intensity_label,
+    convert_co2e,
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  FUNÇÕES CENTRALIZADAS DE UNIDADES — usar em todos os módulos
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_session_mass_unit() -> str:
+    """Retorna a unidade de massa selecionada na sessão (ex: 't', 'kg')."""
+    return get_default_mass_unit_from_session(st.session_state)
+
+
+def label_co2e() -> str:
+    """Rótulo de emissão para a unidade da sessão. Ex: 'tCO₂e', 'kgCO₂e'."""
+    return co2e_label(get_session_mass_unit())
+
+
+def label_intensidade() -> str:
+    """Rótulo de intensidade para a unidade da sessão. Ex: 'tCO₂e/t', 'kgCO₂e/kg'."""
+    return co2e_intensity_label(get_session_mass_unit())
+
+
+def label_massa() -> str:
+    """Rótulo da unidade de massa da sessão. Ex: 't', 'kg'."""
+    return get_session_mass_unit()
+
+
+def converte_emissao(valor_kgco2e: float) -> float:
+    """Converte emissão de kgCO₂e (interna) para a unidade da sessão."""
+    return convert_co2e(valor_kgco2e, get_session_mass_unit())
+
+
+def converte_intensidade(valor_kgco2e_por_t: float) -> float:
+    """Converte intensidade (kgCO₂e/t) para a unidade da sessão.
+
+    A razão XCO₂e/X é numericamente constante (÷ 1 000) independente
+    da unidade de massa escolhida, portanto usamos sempre conversão para 't'.
+    """
+    return convert_co2e(valor_kgco2e_por_t, "t")
+
+
+def converte_massa(valor: float, de: str = "t") -> float:
+    """Converte massa de ``de`` para a unidade da sessão."""
+    return convert_mass(valor, de, get_session_mass_unit())
+
+
+def fmt_emissao(valor_kgco2e: float, casas: int = 2) -> str:
+    """Converte e formata emissão (kgCO₂e → unidade da sessão)."""
+    val = converte_emissao(valor_kgco2e)
+    return f"{val:,.{casas}f}"
+
+
+def fmt_intensidade(valor_kgco2e_por_t: float, casas: int = 4) -> str:
+    """Converte e formata intensidade (kgCO₂e/t → unidade da sessão)."""
+    val = converte_intensidade(valor_kgco2e_por_t)
+    return f"{val:,.{casas}f}"
+
+
+def col_emissao(prefixo: str = "Emissão") -> str:
+    """Nome de coluna para emissão. Ex: 'Emissão (tCO₂e)'."""
+    return f"{prefixo} ({label_co2e()})"
+
+
+def col_intensidade(prefixo: str = "Intensidade") -> str:
+    """Nome de coluna para intensidade. Ex: 'Intensidade (tCO₂e/t)'."""
+    return f"{prefixo} ({label_intensidade()})"
 
 
 def _parse_ano_periodo(periodo):
@@ -17,17 +88,23 @@ def _parse_ano_periodo(periodo):
 
 
 def _resolver_fator_para_ano(nome_insumo, fatores, ano_ref):
-    """Resolve fator/escopo por consumível priorizando ano exato e fallback global."""
+    """Resolve fator/escopo por consumível priorizando ano exato e fallback global.
+
+    Percorre escopos 1, 2 e 3 para encontrar o fator correto, sem assumir
+    que o consumível pertence ao Escopo 1.
+    """
     idx = FatorIndex(fatores)
-    d = idx.get_fator_dict(nome_insumo, "1", ano=ano_ref)
-    if d is None:
-        for f in fatores:
-            if str(f.get("consumivel", "")).strip().upper() == str(nome_insumo).strip().upper():
-                d = f
-                break
-    if d is None:
-        return 0.0, "1"
-    return float(d.get("fator_emissao", 0.0)), str(d.get("escopo", "1"))
+    # 1) Tenta com o ano exato em cada escopo
+    for esc_try in ["1", "2", "3"]:
+        d = idx.get_fator_dict(nome_insumo, esc_try, ano=ano_ref)
+        if d is not None:
+            return float(d.get("fator_emissao", 0.0)), str(d.get("escopo", f"SCOPE {esc_try}"))
+    # 2) Fallback: busca linear por nome (qualquer escopo, qualquer ano)
+    nome_upper = str(nome_insumo).strip().upper()
+    for f in fatores:
+        if str(f.get("consumivel", "")).strip().upper() == nome_upper:
+            return float(f.get("fator_emissao", 0.0)), str(f.get("escopo", "1"))
+    return 0.0, "1"
 
 
 def _resolver_unidade_consumivel(nome_insumo, fatores):
@@ -146,7 +223,7 @@ class UtilsUI:
         _dialog()
 
     def render_tecnologia_form(self, tecnologia=None, key_prefix="tec_form", read_only=False, 
-                               show_save_buttons=True, on_save_callback=None):
+                               show_save_buttons=True, on_save_callback=None, expanded=True):
         """
         Renderiza formulário para visualização ou edição de tecnologia
         
@@ -175,7 +252,7 @@ class UtilsUI:
         else:
             expander_title = "➕ Criar Nova Tecnologia"
         
-        with st.expander(expander_title, expanded=True):
+        with st.expander(expander_title, expanded=expanded):
             col1, col2 = st.columns(2)
             mass_unit = get_default_mass_unit_from_session(st.session_state)
             
@@ -449,6 +526,7 @@ class UtilsUI:
                 read_only=False,
                 show_save_buttons=True,
                 on_save_callback=lambda _t: True,
+                expanded=False
             )
             if nova_tecnologia:
                 consumiveis, consumo_especifico = _montar_consumo(nova_tecnologia)
@@ -708,7 +786,7 @@ class UtilsUI:
         col_header = st.columns(col_widths)
         header_labels = [
             "ID", "Nome", "Ano", "Entrada", "Saída", f"Massa In ({mass_unit})", f"Massa Out ({mass_unit})",
-            "Emissões Totais (tCO₂e)", "Destino", "Editar", "Remover"
+            f"Emissões Totais ({co2e_label(mass_unit)})", "Destino", "Editar", "Remover"
         ]
 
         for col, label in zip(col_header, header_labels):
@@ -736,7 +814,7 @@ class UtilsUI:
             with cols[5]: st.markdown(f"<div style='{style}'>{massa_in_disp:.1f}</div>", unsafe_allow_html=True)
             with cols[6]: st.markdown(f"<div style='{style}'>{massa_out_disp:.1f}</div>", unsafe_allow_html=True)
 
-            emissao_total = u.IntensidadeEmissao * u.MassaOutput
+            emissao_total = convert_co2e(u.IntensidadeEmissao * (u.MassaOutput or 0.0), mass_unit)
             with cols[7]: st.markdown(f"<div style='{style}'>{emissao_total:.2f}</div>", unsafe_allow_html=True)
             with cols[8]: st.markdown(f"<div style='{style}'>{', '.join(destinos)}</div>", unsafe_allow_html=True)
 

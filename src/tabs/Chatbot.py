@@ -4,6 +4,10 @@ import json
 import os
 from typing import List, Dict
 from datetime import datetime
+from core.units import (
+    co2e_label, co2e_intensity_label, convert_co2e,
+    get_default_mass_unit_from_session,
+)
 
 class ChatbotTab:
     def __init__(self):
@@ -232,19 +236,22 @@ class ChatbotTab:
         if unidades:
             st.metric("Unidades Produtivas", len(unidades))
             
+            _mu   = get_default_mass_unit_from_session(st.session_state)
+            _lbl  = co2e_label(_mu)
+            _int  = co2e_intensity_label(_mu)
             # Calcular emissão total
             emissao_total = sum(
                 getattr(u, 'IntensidadeEmissao', 0) * getattr(u, 'MassaOutput', 0) 
                 for u in unidades
             )
-            st.metric("Emissão Total", f"{emissao_total:.2f} tCO2e")
+            st.metric("Emissão Total", f"{convert_co2e(emissao_total, _mu):.2f} {_lbl}")
             
             # Intensidade média
             if unidades:
                 intensidade_media = sum(
                     getattr(u, 'IntensidadeEmissao', 0) for u in unidades
                 ) / len(unidades)
-                st.metric("Intensidade Média", f"{intensidade_media:.3f} tCO2e/t")
+                st.metric("Intensidade Média", f"{convert_co2e(intensidade_media, 't'):.3f} {_int}")
         else:
             st.info("Nenhuma unidade cadastrada ainda.")
         
@@ -282,11 +289,14 @@ Suas capacidades incluem:
                 contexto += f"- Total de unidades produtivas: {len(unidades)}\n"
                 
                 for i, u in enumerate(unidades[:5], 1):  # Limitar a 5 unidades para não exceder tokens
+                    _mu_ctx  = get_default_mass_unit_from_session(st.session_state)
+                    _lbl_ctx = co2e_label(_mu_ctx)
+                    _int_ctx = co2e_intensity_label(_mu_ctx)
                     contexto += f"\n{i}. {getattr(u, 'Nome', 'Unidade')}:\n"
                     contexto += f"   - Localização: {getattr(u, 'Localizacao', 'N/A')}\n"
                     contexto += f"   - Massa Output: {getattr(u, 'MassaOutput', 0):.2f} t\n"
-                    contexto += f"   - Intensidade Emissão: {getattr(u, 'IntensidadeEmissao', 0):.3f} tCO2e/t\n"
-                    contexto += f"   - Pegada Total: {getattr(u, 'Pegada', 0):.2f} tCO2e\n"
+                    contexto += f"   - Intensidade Emissão: {convert_co2e(getattr(u, 'IntensidadeEmissao', 0), 't'):.3f} {_int_ctx}\n"
+                    contexto += f"   - Pegada Total: {convert_co2e(getattr(u, 'Pegada', 0) * getattr(u, 'MassaOutput', 0), _mu_ctx):.2f} {_lbl_ctx}\n"
                     
                     # Consumíveis
                     consumiveis = getattr(u, 'Consumiveis', [])
@@ -300,7 +310,7 @@ Suas capacidades incluem:
                 contexto += f"\n**FATORES DE EMISSÃO DISPONÍVEIS:** {len(fatores)} fatores cadastrados\n"
                 # Listar alguns fatores
                 for f in fatores[:5]:
-                    contexto += f"- {f.get('consumivel', 'N/A')}: {f.get('fator_emissao', 0):.3f} tCO2e/t (Escopo {f.get('escopo', 'N/A')})\n"
+                    contexto += f"- {f.get('consumivel', 'N/A')}: {f.get('fator_emissao', 0):.3f} kgCO₂e/{f.get('kgCO2e_unid', 'unid')} (Escopo {f.get('escopo', 'N/A')})\n"
         
         contexto += "\nResponda de forma clara, técnica quando necessário, mas acessível. Seja proativo em sugerir melhorias e análises."
         
