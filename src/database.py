@@ -7,7 +7,6 @@ from typing import List, Dict, Optional, Any
 import pandas as pd
 #from database import Tecnologia
 from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Any
 from core.units import (
     co2e_label, co2e_intensity_label, convert_co2e,
     get_default_mass_unit_from_session,
@@ -117,10 +116,37 @@ class Tecnologia:
         )
 
 class UnidadeProdutiva:
+    @staticmethod
+    def _normalize_io_list(items: Any) -> List[Dict[str, Any]]:
+        """Normaliza lista de entradas/saídas para o formato canônico."""
+        normalized: List[Dict[str, Any]] = []
+        if not isinstance(items, list):
+            return normalized
+
+        for raw in items:
+            if not isinstance(raw, dict):
+                continue
+            produto_id = str(raw.get("produto_id", raw.get("produto", "")) or "").strip()
+            unidade = str(raw.get("unidade", "t") or "t").strip() or "t"
+            try:
+                quantidade = float(raw.get("quantidade", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                quantidade = 0.0
+            normalized.append(
+                {
+                    "produto_id": produto_id,
+                    "quantidade": quantidade,
+                    "unidade": unidade,
+                }
+            )
+        return normalized
+
     def __init__(self, id_elo: str, nome: str, localizacao: str, periodo: str, 
                 input_insumo: str, massa_input: float,
                 output_insumo: str, massa_output: float,
                 consumiveis: list[dict], consumo_especifico: list[float],
+                inputs: Optional[List[Dict[str, Any]]] = None,
+                outputs: Optional[List[Dict[str, Any]]] = None,
                 taxacao_fronteira: bool = False, taxacao_local: bool = False,
                 tecnologia=None, conexao: 'Conexao' = None):  # novo parâmetro
         
@@ -129,10 +155,32 @@ class UnidadeProdutiva:
         self.Localizacao = localizacao
         self.Periodo = periodo
 
-        self.Input = input_insumo
-        self.MassaInput = massa_input
-        self.Output = output_insumo
-        self.MassaOutput = massa_output
+        if inputs is None:
+            inputs = [
+                {
+                    "produto_id": str(input_insumo or "").strip(),
+                    "quantidade": float(massa_input or 0.0),
+                    "unidade": "t",
+                }
+            ]
+        if outputs is None:
+            outputs = [
+                {
+                    "produto_id": str(output_insumo or "").strip(),
+                    "quantidade": float(massa_output or 0.0),
+                    "unidade": "t",
+                }
+            ]
+
+        self.Inputs = self._normalize_io_list(inputs)
+        self.Outputs = self._normalize_io_list(outputs)
+
+        # Campos legados permanecem para retrocompatibilidade com partes da UI.
+        self.Input = str(input_insumo or "").strip()
+        self.Output = str(output_insumo or "").strip()
+        self.MassaInput = float(massa_input or 0.0)
+        self.MassaOutput = float(massa_output or 0.0)
+        self.sync_legacy_fields_from_lists()
 
         self.Consumiveis = consumiveis
         self.ConsumoEspecifico = consumo_especifico
@@ -154,6 +202,17 @@ class UnidadeProdutiva:
         # Propriedades adicionais
         self.Tecnologia = tecnologia
         self.Conexao = conexao  # Instância de Conexao que sai desta unidade
+
+    def sync_legacy_fields_from_lists(self) -> None:
+        """Sincroniza campos legados (Input/Output/Massa*) a partir de Inputs/Outputs."""
+        if self.Inputs:
+            first_input = self.Inputs[0]
+            self.Input = str(first_input.get("produto_id", "") or "")
+            self.MassaInput = float(sum(float(i.get("quantidade", 0.0) or 0.0) for i in self.Inputs))
+        if self.Outputs:
+            first_output = self.Outputs[0]
+            self.Output = str(first_output.get("produto_id", "") or "")
+            self.MassaOutput = float(sum(float(o.get("quantidade", 0.0) or 0.0) for o in self.Outputs))
 
     def to_dict(self):
         # Converter Tecnologia para ID se for um objeto
@@ -181,6 +240,8 @@ class UnidadeProdutiva:
             "MassaInput": self.MassaInput,
             "Output": self.Output,
             "MassaOutput": self.MassaOutput,
+            "inputs": self.Inputs,
+            "outputs": self.Outputs,
             "Consumiveis": self.Consumiveis,
             "ConsumoEspecifico": self.ConsumoEspecifico,
             "IntensidadeEmissao": self.IntensidadeEmissao,
@@ -275,7 +336,7 @@ class DatabaseManager:
         return next((u for u in st.session_state.unidades if u.ID_ELO == id_elo), None)
 
     # --- Conexões ---
-    def add_edge(self, origem: str, destino: str, massa: float = 0.0, periodo: str = "", label: str = "Fluxo", id_fluxo: str = "") -> Conexao | None:
+    def add_edge(self, origem: str, destino: str, massa: float = 0.0, periodo: str = "", label: str = "Fluxo", id_fluxo: str = "") -> Optional[Conexao]:
         if not any(c.origem == origem and c.destino == destino and c.periodo == periodo for c in st.session_state.conexoes):
             fluxo_id = str(id_fluxo or "").strip() or self.next_fluxo_id()
             conexao = Conexao(id=fluxo_id, origem=origem, destino=destino, massa=massa, label=label, periodo=periodo)
@@ -434,6 +495,31 @@ class DatabaseManager:
                     consumiveis_u = u_data.get("Consumiveis", [])
                     consumo_especifico_u = u_data.get("ConsumoEspecifico", [])
 
+                inputs_u = UnidadeProdutiva._normalize_io_list(u_data.get("inputs", []))
+                outputs_u = UnidadeProdutiva._normalize_io_list(u_data.get("outputs", []))
+
+                # Compatibilidade com legado (input/output únicos)
+                if not inputs_u:
+                    inputs_u = UnidadeProdutiva._normalize_io_list(
+                        [
+                            {
+                                "produto_id": u_data.get("Input", ""),
+                                "quantidade": u_data.get("MassaInput", 0.0),
+                                "unidade": "t",
+                            }
+                        ]
+                    )
+                if not outputs_u:
+                    outputs_u = UnidadeProdutiva._normalize_io_list(
+                        [
+                            {
+                                "produto_id": u_data.get("Output", ""),
+                                "quantidade": u_data.get("MassaOutput", 0.0),
+                                "unidade": "t",
+                            }
+                        ]
+                    )
+
                 unidade = UnidadeProdutiva(
                     id_elo=u_data["ID_ELO"],
                     nome=u_data["Nome"],
@@ -445,6 +531,8 @@ class DatabaseManager:
                     massa_output=u_data.get("MassaOutput", 0.0),
                     consumiveis=consumiveis_u,
                     consumo_especifico=consumo_especifico_u,
+                    inputs=inputs_u,
+                    outputs=outputs_u,
                     taxacao_fronteira=u_data.get("TaxacaoFronteira", False),
                     taxacao_local=u_data.get("TaxacaoLocal", False),
                     tecnologia=tecnologia,

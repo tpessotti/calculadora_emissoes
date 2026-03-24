@@ -169,20 +169,20 @@ class TestPropagarPegada:
         assert u1.PegadaEscopo2 == 0.0
         assert abs(u1.Pegada - 1.0) < 1e-6
 
-        # U2: herda de U1 proporcionalmente (massa_contribuida / MassaInput)
-        # proporção = 100 / 100 = 1.0
-        # PegadaEscopo1 = herança_esc1 + próp_esc1 = 1.0*1.0 + 0 = 1.0
-        # PegadaEscopo2 = herança_esc2 + próp_esc2 = 0*1.0 + 0.3 = 0.3
-        assert abs(u2.PegadaEscopo1 - 1.0) < 1e-6
+        # U2: herda de U1 proporcionalmente (massa_contribuida / MassaOutput_U2)
+        # proporção = 100 / 80 = 1.25
+        # PegadaEscopo1 = herança_esc1 + próp_esc1 = 1.0*1.25 + 0 = 1.25
+        # PegadaEscopo2 = herança_esc2 + próp_esc2 = 0*1.25 + 0.3 = 0.3
+        assert abs(u2.PegadaEscopo1 - 1.25) < 1e-6
         assert abs(u2.PegadaEscopo2 - 0.3) < 1e-6
-        assert abs(u2.Pegada - 1.3) < 1e-6
+        assert abs(u2.Pegada - 1.55) < 1e-6
 
-        # U3: herda de U2 proporcionalmente (80 / 80 = 1.0)
-        # PegadaEscopo1 = 1.0*1.0 + 1.5*0.2 = 1.3
-        # PegadaEscopo2 = 0.3*1.0 + 0 = 0.3
-        assert abs(u3.PegadaEscopo1 - 1.3) < 1e-6
-        assert abs(u3.PegadaEscopo2 - 0.3) < 1e-6
-        assert abs(u3.Pegada - 1.6) < 1e-6
+        # U3: herda de U2 proporcionalmente (80 / 50 = 1.6)
+        # PegadaEscopo1 = 1.25*1.6 + 1.5*0.2 = 2.3
+        # PegadaEscopo2 = 0.3*1.6 + 0 = 0.48
+        assert abs(u3.PegadaEscopo1 - 2.3) < 1e-6
+        assert abs(u3.PegadaEscopo2 - 0.48) < 1e-6
+        assert abs(u3.Pegada - 2.78) < 1e-6
 
     def test_no_connections(self):
         """Unidades isoladas: pegada = intensidade."""

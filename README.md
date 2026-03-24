@@ -1,7 +1,7 @@
 # Calculadora de Emissões de Carbono - CMP
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io/)
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Version](https://img.shields.io/badge/Version-0.2.0--beta-orange.svg?style=for-the-badge)](https://github.com/tpessotti/calculadora_emissoes)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
@@ -97,7 +97,7 @@ O sistema implementa metodologias de Avaliação de Ciclo de Vida (ACV) simplifi
 
 ### Pré-requisitos
 
-- Python 3.9 ou superior
+- Python 3.10 ou superior
 - pip (gerenciador de pacotes Python)
 
 ### Opção 1: Instalação Local (Desenvolvimento)

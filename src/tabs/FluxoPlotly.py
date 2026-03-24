@@ -550,7 +550,9 @@ class FluxoTab:
             hoverinfo="text",
             hoverlabel=dict(
                 bgcolor="white", bordercolor="#e2e8f0",
-                font=dict(size=12, family="Arial, sans-serif"),
+                font=dict(size=12, family="Arial, sans-serif", color=COLORS["text_primary"]),
+                align="left",
+                namelength=-1,
             ),
             marker=dict(
                 size=node_sizes,
@@ -658,6 +660,62 @@ class FluxoTab:
         return f"rgb({r},{g},{b})"
 
     def _build_hover(self, u, is_sel, is_editing):
+        def _fmt_mass(value: float, max_decimals: int = 12) -> str:
+            try:
+                n = float(value)
+            except (TypeError, ValueError):
+                n = 0.0
+            text = f"{n:.{max_decimals}f}".rstrip("0").rstrip(".")
+            return text if text else "0"
+
+        def _format_io_lines(items, icon):
+            lines = []
+            for item in items:
+                produto = str(item.get("produto_id", "") or "").strip()
+                unidade = str(item.get("unidade", "t") or "t").strip() or "t"
+                try:
+                    qtd_raw = float(item.get("quantidade", 0.0) or 0.0)
+                except (TypeError, ValueError):
+                    qtd_raw = 0.0
+
+                qtd_disp = convert_mass(qtd_raw, unidade, _mu)
+                if produto:
+                    lines.append(f"{icon} {produto}: {_fmt_mass(qtd_disp)} {_mu}")
+            return lines
+
+        def _legacy_io_list(produto, massa_t):
+            return [{"produto_id": produto, "quantidade": massa_t, "unidade": "t"}]
+
+        def _format_consumiveis_lines(cons_rows, cons_esp_rows):
+            if not cons_rows or not cons_esp_rows:
+                return []
+
+            escala_para_ton = convert_mass(1.0, "t", _mu)
+            lines = []
+            emis_items = []
+            for c, e in zip(cons_rows, cons_esp_rows):
+                nome = str(c.get("nome", "") or "").strip() or "(sem nome)"
+                esc = str(c.get("escopo", "-") or "-")
+                try:
+                    fator = float(c.get("fator", 0.0) or 0.0)
+                except (TypeError, ValueError):
+                    fator = 0.0
+                try:
+                    cons_esp = float(e or 0.0)
+                except (TypeError, ValueError):
+                    cons_esp = 0.0
+
+                emissao_item = fator * cons_esp * escala_para_ton
+                emis_items.append((nome, esc, fator, cons_esp, emissao_item))
+
+            total_emis = sum(x[4] for x in emis_items)
+            for nome, esc, fator, cons_esp, emis in emis_items:
+                pct = (emis / total_emis * 100.0) if total_emis > 0 else 0.0
+                lines.append(
+                    f"• {nome} ({esc}) | fator {fator:.4f} | consumo esp. {cons_esp:.4f} | {pct:.1f}%"
+                )
+            return lines
+
         status = ""
         if is_editing:
             status = "✏️ <b>Editando</b><br>"
@@ -671,33 +729,59 @@ class FluxoTab:
         c2t  = lambda v: convert_co2e(v, _mu)      # emissão total
         cm   = lambda v: convert_mass(v, "t", _mu)
 
-        consumos = ""
-        if u.Consumiveis and u.ConsumoEspecifico:
-            items = [f"  • {c['nome']}: {e:.2f}" for c, e in zip(u.Consumiveis, u.ConsumoEspecifico)]
-            consumos = "<br>".join(items)
+        inputs_rows = list(getattr(u, "Inputs", []) or [])
+        outputs_rows = list(getattr(u, "Outputs", []) or [])
+        if not inputs_rows:
+            inputs_rows = _legacy_io_list(getattr(u, "Input", ""), getattr(u, "MassaInput", 0.0))
+        if not outputs_rows:
+            outputs_rows = _legacy_io_list(getattr(u, "Output", ""), getattr(u, "MassaOutput", 0.0))
+
+        input_lines = _format_io_lines(inputs_rows, "📥")
+        output_lines = _format_io_lines(outputs_rows, "📤")
+        consumos_lines = _format_consumiveis_lines(
+            list(getattr(u, "Consumiveis", []) or []),
+            list(getattr(u, "ConsumoEspecifico", []) or []),
+        )
+
+        tecnologia_nome = "—"
+        tecnologia = getattr(u, "Tecnologia", None)
+        if tecnologia:
+            tecnologia_nome = str(getattr(tecnologia, "nome", tecnologia) or "—")
+
+        input_block = "<br>".join(input_lines) if input_lines else "📥 (sem entradas informadas)"
+        output_block = "<br>".join(output_lines) if output_lines else "📤 (sem saídas informadas)"
+        consumos_block = "<br>".join(consumos_lines) if consumos_lines else "• sem consumíveis detalhados"
+
+        emissao_total = c2t(u.IntensidadeEmissao * u.MassaOutput)
+        pegada_total = c2t(u.Pegada * u.MassaOutput)
 
         hover = (
             f"{status}"
             f"<b>{u.ID_ELO} – {u.Nome}</b><br>"
-            f"📍 {u.Localizacao} | 📅 {u.Periodo}<br>"
-            f"<br>"
-            f"📥 Input: {u.Input} ({cm(u.MassaInput):.2f} {_mu})<br>"
-            f"📤 Output: {u.Output} ({cm(u.MassaOutput):.2f} {_mu})<br>"
+            f"<span style='color:{COLORS['text_secondary']}'>"
+            f"📍 {u.Localizacao} | 📅 {u.Periodo} | 🧪 Tecnologia: {tecnologia_nome}"
+            f"</span><br>"
+            f"<br><b>Entradas ({len(input_lines)})</b><br>"
+            f"{input_block}<br>"
+            f"<br><b>Saídas ({len(output_lines)})</b><br>"
+            f"{output_block}<br>"
         )
-        if consumos:
-            hover += f"<br>🛢️ Insumos:<br>{consumos}<br>"
+
+        hover += f"<br><b>Insumos e Contribuição</b><br>{consumos_block}<br>"
+
         hover += (
-            f"<br>"
+            f"<br><b>Indicadores</b><br>"
             f"💨 Intensidade: {c2e(u.IntensidadeEmissao):.4f} {_int}<br>"
-            f"   E1: {c2e(u.IntensidadeEmissaoEscopo1):.4f} | "
+            f"💨 Emissão própria total: {emissao_total:.4f} {_lbl}<br>"
+            f" E1: {c2e(u.IntensidadeEmissaoEscopo1):.4f} | "
             f"E2: {c2e(u.IntensidadeEmissaoEscopo2):.4f} | "
             f"E3: {c2e(u.IntensidadeEmissaoEscopo3):.4f}<br>"
-            f"<br>"
-            f"🌍 Pegada: {c2t(u.Pegada * u.MassaOutput):.4f} {_lbl}<br>"
-            f"   E1: {c2e(u.PegadaEscopo1):.4f} | "
+            f"🌍 Pegada total: {pegada_total:.4f} {_lbl}<br>"
+            f" E1: {c2e(u.PegadaEscopo1):.4f} | "
             f"E2: {c2e(u.PegadaEscopo2):.4f} | "
             f"E3: {c2e(u.PegadaEscopo3):.4f}<br>"
         )
+
         if u.TaxacaoFronteira:
             hover += "<br>🔴 <b>Sujeito a taxação de fronteira</b>"
         if u.TaxacaoLocal:
@@ -780,7 +864,8 @@ class FluxoTab:
         if u_src:
             _mu_e = get_default_mass_unit_from_session(st.session_state)
             massa_disp = convert_mass(u_src.MassaOutput, "t", _mu_e)
-            label_text = f"{massa_disp:.1f} {_mu_e}"
+            text_val = f"{massa_disp:.12f}".rstrip("0").rstrip(".") or "0"
+            label_text = f"{text_val} {_mu_e}"
             traces.append(go.Scatter(
                 x=[cx], y=[cy - 8],
                 mode="text",
@@ -1393,6 +1478,16 @@ class FluxoTab:
             unidade_existente.MassaOutput = kwargs.get("massa_output", unidade_existente.MassaOutput)
             unidade_existente.Consumiveis = kwargs.get("consumiveis", unidade_existente.Consumiveis)
             unidade_existente.ConsumoEspecifico = kwargs.get("consumo_especifico", unidade_existente.ConsumoEspecifico)
+            unidade_existente.Inputs = self.utils_ui._normalize_io_rows(
+                kwargs.get("inputs", getattr(unidade_existente, "Inputs", []))
+            )
+            unidade_existente.Outputs = self.utils_ui._normalize_io_rows(
+                kwargs.get("outputs", getattr(unidade_existente, "Outputs", []))
+            )
+
+            # Mantém compatibilidade com trechos legados que ainda usam Input/Output e Massa*.
+            if hasattr(unidade_existente, "sync_legacy_fields_from_lists"):
+                unidade_existente.sync_legacy_fields_from_lists()
             unidade_existente.TaxacaoFronteira = kwargs.get("taxacao_fronteira", unidade_existente.TaxacaoFronteira)
             unidade_existente.TaxacaoLocal = kwargs.get("taxacao_local", unidade_existente.TaxacaoLocal)
             unidade_existente.Tecnologia = kwargs.get("tecnologia", unidade_existente.Tecnologia)

@@ -53,7 +53,41 @@ class EmissionCalculator:
         except (ValueError, TypeError, AttributeError):
             ano_ref = None
 
-        for c, e in zip(unidade.Consumiveis, unidade.ConsumoEspecifico):
+        if float(getattr(unidade, "MassaOutput", 0.0) or 0.0) <= 0:
+            unidade.IntensidadeEmissaoEscopo1 = 0.0
+            unidade.IntensidadeEmissaoEscopo2 = 0.0
+            unidade.IntensidadeEmissaoEscopo3 = 0.0
+            unidade.IntensidadeEmissao = 0.0
+            unidade.PegadaEscopo1 = 0.0
+            unidade.PegadaEscopo2 = 0.0
+            unidade.PegadaEscopo3 = 0.0
+            unidade.Pegada = 0.0
+            return unidade
+
+        entradas = getattr(unidade, "Inputs", []) or []
+        consumiveis = list(getattr(unidade, "Consumiveis", []) or [])
+        consumo_especifico = list(getattr(unidade, "ConsumoEspecifico", []) or [])
+
+        # Prioriza modelo novo (inputs/outputs) quando consumíveis não estiverem alinhados.
+        if (not consumiveis or len(consumiveis) != len(consumo_especifico)) and entradas:
+            massa_output = float(getattr(unidade, "MassaOutput", 0.0) or 0.0)
+            consumiveis = []
+            consumo_especifico = []
+            for item in entradas:
+                produto = str(item.get("produto_id", "") or "").strip()
+                quantidade = float(item.get("quantidade", 0.0) or 0.0)
+                consumiveis.append({
+                    "nome": produto,
+                    "fator": 0.0,
+                    "escopo": "SCOPE 1",
+                })
+                # quantidade absoluta -> consumo específico por unidade de output
+                if massa_output > 0:
+                    consumo_especifico.append(quantidade / massa_output)
+                else:
+                    consumo_especifico.append(0.0)
+
+        for c, e in zip(consumiveis, consumo_especifico):
             nome_consumivel = str(c.get("nome", "")).strip()
             escopo_stored   = str(c.get("escopo", "SCOPE 1"))
 
@@ -74,6 +108,10 @@ class EmissionCalculator:
                 if fator_dict is not None:
                     fator  = float(fator_dict.get("fator_emissao", 0.0))
                     escopo = str(fator_dict.get("escopo", escopo_stored))
+                elif fator <= 0:
+                    st.warning(
+                        f"Fator de emissão não encontrado para '{nome_consumivel}' (ano {ano_ref})."
+                    )
 
             consumo_por_ton = float(e) * float(escala_para_ton)  # unid_consumível / t
             emissao = fator * consumo_por_ton                     # kgCO₂e / t

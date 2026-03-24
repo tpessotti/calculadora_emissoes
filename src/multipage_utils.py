@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import time
+from typing import Any, MutableMapping, Optional
 import streamlit as st
 
 _src_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,21 +23,23 @@ from core.io.json_io import load_fatores_emissao
 
 # ── Session state ─────────────────────────────────────────────────────────────
 
-def _auto_restore_session():
+def _auto_restore_session(session_state: Optional[MutableMapping[str, Any]] = None) -> None:
     """Restaura automaticamente a sessão salva do usuário no primeiro rerun após o login.
 
     Lê data/user_sessions.json e chama _importar_sessao (Settings) se existir
     um registro salvo para o usuário logado.  O flag 'sessao_restaurada' evita
     que a restauração seja disparada mais de uma vez por sessão de browser.
     """
-    usuario = st.session_state.get("usuario_logado")
+    state = session_state if session_state is not None else st.session_state
+
+    usuario = state.get("usuario_logado")
     if not usuario:
         return
-    if st.session_state.get("sessao_restaurada"):
+    if state.get("sessao_restaurada"):
         return
 
     # Marca imediatamente para evitar re-entrada em caso de erro
-    st.session_state.sessao_restaurada = True
+    state["sessao_restaurada"] = True
 
     sessions_file = os.path.join(_root_dir, "data", "user_sessions.json")
     if not os.path.exists(sessions_file):
@@ -54,14 +57,33 @@ def _auto_restore_session():
 
     try:
         from tabs.Settings import SettingsTab  # importação local — evita ciclo
+        from core.units import normalize_unit
         SettingsTab()._importar_sessao(sessao_data)
+        
+        # Reforço extra: garanta que mass_unit foi restaurado mesmo se houver falha parcial
+        if "mass_unit" in sessao_data:
+            state["mass_unit"] = normalize_unit(sessao_data["mass_unit"])
     except Exception as e:
         st.warning(f"⚠️ Não foi possível restaurar a sessão anterior: {e}")
 
 
-def init_session_state():
-    """Inicializa valores padrão no session_state e restaura sessão do usuário."""
-    db = DatabaseManager()
+def init_session_state(
+    session_state: Optional[MutableMapping[str, Any]] = None,
+    db: Optional[DatabaseManager] = None,
+    context: Optional[AppContext] = None,
+) -> None:
+    """Inicializa valores padrão da sessão e restaura sessão salva.
+
+    Args:
+        session_state (Optional[MutableMapping[str, Any]]): Estado alvo da sessão.
+            Quando ``None``, usa ``st.session_state``.
+        db (Optional[DatabaseManager]): Instância opcional para acesso a dados.
+        context (Optional[AppContext]): Contexto da aplicação para resolução de paths.
+    """
+    state = session_state if session_state is not None else st.session_state
+    db = db or DatabaseManager()
+    ctx = context or AppContext.get()
+
     session_defaults = {
         "selected_nodes": [],
         "selected_edge": None,
@@ -80,20 +102,19 @@ def init_session_state():
         "_auto_save_last_ts": 0.0,
     }
     for key, value in session_defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+        if key not in state:
+            state[key] = value
 
-    if "fatores_emissao" not in st.session_state or not st.session_state["fatores_emissao"]:
-        ctx = AppContext.get()
+    if "fatores_emissao" not in state or not state["fatores_emissao"]:
         fatores = load_fatores_emissao(ctx.fatores_path())
         if fatores:
-            st.session_state.fatores_emissao = fatores
+            state["fatores_emissao"] = fatores
         else:
-            st.session_state.fatores_emissao = []
-            st.session_state["mostrar_aviso_fatores_emissao"] = True
+            state["fatores_emissao"] = []
+            state["mostrar_aviso_fatores_emissao"] = True
 
     # Restaura sessão salva no primeiro rerun após o login
-    _auto_restore_session()
+    _auto_restore_session(state)
 
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
@@ -105,8 +126,13 @@ def apply_theme():
 
 # ── Header bar (canto superior direito) ──────────────────────────────────────
 
-def render_header_bar(usuario_logado: str | None):
+def render_header_bar(usuario_logado: Optional[str]) -> None:
     """
+    Renderiza o header da aplicação.
+
+    Args:
+        usuario_logado (Optional[str]): Nome do usuário autenticado.
+
     Injeta um pill fixo no canto superior direito com o nome do usuário.
     Usa apenas estilos inline (sem bloco <style>) para evitar o bug do
     Streamlit que vaza o texto de blocos <style> na página.
@@ -145,23 +171,38 @@ def render_header_bar(usuario_logado: str | None):
 
 # ── Sidebar extras ────────────────────────────────────────────────────────────
 
-def render_sidebar_extras(usuario_logado: str | None):
+def render_sidebar_extras(
+    usuario_logado: Optional[str],
+    session_state: Optional[MutableMapping[str, Any]] = None,
+) -> None:
     """
     Executa o salvamento automático periódico (sem widget na sidebar
     — o toggle fica em Configurações > Preferências).
+
+    Args:
+        usuario_logado (Optional[str]): Nome do usuário autenticado.
+        session_state (Optional[MutableMapping[str, Any]]): Estado alvo da sessão.
+            Quando ``None``, usa ``st.session_state``.
     """
     if not usuario_logado:
         return
 
-    if st.session_state.get("auto_save_session", True):
-        interval = int(st.session_state.get("auto_save_interval", 20))
+    state = session_state if session_state is not None else st.session_state
+
+    if state.get("auto_save_session", True):
+        try:
+            interval = int(state.get("auto_save_interval", 20))
+        except (TypeError, ValueError):
+            interval = 20
+
+        interval = max(5, interval)
         now_ts = time.time()
-        last_ts = float(st.session_state.get("_auto_save_last_ts", 0.0) or 0.0)
+        last_ts = float(state.get("_auto_save_last_ts", 0.0) or 0.0)
         if (now_ts - last_ts) >= interval:
             from tabs.Sessoes import SessoesTab  # importação local para evitar ciclo
             if SessoesTab()._save_user_session():
-                st.session_state._auto_save_last_ts = now_ts
-                if st.session_state.get("pref_show_save_toast", True):
+                state["_auto_save_last_ts"] = now_ts
+                if state.get("pref_show_save_toast", True):
                     st.toast("✅ Sessão salva automaticamente", icon="💾")
 
 

@@ -20,6 +20,75 @@ import streamlit as st
 logger = logging.getLogger(__name__)
 
 
+def migrar_unidade_legacy(unidade: Dict[str, Any]) -> Dict[str, Any]:
+    """Converte unidade legado (Input/Output únicos) para inputs/outputs em lista.
+
+    A migração é idempotente: pode ser executada múltiplas vezes sem duplicação.
+    """
+    if not isinstance(unidade, dict):
+        return unidade
+
+    if "inputs" not in unidade or not isinstance(unidade.get("inputs"), list):
+        unidade["inputs"] = []
+    if "outputs" not in unidade or not isinstance(unidade.get("outputs"), list):
+        unidade["outputs"] = []
+
+    if not unidade["inputs"] and ("Input" in unidade or "MassaInput" in unidade):
+        unidade["inputs"] = [
+            {
+                "produto_id": str(unidade.get("Input", "") or "").strip(),
+                "quantidade": float(unidade.get("MassaInput", 0.0) or 0.0),
+                "unidade": "t",
+            }
+        ]
+
+    if not unidade["outputs"] and ("Output" in unidade or "MassaOutput" in unidade):
+        unidade["outputs"] = [
+            {
+                "produto_id": str(unidade.get("Output", "") or "").strip(),
+                "quantidade": float(unidade.get("MassaOutput", 0.0) or 0.0),
+                "unidade": "t",
+            }
+        ]
+
+    # Re-sincroniza campos legados para manter compatibilidade com código antigo.
+    if unidade.get("inputs"):
+        unidade["Input"] = str(unidade["inputs"][0].get("produto_id", "") or "")
+        unidade["MassaInput"] = float(
+            sum(float(i.get("quantidade", 0.0) or 0.0) for i in unidade["inputs"])
+        )
+    if unidade.get("outputs"):
+        unidade["Output"] = str(unidade["outputs"][0].get("produto_id", "") or "")
+        unidade["MassaOutput"] = float(
+            sum(float(o.get("quantidade", 0.0) or 0.0) for o in unidade["outputs"])
+        )
+
+    return unidade
+
+
+def migrate_database_payload(data: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+    """Migra payload completo para schema com suporte a inputs/outputs."""
+    if not isinstance(data, dict):
+        return data, False
+
+    changed = False
+    unidades = data.get("unidades", [])
+    if isinstance(unidades, list):
+        for idx, unidade in enumerate(unidades):
+            before = json.dumps(unidade, ensure_ascii=False, sort_keys=True)
+            unidades[idx] = migrar_unidade_legacy(unidade)
+            after = json.dumps(unidades[idx], ensure_ascii=False, sort_keys=True)
+            if before != after:
+                changed = True
+
+    schema_version = str(data.get("schema_version", "") or "")
+    if schema_version != "1.3.0":
+        data["schema_version"] = "1.3.0"
+        changed = True
+
+    return data, changed
+
+
 def _to_jsonable(value: Any) -> Any:
     """Converte objetos arbitrários para tipos serializáveis em JSON."""
     if value is None or isinstance(value, (str, int, float, bool)):
@@ -114,6 +183,13 @@ def load_database(filepath: str) -> Dict[str, Any]:
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
+
+        data, changed = migrate_database_payload(data)
+        if changed:
+            data["updated_at"] = datetime.now().isoformat()
+            _atomic_write_json(filepath, data)
+            logger.info("Database migrado para schema 1.3.0 em %s", filepath)
+
         logger.info("Database carregado de %s", filepath)
         return data
     except Exception as exc:

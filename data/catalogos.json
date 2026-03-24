@@ -3,8 +3,11 @@
     "Brasil"
   ],
   "insumos": [
+    "Fermento",
     "Massa",
     "Pão",
-    "Trigo; Água; Fermento"
+    "Trigo",
+    "Trigo; Água; Fermento",
+    "Água"
   ]
 }

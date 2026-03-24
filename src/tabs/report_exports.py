@@ -10,6 +10,7 @@ import sys
 import os
 from datetime import datetime
 from io import BytesIO
+from typing import Optional
 
 # Ensure core is importable
 _root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -76,7 +77,7 @@ def get_report_config() -> dict:
     return st.session_state.report_config
 
 
-def _fmt_date(dt: datetime | None = None, fmt: str = "DD/MM/AAAA") -> str:
+def _fmt_date(dt: Optional[datetime] = None, fmt: str = "DD/MM/AAAA") -> str:
     dt = dt or datetime.now()
     if fmt == "AAAA-MM-DD":
         return dt.strftime("%Y-%m-%d")
@@ -204,7 +205,7 @@ def _footer_md(cfg: dict) -> str:
     return "\n".join(lines)
 
 
-def _table_md(headers: list[str], rows: list[list], align: list[str] | None = None) -> str:
+def _table_md(headers: list[str], rows: list[list], align: Optional[list[str]] = None) -> str:
     """Build a pipe-delimited markdown table."""
     if not rows:
         return "*Sem dados.*\n"
@@ -1001,8 +1002,8 @@ def generate_pdf_comparativo(data: dict, cfg: dict) -> bytes:
 def render_download_bar(
     tab_key: str,
     md_content: str,
-    pdf_bytes: bytes | None = None,
-    extra_downloads: dict | None = None,
+    pdf_bytes: Optional[bytes] = None,
+    extra_downloads: Optional[dict] = None,
     filename_base: str = "relatorio",
 ):
     """

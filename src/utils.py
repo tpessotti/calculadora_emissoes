@@ -12,6 +12,8 @@ from core.units import (
     co2e_label,
     co2e_intensity_label,
     convert_co2e,
+    unit_keys,
+    normalize_unit,
 )
 
 
@@ -120,6 +122,151 @@ class UtilsUI:
     def __init__(self):
         self.db = database.DatabaseManager()
         self.ec = calculations.EmissionCalculator()
+
+    @staticmethod
+    def _normalize_io_rows(rows):
+        normalized = []
+        for item in rows or []:
+            if not isinstance(item, dict):
+                continue
+            produto = str(item.get("produto_id", item.get("produto", "")) or "").strip()
+            unidade = str(item.get("unidade", "t") or "t").strip() or "t"
+            try:
+                quantidade = float(item.get("quantidade", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                quantidade = 0.0
+            normalized.append(
+                {
+                    "produto_id": produto,
+                    "quantidade": quantidade,
+                    "unidade": unidade,
+                }
+            )
+        return normalized
+
+    @staticmethod
+    def _remove_io_row(rows, index: int, min_rows: int = 1):
+        """Remove linha por índice mantendo quantidade mínima de linhas."""
+        data = list(rows or [])
+        if len(data) <= min_rows:
+            return data
+        if 0 <= index < len(data):
+            data.pop(index)
+        return data
+
+    @staticmethod
+    def _format_mass_precise(value: float, max_decimals: int = 12) -> str:
+        """Formata massa sem arredondamento agressivo para exibição na UI."""
+        try:
+            n = float(value)
+        except (TypeError, ValueError):
+            n = 0.0
+        text = f"{n:.{max_decimals}f}".rstrip("0").rstrip(".")
+        return text if text else "0"
+
+    @staticmethod
+    def _sum_io_rows_in_t(rows, fallback_unit: str = "t") -> float:
+        """Soma quantidades convertendo cada linha para toneladas."""
+        total_t = 0.0
+        for item in UtilsUI._normalize_io_rows(rows):
+            unidade = str(item.get("unidade", fallback_unit) or fallback_unit)
+            total_t += convert_mass(float(item.get("quantidade", 0.0) or 0.0), unidade, "t")
+        return total_t
+
+    def _init_io_rows_for_form(self, form_key: str, unidade=None):
+        input_key = f"{form_key}_inputs_rows"
+        output_key = f"{form_key}_outputs_rows"
+
+        if input_key not in st.session_state:
+            if unidade and getattr(unidade, "Inputs", None):
+                st.session_state[input_key] = self._normalize_io_rows(unidade.Inputs)
+            elif unidade:
+                st.session_state[input_key] = self._normalize_io_rows([
+                    {
+                        "produto_id": getattr(unidade, "Input", ""),
+                        "quantidade": getattr(unidade, "MassaInput", 0.0),
+                        "unidade": "t",
+                    }
+                ])
+            else:
+                st.session_state[input_key] = [{"produto_id": "", "quantidade": 0.0, "unidade": "t"}]
+
+        if output_key not in st.session_state:
+            if unidade and getattr(unidade, "Outputs", None):
+                st.session_state[output_key] = self._normalize_io_rows(unidade.Outputs)
+            elif unidade:
+                st.session_state[output_key] = self._normalize_io_rows([
+                    {
+                        "produto_id": getattr(unidade, "Output", ""),
+                        "quantidade": getattr(unidade, "MassaOutput", 0.0),
+                        "unidade": "t",
+                    }
+                ])
+            else:
+                st.session_state[output_key] = [{"produto_id": "", "quantidade": 0.0, "unidade": "t"}]
+
+    def _render_io_rows_editor(self, *, title: str, rows_key: str, products: list[str], mass_unit: str, add_button_key: str):
+        rows = self._normalize_io_rows(st.session_state.get(rows_key, []))
+
+        st.markdown(f"**{title}**")
+        if not rows:
+            st.caption("Nenhum item informado.")
+
+        for idx, row in enumerate(rows):
+            c1, c2, c3, c4 = st.columns([4, 3, 1.5, 1])
+            with c1:
+                produto = st.selectbox(
+                    "Produto",
+                    options=[""] + products,
+                    index=([""] + products).index(row.get("produto_id", "")) if row.get("produto_id", "") in ([""] + products) else 0,
+                    format_func=lambda v: "Selecione..." if v == "" else v,
+                    key=f"{rows_key}_produto_{idx}",
+                )
+            with c2:
+                quantidade = st.number_input(
+                    "Quantidade",
+                    min_value=0.0,
+                    value=float(row.get("quantidade", 0.0) or 0.0),
+                    step=0.000001,
+                    format="%.12f",
+                    key=f"{rows_key}_quantidade_{idx}",
+                )
+            with c3:
+                unidade_atual = normalize_unit(str(row.get("unidade", mass_unit) or mass_unit), default=mass_unit)
+                unit_options = [mass_unit] + [u for u in unit_keys() if u != mass_unit]
+                if unidade_atual not in unit_options:
+                    unit_options.append(unidade_atual)
+                unidade = st.selectbox(
+                    "Unid.",
+                    options=unit_options,
+                    index=unit_options.index(unidade_atual),
+                    key=f"{rows_key}_unidade_{idx}",
+                )
+            with c4:
+                st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+                if st.button("🗑️", key=f"{rows_key}_remove_{idx}", help="Remover linha"):
+                    rows = self._remove_io_row(rows, idx, min_rows=0)
+                    st.session_state[rows_key] = rows
+                    st.rerun()
+
+            rows[idx] = {
+                "produto_id": produto,
+                "quantidade": float(quantidade),
+                "unidade": unidade,
+            }
+
+        if st.button(f"+ Adicionar {'insumo' if 'inputs' in rows_key else 'saída'}", key=add_button_key):
+            rows.append({"produto_id": "", "quantidade": 0.0, "unidade": mass_unit})
+            st.session_state[rows_key] = rows
+            st.rerun()
+
+        total_t = self._sum_io_rows_in_t(rows, fallback_unit=mass_unit)
+        total_display = convert_mass(total_t, "t", mass_unit)
+        total_display_str = self._format_mass_precise(total_display)
+        st.caption(f"Total informado: {total_display_str} {mass_unit} ({len(rows)} item(ns))")
+
+        st.session_state[rows_key] = rows
+        return rows
 
     def _ensure_catalog_inputs(self):
         """Garante catálogos mínimos de localização e produtos no estado da sessão."""
@@ -608,6 +755,7 @@ class UtilsUI:
     def render_form(self, modal):
         """Formulário para criação de nova unidade produtiva"""
         self._ensure_catalog_inputs()
+        self._init_io_rows_for_form("create")
 
         if "fatores_emissao" not in st.session_state or not st.session_state.fatores_emissao:
             st.warning("Nenhum fator de emissão disponível. Importe antes de criar unidades.")
@@ -647,33 +795,24 @@ class UtilsUI:
             taxacao_local = st.checkbox("Taxação Local")
 
         with col2:
-            c_in, c_in_btn = st.columns([6, 1])
-            with c_in:
-                input_insumo = st.selectbox(
-                    "Insumo Entrada",
-                    options=[""] + produtos,
-                    format_func=lambda v: "Não informado" if v == "" else v,
-                    key="create_input_insumo",
-                )
-            with c_in_btn:
-                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if st.button("➕", key="create_add_insumo_in", help="Cadastrar novo insumo"):
-                    st.session_state["create_open_catalog_insumos"] = True
+            if st.button("➕ Cadastrar novo produto/insumo", key="create_add_insumo_catalog", help="Cadastrar novo insumo"):
+                st.session_state["create_open_catalog_insumos"] = True
 
-            c_out, c_out_btn = st.columns([6, 1])
-            with c_out:
-                output_insumo = st.selectbox(
-                    "Insumo Saída",
-                    options=[""] + produtos,
-                    format_func=lambda v: "Não informado" if v == "" else v,
-                    key="create_output_insumo",
-                )
-            with c_out_btn:
-                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if st.button("➕", key="create_add_insumo_out", help="Cadastrar novo insumo"):
-                    st.session_state["create_open_catalog_insumos"] = True
-            massa_input = st.number_input(f"Massa de Entrada ({mass_unit})", value=0.0)
-            massa_output = st.number_input(f"Massa de Saída ({mass_unit})", value=0.0)
+            inputs_rows = self._render_io_rows_editor(
+                title="Entradas do processo",
+                rows_key="create_inputs_rows",
+                products=produtos,
+                mass_unit=mass_unit,
+                add_button_key="create_add_input_row",
+            )
+
+            outputs_rows = self._render_io_rows_editor(
+                title="Saídas do processo",
+                rows_key="create_outputs_rows",
+                products=produtos,
+                mass_unit=mass_unit,
+                add_button_key="create_add_output_row",
+            )
             taxacao_fronteira = st.checkbox("Taxação na Fronteira")
 
         if st.session_state.get("create_open_catalog_localizacoes", False):
@@ -693,6 +832,16 @@ class UtilsUI:
             if not tecnologia_escolhida:
                 st.error("Selecione ou crie uma tecnologia antes de salvar.")
                 return
+
+            inputs_clean = [r for r in self._normalize_io_rows(inputs_rows) if r.get("produto_id") and float(r.get("quantidade", 0.0) or 0.0) > 0]
+            outputs_clean = [r for r in self._normalize_io_rows(outputs_rows) if r.get("produto_id") and float(r.get("quantidade", 0.0) or 0.0) > 0]
+
+            if not inputs_clean:
+                st.error("Informe ao menos 1 insumo de entrada com quantidade > 0.")
+                return
+            if not outputs_clean:
+                st.error("Informe ao menos 1 produto de saída com quantidade > 0.")
+                return
             
             try:
                 self._salvar_ou_atualizar_unidade(
@@ -700,12 +849,22 @@ class UtilsUI:
                     nome=nome,
                     localizacao=localizacao,
                     periodo=periodo,
-                    input_insumo=input_insumo,
-                    massa_input=convert_mass(massa_input, mass_unit, "t"),
-                    output_insumo=output_insumo,
-                    massa_output=convert_mass(massa_output, mass_unit, "t"),
+                    input_insumo=inputs_clean[0]["produto_id"],
+                    massa_input=self._sum_io_rows_in_t(inputs_clean, fallback_unit=mass_unit),
+                    output_insumo=outputs_clean[0]["produto_id"],
+                    massa_output=self._sum_io_rows_in_t(outputs_clean, fallback_unit=mass_unit),
                     consumiveis=consumiveis,
                     consumo_especifico=consumo_especifico,
+                    inputs=[{
+                        "produto_id": i["produto_id"],
+                        "quantidade": convert_mass(float(i["quantidade"]), str(i.get("unidade", mass_unit) or mass_unit), "t"),
+                        "unidade": "t",
+                    } for i in inputs_clean],
+                    outputs=[{
+                        "produto_id": o["produto_id"],
+                        "quantidade": convert_mass(float(o["quantidade"]), str(o.get("unidade", mass_unit) or mass_unit), "t"),
+                        "unidade": "t",
+                    } for o in outputs_clean],
                     taxacao_fronteira=taxacao_fronteira,
                     taxacao_local=taxacao_local,
                     modal=modal,
@@ -719,6 +878,7 @@ class UtilsUI:
                                     input_insumo, massa_input, output_insumo, massa_output,
                                     consumiveis, consumo_especifico,
                                     taxacao_fronteira, taxacao_local,
+                                    inputs=None, outputs=None,
                                     modal=None, tecnologia=None,
                                     unidade_existente=None):
         """Cria ou atualiza uma unidade produtiva"""
@@ -740,6 +900,10 @@ class UtilsUI:
                 unidade.TaxacaoLocal = taxacao_local
                 unidade.Consumiveis = consumiveis
                 unidade.ConsumoEspecifico = consumo_especifico
+                unidade.Inputs = self._normalize_io_rows(inputs or [])
+                unidade.Outputs = self._normalize_io_rows(outputs or [])
+                if hasattr(unidade, "sync_legacy_fields_from_lists"):
+                    unidade.sync_legacy_fields_from_lists()
                 unidade.Tecnologia = tecnologia
             else:
                 unidade = UnidadeProdutiva(
@@ -753,6 +917,8 @@ class UtilsUI:
                     massa_output=massa_output,
                     consumiveis=consumiveis,
                     consumo_especifico=consumo_especifico,
+                    inputs=self._normalize_io_rows(inputs or []),
+                    outputs=self._normalize_io_rows(outputs or []),
                     taxacao_fronteira=taxacao_fronteira,
                     taxacao_local=taxacao_local,
                     tecnologia=tecnologia
@@ -811,8 +977,8 @@ class UtilsUI:
             with cols[4]: st.markdown(f"<div style='{style}'>{u.Output}</div>", unsafe_allow_html=True)
             massa_in_disp = convert_mass(u.MassaInput, "t", mass_unit)
             massa_out_disp = convert_mass(u.MassaOutput, "t", mass_unit)
-            with cols[5]: st.markdown(f"<div style='{style}'>{massa_in_disp:.1f}</div>", unsafe_allow_html=True)
-            with cols[6]: st.markdown(f"<div style='{style}'>{massa_out_disp:.1f}</div>", unsafe_allow_html=True)
+            with cols[5]: st.markdown(f"<div style='{style}'>{self._format_mass_precise(massa_in_disp)}</div>", unsafe_allow_html=True)
+            with cols[6]: st.markdown(f"<div style='{style}'>{self._format_mass_precise(massa_out_disp)}</div>", unsafe_allow_html=True)
 
             emissao_total = convert_co2e(u.IntensidadeEmissao * (u.MassaOutput or 0.0), mass_unit)
             with cols[7]: st.markdown(f"<div style='{style}'>{emissao_total:.2f}</div>", unsafe_allow_html=True)
@@ -829,6 +995,7 @@ class UtilsUI:
     def render_edit_form(self, unidade, fatores_emissao, callback_salvar):
         """Formulário para edição de uma unidade produtiva com tecnologia associada"""
         self._ensure_catalog_inputs()
+        self._init_io_rows_for_form(f"edit_{unidade.ID_ELO}", unidade=unidade)
 
         localizacoes = st.session_state.get("cadastro_localizacoes", [])
         produtos = st.session_state.get("cadastro_insumos", st.session_state.get("cadastro_produtos", []))
@@ -871,23 +1038,15 @@ class UtilsUI:
                 if st.button("➕", key=f"edit_{unidade.ID_ELO}_add_localizacao", help="Cadastrar nova localização"):
                     st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_localizacoes"] = True
 
-            c_in, c_in_btn = st.columns([6, 1])
-            with c_in:
-                input_insumo = st.selectbox(
-                    "Insumo Entrada",
-                    options=[""] + produtos,
-                    index=([""] + produtos).index(input_atual) if input_atual in ([""] + produtos) else 0,
-                    format_func=lambda v: "Não informado" if v == "" else v,
-                    key=f"edit_{unidade.ID_ELO}_input",
-                )
-            with c_in_btn:
-                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if st.button("➕", key=f"edit_{unidade.ID_ELO}_add_insumo_in", help="Cadastrar novo insumo"):
-                    st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_insumos"] = True
-            massa_input = st.number_input(
-                f"Massa de Entrada ({mass_unit})",
-                value=float(convert_mass(unidade.MassaInput, "t", mass_unit)),
-                key=f"edit_{unidade.ID_ELO}_massa_in",
+            if st.button("➕ Cadastrar novo produto/insumo", key=f"edit_{unidade.ID_ELO}_add_insumo_catalog", help="Cadastrar novo insumo"):
+                st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_insumos"] = True
+
+            inputs_rows = self._render_io_rows_editor(
+                title="Entradas do processo",
+                rows_key=f"edit_{unidade.ID_ELO}_inputs_rows",
+                products=produtos,
+                mass_unit=mass_unit,
+                add_button_key=f"edit_{unidade.ID_ELO}_add_input_row",
             )
             tax_local = st.checkbox("Taxação Local", value=unidade.TaxacaoLocal, key=f"edit_{unidade.ID_ELO}_tax_local")
 
@@ -898,23 +1057,12 @@ class UtilsUI:
                 index=anos_disponiveis.index(periodo_atual) if periodo_atual in anos_disponiveis else anos_disponiveis.index(ano_default),
                 key=f"edit_{unidade.ID_ELO}_periodo",
             )
-            c_out, c_out_btn = st.columns([6, 1])
-            with c_out:
-                output_insumo = st.selectbox(
-                    "Insumo Saída",
-                    options=[""] + produtos,
-                    index=([""] + produtos).index(output_atual) if output_atual in ([""] + produtos) else 0,
-                    format_func=lambda v: "Não informado" if v == "" else v,
-                    key=f"edit_{unidade.ID_ELO}_output",
-                )
-            with c_out_btn:
-                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if st.button("➕", key=f"edit_{unidade.ID_ELO}_add_insumo_out", help="Cadastrar novo insumo"):
-                    st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_insumos"] = True
-            massa_output = st.number_input(
-                f"Massa de Saída ({mass_unit})",
-                value=float(convert_mass(unidade.MassaOutput, "t", mass_unit)),
-                key=f"edit_{unidade.ID_ELO}_massa_out",
+            outputs_rows = self._render_io_rows_editor(
+                title="Saídas do processo",
+                rows_key=f"edit_{unidade.ID_ELO}_outputs_rows",
+                products=produtos,
+                mass_unit=mass_unit,
+                add_button_key=f"edit_{unidade.ID_ELO}_add_output_row",
             )
             tax_fronteira = st.checkbox("Taxação na Fronteira", value=unidade.TaxacaoFronteira, key=f"edit_{unidade.ID_ELO}_tax_front")
 
@@ -945,18 +1093,38 @@ class UtilsUI:
             if not all([nome, localizacao, periodo]):
                 st.error("Preencha todos os campos obrigatórios (*)")
                 return
+
+            inputs_clean = [r for r in self._normalize_io_rows(inputs_rows) if r.get("produto_id") and float(r.get("quantidade", 0.0) or 0.0) > 0]
+            outputs_clean = [r for r in self._normalize_io_rows(outputs_rows) if r.get("produto_id") and float(r.get("quantidade", 0.0) or 0.0) > 0]
+
+            if not inputs_clean:
+                st.error("Informe ao menos 1 insumo de entrada com quantidade > 0.")
+                return
+            if not outputs_clean:
+                st.error("Informe ao menos 1 produto de saída com quantidade > 0.")
+                return
                 
             callback_salvar(
                 id_elo=unidade.ID_ELO,
                 nome=nome,
                 localizacao=localizacao,
                 periodo=periodo,
-                input_insumo=input_insumo,
-                massa_input=convert_mass(massa_input, mass_unit, "t"),
-                output_insumo=output_insumo,
-                massa_output=convert_mass(massa_output, mass_unit, "t"),
+                input_insumo=inputs_clean[0]["produto_id"],
+                massa_input=self._sum_io_rows_in_t(inputs_clean, fallback_unit=mass_unit),
+                output_insumo=outputs_clean[0]["produto_id"],
+                massa_output=self._sum_io_rows_in_t(outputs_clean, fallback_unit=mass_unit),
                 consumiveis=consumiveis,
                 consumo_especifico=consumo_especifico,
+                inputs=[{
+                    "produto_id": i["produto_id"],
+                    "quantidade": convert_mass(float(i["quantidade"]), str(i.get("unidade", mass_unit) or mass_unit), "t"),
+                    "unidade": "t",
+                } for i in inputs_clean],
+                outputs=[{
+                    "produto_id": o["produto_id"],
+                    "quantidade": convert_mass(float(o["quantidade"]), str(o.get("unidade", mass_unit) or mass_unit), "t"),
+                    "unidade": "t",
+                } for o in outputs_clean],
                 taxacao_fronteira=tax_fronteira,
                 taxacao_local=tax_local,
                 tecnologia=tecnologia_escolhida,

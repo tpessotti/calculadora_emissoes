@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional, Union
 
-MASS_UNITS: Dict[str, Dict[str, float | str]] = {
+MASS_UNITS: Dict[str, Dict[str, Union[float, str]]] = {
     # ── Métricas SI ──────────────────────────────────────────────
     "g":       {"label": "Grama (g)",                   "to_ton": 1e-6},
     "kg":      {"label": "Quilograma (kg)",              "to_ton": 0.001},
@@ -24,18 +24,18 @@ def unit_keys() -> List[str]:
     return list(MASS_UNITS.keys())
 
 
-def normalize_unit(unit: str | None, default: str = "t") -> str:
+def normalize_unit(unit: Optional[str], default: str = "t") -> str:
     """Normaliza a chave da unidade de massa (case-insensitive)."""
     u = str(unit or "").strip().lower()
     return _UNIT_LOWER_MAP.get(u, default)
 
 
-def unit_label(unit: str | None) -> str:
+def unit_label(unit: Optional[str]) -> str:
     u = normalize_unit(unit)
     return str(MASS_UNITS[u]["label"])
 
 
-def convert_mass(value: float | int | None, from_unit: str | None, to_unit: str | None) -> float:
+def convert_mass(value: Optional[Union[float, int]], from_unit: Optional[str], to_unit: Optional[str]) -> float:
     if value is None:
         return 0.0
     f = normalize_unit(from_unit)
@@ -65,7 +65,7 @@ CO2E_LABELS: Dict[str, str] = {
 }
 
 
-def co2e_label(mass_unit: str | None = None) -> str:
+def co2e_label(mass_unit: Optional[str] = None) -> str:
     """Rótulo da unidade de CO₂e equivalente à unidade de massa selecionada.
 
     Exemplos: "t" → "tCO₂e", "kg" → "kgCO₂e", "Mt" → "MtCO₂e".
@@ -73,13 +73,13 @@ def co2e_label(mass_unit: str | None = None) -> str:
     return CO2E_LABELS.get(normalize_unit(mass_unit), "tCO₂e")
 
 
-def co2e_intensity_label(mass_unit: str | None = None) -> str:
+def co2e_intensity_label(mass_unit: Optional[str] = None) -> str:
     """Rótulo de intensidade de emissão, ex.: \"tCO₂e/t\", \"kgCO₂e/kg\"."""
     u = normalize_unit(mass_unit)
     return f"{co2e_label(u)}/{u}"
 
 
-def convert_co2e(value_kgco2e: float | int | None, target_mass_unit: str | None = None) -> float:
+def convert_co2e(value_kgco2e: Optional[Union[float, int]], target_mass_unit: Optional[str] = None) -> float:
     """Converte um valor em kgCO₂e (unidade interna dos cálculos) para a unidade de
     emissão correspondente à unidade de massa selecionada pelo usuário.
 

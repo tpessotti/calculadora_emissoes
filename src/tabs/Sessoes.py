@@ -193,20 +193,49 @@ class SessoesTab:
         reset_dialog()
 
     def _reset_session(self):
-        keys = [
+        """Reset completo de todos os dados de trabalho (unidades, conexões, insumos, localizações).
+        Preserva preferências do usuário (tema, unidade de massa, etc).
+        """
+        # Dados principais de trabalho
+        keys_to_reset = [
+            # Dados principais
             "unidades",
             "conexoes",
             "edges",
             "fatores_emissao",
             "tecnologias_alternativas",
             "node_counter",
-            "refresh_canvas",
+            # Cadastros (localizações, insumos, produtos)
+            "cadastro_localizacoes",
+            "cadastro_produtos",
+            "cadastro_insumos",
+            # UI State
+            "selected_nodes",
+            "selected_edges",
+            "selected_edge",
+            "unidade_editando_fluxo",
+            "confirmar_exclusao",
+            "nodes_para_excluir",
+            "canvas_opened_once",
             "selected_node",
+            "refresh_canvas",
             "mostrar_aviso_fatores_emissao",
+            # Sessão
+            "sessao_restaurada",
         ]
-        for k in keys:
+        for k in keys_to_reset:
             if k in st.session_state:
                 del st.session_state[k]
+        
+        # Reinicializar com valores padrão
+        st.session_state.unidades = []
+        st.session_state.conexoes = []
+        st.session_state.edges = []
+        st.session_state.fatores_emissao = []
+        st.session_state.tecnologias_alternativas = []
+        st.session_state.node_counter = 1
+        st.session_state.selected_nodes = []
+        st.session_state.selected_edges = []
         st.session_state.refresh_canvas = True
 
     def _render_export_modal(self):
@@ -405,17 +434,42 @@ class SessoesTab:
                 consumiveis_u = u_dict.get("Consumiveis", [])
                 consumo_especifico_u = u_dict.get("ConsumoEspecifico", [])
 
+            inputs_u = UnidadeProdutiva._normalize_io_list(
+                u_dict.get("inputs", u_dict.get("Inputs", []))
+            )
+            outputs_u = UnidadeProdutiva._normalize_io_list(
+                u_dict.get("outputs", u_dict.get("Outputs", []))
+            )
+            if not inputs_u:
+                inputs_u = UnidadeProdutiva._normalize_io_list([
+                    {
+                        "produto_id": u_dict.get("Input", ""),
+                        "quantidade": u_dict.get("MassaInput", 0.0),
+                        "unidade": "t",
+                    }
+                ])
+            if not outputs_u:
+                outputs_u = UnidadeProdutiva._normalize_io_list([
+                    {
+                        "produto_id": u_dict.get("Output", ""),
+                        "quantidade": u_dict.get("MassaOutput", 0.0),
+                        "unidade": "t",
+                    }
+                ])
+
             unidade = UnidadeProdutiva(
                 id_elo=u_dict["ID_ELO"],
                 nome=u_dict["Nome"],
                 localizacao=u_dict["Localizacao"],
                 periodo=u_dict["Periodo"],
-                input_insumo=u_dict["Input"],
-                massa_input=u_dict["MassaInput"],
-                output_insumo=u_dict["Output"],
-                massa_output=u_dict["MassaOutput"],
+                input_insumo=u_dict.get("Input", ""),
+                massa_input=u_dict.get("MassaInput", 0.0),
+                output_insumo=u_dict.get("Output", ""),
+                massa_output=u_dict.get("MassaOutput", 0.0),
                 consumiveis=consumiveis_u,
                 consumo_especifico=consumo_especifico_u,
+                inputs=inputs_u,
+                outputs=outputs_u,
                 taxacao_fronteira=u_dict.get("TaxacaoFronteira", False),
                 taxacao_local=u_dict.get("TaxacaoLocal", False),
                 tecnologia=tecnologia_obj,

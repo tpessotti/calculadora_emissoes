@@ -20,13 +20,12 @@ logger = logging.getLogger(__name__)
 #  SCHEMA — estrutura canônica do JSON DB
 # ═══════════════════════════════════════════════════════════════════
 
-SCHEMA_VERSION = "1.2.0"
+SCHEMA_VERSION = "1.3.0"
 
 # Campos obrigatórios por entidade
 REQUIRED_FIELDS = {
     "unidade": [
         "ID_ELO", "Nome", "Localizacao", "Periodo",
-        "Input", "MassaInput", "Output", "MassaOutput",
         "Consumiveis", "ConsumoEspecifico",
     ],
     "conexao": ["origem", "destino"],
@@ -52,6 +51,8 @@ FIELD_TYPES = {
     "MassaInput": (int, float),
     "Output": str,
     "MassaOutput": (int, float),
+    "inputs": list,
+    "outputs": list,
     "Consumiveis": list,
     "ConsumoEspecifico": list,
     "TaxacaoFronteira": bool,
@@ -164,6 +165,82 @@ def validar_entidade(
 
 def _validar_unidade(reg: Dict, idx: int, report: ValidationReport) -> None:
     """Validações específicas de unidade produtiva."""
+    inputs = reg.get("inputs", []) if isinstance(reg.get("inputs", []), list) else []
+    outputs = reg.get("outputs", []) if isinstance(reg.get("outputs", []), list) else []
+
+    # Compatibilidade com legado (campos únicos)
+    if not inputs and (reg.get("Input") is not None or reg.get("MassaInput") is not None):
+        inputs = [{
+            "produto_id": reg.get("Input", ""),
+            "quantidade": reg.get("MassaInput", 0.0),
+            "unidade": "t",
+        }]
+
+    if not outputs and (reg.get("Output") is not None or reg.get("MassaOutput") is not None):
+        outputs = [{
+            "produto_id": reg.get("Output", ""),
+            "quantidade": reg.get("MassaOutput", 0.0),
+            "unidade": "t",
+        }]
+
+    if not inputs:
+        report.erros.append(ValidationError(
+            entidade="unidade", indice=idx, campo="inputs",
+            mensagem="A unidade deve possuir ao menos 1 input.",
+        ))
+
+    if not outputs:
+        report.erros.append(ValidationError(
+            entidade="unidade", indice=idx, campo="outputs",
+            mensagem="A unidade deve possuir ao menos 1 output.",
+        ))
+
+    for i, item in enumerate(inputs):
+        if not isinstance(item, dict):
+            report.erros.append(ValidationError(
+                entidade="unidade", indice=idx, campo=f"inputs[{i}]",
+                mensagem="Item de input inválido (esperado objeto).",
+            ))
+            continue
+        produto = str(item.get("produto_id", "") or "").strip()
+        if not produto:
+            report.erros.append(ValidationError(
+                entidade="unidade", indice=idx, campo=f"inputs[{i}].produto_id",
+                mensagem="produto_id obrigatório em input.",
+            ))
+        try:
+            qtd = float(item.get("quantidade", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            qtd = -1.0
+        if qtd <= 0:
+            report.erros.append(ValidationError(
+                entidade="unidade", indice=idx, campo=f"inputs[{i}].quantidade",
+                mensagem="Quantidade de input deve ser > 0.",
+            ))
+
+    for i, item in enumerate(outputs):
+        if not isinstance(item, dict):
+            report.erros.append(ValidationError(
+                entidade="unidade", indice=idx, campo=f"outputs[{i}]",
+                mensagem="Item de output inválido (esperado objeto).",
+            ))
+            continue
+        produto = str(item.get("produto_id", "") or "").strip()
+        if not produto:
+            report.erros.append(ValidationError(
+                entidade="unidade", indice=idx, campo=f"outputs[{i}].produto_id",
+                mensagem="produto_id obrigatório em output.",
+            ))
+        try:
+            qtd = float(item.get("quantidade", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            qtd = -1.0
+        if qtd <= 0:
+            report.erros.append(ValidationError(
+                entidade="unidade", indice=idx, campo=f"outputs[{i}].quantidade",
+                mensagem="Quantidade de output deve ser > 0.",
+            ))
+
     # Massa positiva
     for campo in ("MassaInput", "MassaOutput"):
         val = reg.get(campo, 0)
@@ -236,10 +313,93 @@ def validar_database(data: Dict[str, Any]) -> ValidationReport:
     # Verificar integridade referencial
     _validar_referencias(data, report)
 
+    # Validar existência de produto e fator para produto+ano
+    _validar_produtos_e_fatores(data, report)
+
     # Verificar unicidade de chaves
     _validar_unicidade(data, report)
 
     return report
+
+
+def _validar_produtos_e_fatores(data: Dict[str, Any], report: ValidationReport) -> None:
+    """Valida produtos dos inputs/outputs e fator existente por produto+ano."""
+    fatores = data.get("fatores_emissao", [])
+    produtos_fatores = {
+        str(f.get("consumivel", "") or "").strip().upper()
+        for f in fatores
+        if str(f.get("consumivel", "") or "").strip()
+    }
+
+    fator_keys = set()
+    fator_global = set()
+    for f in fatores:
+        produto = str(f.get("consumivel", "") or "").strip().upper()
+        escopo = str(f.get("escopo", "") or "").strip().upper()
+        ano = f.get("ano", None)
+        if not produto or not escopo:
+            continue
+        if ano is None or str(ano).strip() == "":
+            fator_global.add((produto, escopo))
+        else:
+            try:
+                fator_keys.add((produto, escopo, int(ano)))
+            except (TypeError, ValueError):
+                continue
+
+    for idx, reg in enumerate(data.get("unidades", [])):
+        try:
+            ano = int(float(str(reg.get("Periodo", "")).strip()))
+        except (TypeError, ValueError):
+            ano = None
+
+        inputs = reg.get("inputs", []) if isinstance(reg.get("inputs", []), list) else []
+        outputs = reg.get("outputs", []) if isinstance(reg.get("outputs", []), list) else []
+
+        if not inputs and reg.get("Input"):
+            inputs = [{"produto_id": reg.get("Input", "")}]
+        if not outputs and reg.get("Output"):
+            outputs = [{"produto_id": reg.get("Output", "")}]
+
+        for i, item in enumerate(inputs):
+            produto = str(item.get("produto_id", "") or "").strip().upper()
+            if not produto:
+                continue
+            if produto not in produtos_fatores:
+                report.avisos.append(ValidationError(
+                    entidade="unidade", indice=idx, campo=f"inputs[{i}].produto_id",
+                    mensagem=f"Produto '{produto}' não existe na base de fatores.",
+                    severidade="warning",
+                ))
+                continue
+
+            has_factor = False
+            for esc in ("1", "2", "3"):
+                scope_key = f"SCOPE {esc}"
+                if ano is not None and (produto, scope_key, ano) in fator_keys:
+                    has_factor = True
+                    break
+                if (produto, scope_key) in fator_global:
+                    has_factor = True
+                    break
+
+            if not has_factor:
+                report.avisos.append(ValidationError(
+                    entidade="unidade", indice=idx, campo=f"inputs[{i}]",
+                    mensagem=(
+                        f"Fator inexistente para produto '{produto}' no ano {ano}."
+                    ),
+                    severidade="warning",
+                ))
+
+        for i, item in enumerate(outputs):
+            produto = str(item.get("produto_id", "") or "").strip().upper()
+            if produto and produto not in produtos_fatores:
+                report.avisos.append(ValidationError(
+                    entidade="unidade", indice=idx, campo=f"outputs[{i}].produto_id",
+                    mensagem=f"Produto de output '{produto}' não encontrado na base de fatores.",
+                    severidade="warning",
+                ))
 
 
 def _validar_referencias(data: Dict[str, Any], report: ValidationReport) -> None:

@@ -205,16 +205,49 @@ class SettingsTab:
         reset_dialog()
 
     def _reset_session(self):
-        """Limpa dados de trabalho mantendo o login."""
-        keys = [
-            "unidades", "conexoes", "edges", "fatores_emissao",
-            "tecnologias_alternativas", "node_counter",
-            "refresh_canvas", "selected_node",
+        """Limpa todos os dados de trabalho (unidades, conex\u00f5es, insumos, localiza\u00e7\u00f5es).
+        Preserva prefer\u00eancias do usu\u00e1rio (tema, unidade de massa, etc).
+        """
+        # Dados principais de trabalho
+        keys_to_reset = [
+            # Dados principais
+            "unidades",
+            "conexoes",
+            "edges",
+            "fatores_emissao",
+            "tecnologias_alternativas",
+            "node_counter",
+            # Cadastros (localiza\u00e7\u00f5es, insumos, produtos)
+            "cadastro_localizacoes",
+            "cadastro_produtos",
+            "cadastro_insumos",
+            # UI State
+            "selected_nodes",
+            "selected_edges",
+            "selected_edge",
+            "unidade_editando_fluxo",
+            "confirmar_exclusao",
+            "nodes_para_excluir",
+            "canvas_opened_once",
+            "selected_node",
+            "refresh_canvas",
             "mostrar_aviso_fatores_emissao",
+            # Sess\u00e3o
+            "sessao_restaurada",
         ]
-        for k in keys:
+        for k in keys_to_reset:
             if k in st.session_state:
                 del st.session_state[k]
+        
+        # Reinicializar com valores padr\u00e3o
+        st.session_state.unidades = []
+        st.session_state.conexoes = []
+        st.session_state.edges = []
+        st.session_state.fatores_emissao = []
+        st.session_state.tecnologias_alternativas = []
+        st.session_state.node_counter = 1
+        st.session_state.selected_nodes = []
+        st.session_state.selected_edges = []
         st.session_state.refresh_canvas = True
 
     # ══════════════════════════════════════════════════════════════
@@ -471,7 +504,9 @@ class SettingsTab:
                     st.session_state.mass_unit = unidade_nova
                     st.session_state.emission_unit = co2e_label(unidade_nova)
                     self._atualizar_preferencias_usuario()
-                    st.success("Unidade de massa atualizada.")
+                    # Força salvamento imediato para garantir persistência
+                    self._save_user_session()
+                    st.success("Unidade de massa atualizada e salva.")
                     st.rerun()
 
         # ── Coluna 2: Conta e Notificações ──────────────────────────────────
@@ -896,13 +931,38 @@ class SettingsTab:
                     consumiveis_u = u_dict.get("Consumiveis", [])
                     consumo_especifico_u = u_dict.get("ConsumoEspecifico", [])
 
+                inputs_u = UnidadeProdutiva._normalize_io_list(
+                    u_dict.get("inputs", u_dict.get("Inputs", []))
+                )
+                outputs_u = UnidadeProdutiva._normalize_io_list(
+                    u_dict.get("outputs", u_dict.get("Outputs", []))
+                )
+                if not inputs_u:
+                    inputs_u = UnidadeProdutiva._normalize_io_list([
+                        {
+                            "produto_id": u_dict.get("Input", ""),
+                            "quantidade": u_dict.get("MassaInput", 0.0),
+                            "unidade": "t",
+                        }
+                    ])
+                if not outputs_u:
+                    outputs_u = UnidadeProdutiva._normalize_io_list([
+                        {
+                            "produto_id": u_dict.get("Output", ""),
+                            "quantidade": u_dict.get("MassaOutput", 0.0),
+                            "unidade": "t",
+                        }
+                    ])
+
                 unidade = UnidadeProdutiva(
                     id_elo=u_dict["ID_ELO"], nome=u_dict["Nome"],
                     localizacao=u_dict["Localizacao"], periodo=u_dict["Periodo"],
-                    input_insumo=u_dict["Input"], massa_input=u_dict["MassaInput"],
-                    output_insumo=u_dict["Output"], massa_output=u_dict["MassaOutput"],
+                    input_insumo=u_dict.get("Input", ""), massa_input=u_dict.get("MassaInput", 0.0),
+                    output_insumo=u_dict.get("Output", ""), massa_output=u_dict.get("MassaOutput", 0.0),
                     consumiveis=consumiveis_u,
                     consumo_especifico=consumo_especifico_u,
+                    inputs=inputs_u,
+                    outputs=outputs_u,
                     taxacao_fronteira=u_dict.get("TaxacaoFronteira", False),
                     taxacao_local=u_dict.get("TaxacaoLocal", False),
                     tecnologia=tecnologia_obj, conexao=conexao,

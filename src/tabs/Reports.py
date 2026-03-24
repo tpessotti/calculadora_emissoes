@@ -2543,6 +2543,13 @@ Estabelece requisitos gerais de divulgação: Governança, Estratégia, Gestão 
                             elif f < 2: faixas.add("Média")
                             elif f < 5: faixas.add("Alta")
                             else: faixas.add("Muito Alta")
+            elif hasattr(u, "Inputs") and u.Inputs:
+                for item in u.Inputs:
+                    if not isinstance(item, dict):
+                        continue
+                    produto = str(item.get("produto_id", "") or "").strip()
+                    if produto:
+                        cons.add(produto)
         if len(locs) > 1: dims["Localização"] = locs
         if len(tecs) > 1: dims["Tecnologia"] = tecs
         if len(nomes) > 1: dims["Nome"] = nomes
@@ -2594,6 +2601,51 @@ Estabelece requisitos gerais de divulgação: Governança, Estratégia, Gestão 
                         for d in flux:
                             r[d] = self._get_dimensao_valor_consumivel(u,c,d,i) if d in dc else (self._get_dimensao_valor(u,d) or f"Sem {d}")
                         r["valor"] = fc * fe * u.MassaOutput; rows.append(r)
+            elif has_dc and hasattr(u, "Inputs") and u.Inputs:
+                try:
+                    from core.calc.fatores import FatorIndex
+                    fator_idx = FatorIndex(st.session_state.get("fatores_emissao", []))
+                except Exception:
+                    fator_idx = None
+
+                try:
+                    ano_ref = int(float(str(getattr(u, "Periodo", "")).strip()))
+                except (TypeError, ValueError):
+                    ano_ref = None
+
+                massa_output = float(getattr(u, "MassaOutput", 0.0) or 0.0)
+                for i, item in enumerate(u.Inputs):
+                    if not isinstance(item, dict):
+                        continue
+
+                    nome = str(item.get("produto_id", "") or "").strip()
+                    if not nome:
+                        continue
+
+                    try:
+                        quantidade = float(item.get("quantidade", 0.0) or 0.0)
+                    except (TypeError, ValueError):
+                        quantidade = 0.0
+                    consumo_espec = (quantidade / massa_output) if massa_output > 0 else 0.0
+
+                    fator = 0.0
+                    escopo = "SCOPE 1"
+                    if fator_idx:
+                        for esc_try in ("1", "2", "3"):
+                            d = fator_idx.get_fator_dict(nome, esc_try, ano=ano_ref)
+                            if d is None:
+                                d = fator_idx.get_fator_dict(nome, esc_try, ano=None)
+                            if d is not None:
+                                fator = float(d.get("fator_emissao", 0.0))
+                                escopo = str(d.get("escopo", f"SCOPE {esc_try}"))
+                                break
+
+                    c = {"nome": nome, "escopo": escopo, "fator": fator}
+                    r = {"ID_ELO": u.ID_ELO, "u": u}
+                    for d in flux:
+                        r[d] = self._get_dimensao_valor_consumivel(u, c, d, i) if d in dc else (self._get_dimensao_valor(u, d) or f"Sem {d}")
+                    r["valor"] = consumo_espec * fator * massa_output
+                    rows.append(r)
             else:
                 r = {"ID_ELO": u.ID_ELO, "u": u}
                 for d in flux: r[d] = self._get_dimensao_valor(u,d) or f"Sem {d}"
@@ -2625,6 +2677,11 @@ Estabelece requisitos gerais de divulgação: Governança, Estratégia, Gestão 
                     if ol in nm and dl in nm:
                         src.append(nm[ol]); tgt.append(nm[dl]); val.append(r["valor"])
                         hov.append(f"{ol}<br>→ {dl}<br>{_c2e_san(r['valor']):,.2f} {_co2e_lbl_san}")
+
+        total_val = sum(val)
+        if total_val > 0:
+            hov = [f"{h}<br>Contribuição: {(v / total_val) * 100:.2f}%" for h, v in zip(hov, val)]
+
         return nodes, src, tgt, val, ["rgba(150,150,150,0.3)"]*len(val), hov
 
     def _get_node_colors_advanced(self, labels, cor, flux):
