@@ -13,6 +13,8 @@ Estrutura empacotada:
 
 import os
 import json
+import argparse
+import re
 from pathlib import Path
 
 # Diretórios
@@ -21,6 +23,16 @@ CORE_DIR = Path("core")
 DATA_DIR = Path("data")
 ASSETS_DIR = Path("assets")
 OUTPUT_FILE = Path("calculadora_emissoes_standalone.html")
+
+# Dependências padrão (compatíveis com ambiente browser/Pyodide)
+DEFAULT_REQUIREMENTS = [
+    "numpy",
+    "pandas",
+    "plotly",
+    "networkx",
+    "openpyxl",
+    "requests",
+]
 
 # Template HTML base
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -105,9 +117,8 @@ def read_file_safe(filepath):
         # Tenta ler como texto utf-8
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
-        # Escapar backticks para não quebrar template strings
-        content = content.replace('`', '\\`')
-        content = content.replace('${', '\\${')
+        # Evita fechamento prematuro da tag <script> no HTML gerado.
+        content = re.sub(r"</script", r"<\\/script", content, flags=re.IGNORECASE)
         return content
     except UnicodeDecodeError:
         print(f"Aviso: Arquivo binário ou encoding inválido ignorado: {filepath}")
@@ -115,6 +126,102 @@ def read_file_safe(filepath):
     except Exception as e:
         print(f"Erro ao ler {filepath}: {e}")
         return None
+
+
+def load_requirements(requirements_file: Path):
+    """Lê requirements.txt com fallback de encoding e retorna lista limpa."""
+    if not requirements_file.exists():
+        print(f"Aviso: arquivo de requirements não encontrado: {requirements_file}")
+        return DEFAULT_REQUIREMENTS
+
+    encodings = ["utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "latin-1"]
+    text = None
+    for enc in encodings:
+        try:
+            text = requirements_file.read_text(encoding=enc)
+            break
+        except UnicodeDecodeError:
+            continue
+        except Exception as e:
+            print(f"Aviso: falha ao ler {requirements_file} com encoding {enc}: {e}")
+
+    if text is None:
+        print("Aviso: não foi possível interpretar requirements, usando padrão")
+        return DEFAULT_REQUIREMENTS
+
+    parsed = []
+
+    def _extract_pkg_name(spec: str):
+        """Extrai o nome base de um requirement (PEP 508 simplificado)."""
+        # Remove environment marker, ex.: pkg>=1.0; python_version>="3.11"
+        spec = spec.split(";", 1)[0].strip()
+        if not spec:
+            return None
+
+        # Ignora referências diretas por URL/path
+        if "@" in spec and ("://" in spec or spec.startswith((".", "/"))):
+            return None
+
+        # Remove extras: pacote[extra] -> pacote
+        spec = spec.split("[", 1)[0].strip()
+
+        # Isola nome antes de operadores de versão/comparação
+        name = re.split(r"\s*(?:==|!=|~=|>=|<=|>|<)\s*", spec, maxsplit=1)[0].strip()
+        if not name:
+            return None
+        return name
+
+    # Pacotes resolvidos pelo runtime do stlite (não instalar via micropip)
+    runtime_managed = {"streamlit"}
+
+    # Pacotes conhecidos do ecossistema Pyodide: manter sem pin de versão
+    pyodide_managed = {"numpy", "pandas"}
+
+    seen = set()
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # Remove comentário inline e marcadores/flags básicos
+        line = line.split(" #", 1)[0].strip()
+        if line.startswith(("-r", "--")):
+            continue
+
+        pkg_name = _extract_pkg_name(line)
+        if not pkg_name:
+            continue
+
+        normalized = pkg_name.lower()
+        if normalized in runtime_managed:
+            continue
+
+        # Evita pinos para pacotes nativos do Pyodide (ex.: numpy==2.x)
+        if normalized in pyodide_managed:
+            line = normalized
+        else:
+            # Usa apenas o nome base para evitar resolução de wheel não compatível
+            line = normalized
+
+        if line not in seen:
+            seen.add(line)
+            parsed.append(line)
+
+    if not parsed:
+        print("Aviso: requirements vazio, usando padrão")
+        return DEFAULT_REQUIREMENTS
+
+    # Mantém apenas dependências realmente usadas no standalone
+    safe_requirements = {
+        "numpy",
+        "pandas",
+        "plotly",
+        "networkx",
+        "openpyxl",
+        "requests",
+        "streamlit-agraph",
+    }
+    filtered = [r for r in parsed if r in safe_requirements]
+    return filtered or DEFAULT_REQUIREMENTS
 
 def get_files_content():
     files = {}
@@ -125,6 +232,10 @@ def get_files_content():
         if "__pycache__" in path.parts:
             return False
         if path.suffix in {".pyc", ".pyo"}:
+            return False
+        if path.name.startswith(".") and path.suffix in {".swp", ".tmp"}:
+            return False
+        if ".bak." in path.name or path.name.endswith(".bak"):
             return False
         # pasta pages/ foi removida — ignorar caso ainda exista no disco
         if "pages" in path.parts and path.parent.name == "pages":
@@ -144,6 +255,9 @@ def get_files_content():
                 if content is not None:
                     files[str_path] = content
                     print(f"Adicionado: {str_path}")
+
+    # Ordem estável para facilitar comparação entre builds
+    files = dict(sorted(files.items(), key=lambda item: item[0]))
 
     # 1.1 Processar arquivos de core/ (mapeados para core/)
     if CORE_DIR.exists():
@@ -214,19 +328,35 @@ def get_files_content():
 
     return files
 
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Gera a versão standalone HTML da Calculadora de Emissões"
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=str(OUTPUT_FILE),
+        help="Arquivo HTML de saída",
+    )
+    parser.add_argument(
+        "-r",
+        "--requirements-file",
+        default="requirements.txt",
+        help="Arquivo requirements a ser utilizado",
+    )
+    return parser.parse_args()
+
 def main():
+    args = parse_args()
+    output_file = Path(args.output)
+    requirements_file = Path(args.requirements_file)
+
     print("Iniciando build standalone...")
-    
+
     # Lista de dependências
-    requirements = [
-        "streamlit",
-        "pandas",
-        "numpy",
-        "plotly",
-        "networkx",
-        "openpyxl",
-        "requests"
-    ]
+    requirements = load_requirements(requirements_file)
+    print(f"Dependências incluídas: {len(requirements)}")
     
     # Coletar arquivos
     files = get_files_content()
@@ -238,10 +368,10 @@ def main():
     )
     
     # Salvar arquivo
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(html_content)
         
-    print(f"\nSucesso! Arquivo gerado em: {OUTPUT_FILE.absolute()}")
+    print(f"\nSucesso! Arquivo gerado em: {output_file.absolute()}")
     print(f"Total de arquivos empacotados: {len(files)}")
 
 if __name__ == "__main__":
