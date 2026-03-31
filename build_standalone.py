@@ -90,6 +90,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     
     <script type="module">
         import {{ mount }} from "https://cdn.jsdelivr.net/npm/@stlite/browser@0.89.1/build/stlite.js";
+
+        // Em file:/// (origin null), alguns navegadores bloqueiam pushState/replaceState.
+        // Isso evita erro recorrente de "Bad message format" no standalone.
+        if (window.location.protocol === "file:" && window.history) {{
+            const _pushState = window.history.pushState.bind(window.history);
+            const _replaceState = window.history.replaceState.bind(window.history);
+
+            // Sempre salva o path no hash — lido pelo Python via js.window.location.hash
+            // para restaurar a página ativa após qualquer st.rerun() em file://.
+            function _saveNavHash(url) {{
+                if (!url) return;
+                try {{
+                    var path = String(url).replace(/^\/+/, '');
+                    window.location.hash = path;
+                }} catch (_) {{}}
+            }}
+
+            window.history.pushState = function(state, title, url) {{
+                _saveNavHash(url);
+                try {{ return _pushState(state, title, url); }} catch (_) {{}}
+            }};
+
+            window.history.replaceState = function(state, title, url) {{
+                _saveNavHash(url);
+                try {{ return _replaceState(state, title, url); }} catch (_) {{}}
+            }};
+        }}
         
         mount({{
             requirements: {requirements},
@@ -218,7 +245,6 @@ def load_requirements(requirements_file: Path):
         "networkx",
         "openpyxl",
         "requests",
-        "streamlit-agraph",
     }
     filtered = [r for r in parsed if r in safe_requirements]
     return filtered or DEFAULT_REQUIREMENTS

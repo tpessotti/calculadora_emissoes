@@ -85,21 +85,38 @@ def init_session_state(
     ctx = context or AppContext.get()
 
     session_defaults = {
+        # dados do modelo
+        "unidades": db.get_unidades(),
+        "conexoes": db.get_conexoes(),
+        "edges": db.get_edges_for_graph(),
+        "tecnologias_alternativas": [],
+        "fatores_emissao": [],
+        # autenticação
+        "usuario_logado": None,
+        # UI / seleção
         "selected_nodes": [],
+        "selected_edges": [],
         "selected_edge": None,
         "modo_selecao": False,
         "modo_exclusao_fluxo": False,
         "refresh_canvas": True,
         "canvas_opened_once": False,
-        "unidades": db.get_unidades(),
-        "edges": db.get_edges_for_graph(),
+        "unidade_editando_fluxo": None,
+        "confirmar_exclusao": False,
+        "nodes_para_excluir": [],
+        # unidades de medida
         "mass_unit": "t",
         "emission_unit": "tCO₂e",
+        # contadores
+        "node_counter": 1,
+        # preferências / auto-save
         "auto_save_session": True,
         "auto_save_interval": 20,
         "pref_show_save_toast": True,
         "pref_show_integrity_alerts": True,
         "_auto_save_last_ts": 0.0,
+        # restauração de sessão
+        "sessao_restaurada": False,
     }
     for key, value in session_defaults.items():
         if key not in state:

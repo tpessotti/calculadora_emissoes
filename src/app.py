@@ -52,8 +52,15 @@ if not usuario_logado:
         unsafe_allow_html=True,
     )
 
+# ── helpers ───────────────────────────────────────────────────────────────────
+def _is_pyodide() -> bool:
+    """Retorna True quando rodando no browser via Pyodide/Stlite (standalone)."""
+    return "pyodide" in sys.modules or "js" in sys.modules
+
 # ── loading screen (disparado logo após o login) ──────────────────────────────
-if st.session_state.pop("_show_loading", False) and usuario_logado:
+# No standalone (Pyodide), time.sleep() bloqueia o event-loop do WASM e
+# causa STATUS_STACK_BUFFER_OVERRUN.  A tela é cosmética — pulamos no browser.
+if st.session_state.pop("_show_loading", False) and usuario_logado and not _is_pyodide():
     import time
     import streamlit.components.v1 as _cmp
 
@@ -197,18 +204,18 @@ def page_configuracoes():
 
 # ── navigation definition ─────────────────────────────────────────────────────
 _pages_publicas = [
-    st.Page(page_home, title="Início", default=True),
-    st.Page(page_sessoes, title="Sessões"),
-    st.Page(page_configuracoes,title="Configurações"),
+    st.Page(page_home,          title="Início",          default=True),
+    st.Page(page_sessoes,       title="Sessões",         url_path="sessoes"),
+    st.Page(page_configuracoes, title="Configurações",   url_path="configuracoes"),
 ]
 
 _pages_autenticadas = [
-    st.Page(page_unidades,     title="Unidades & Fluxos"),
-    st.Page(page_fluxo,        title="Diagrama de Fluxo"),
-    st.Page(page_fatores,      title="Fatores de Emissão"),
-    st.Page(page_tecnologias,  title="Tecnologias"),
-    st.Page(page_relatorios,   title="Análise de Emissões"),
-    st.Page(page_chatbot,      title="Assistente IA"),
+    st.Page(page_unidades,    title="Unidades & Fluxos",   url_path="unidades"),
+    st.Page(page_fluxo,       title="Diagrama de Fluxo",   url_path="fluxo"),
+    st.Page(page_fatores,     title="Fatores de Emissão",  url_path="fatores"),
+    st.Page(page_tecnologias, title="Tecnologias",         url_path="tecnologias"),
+    st.Page(page_relatorios,  title="Análise de Emissões", url_path="relatorios"),
+    st.Page(page_chatbot,     title="Assistente IA",       url_path="chatbot"),
 ]
 
 if usuario_logado:
@@ -219,9 +226,25 @@ else:
 # ── render navigation & header bar ──────────────────────────────────────────
 pg = st.navigation(nav_pages, position="sidebar", expanded=True)
 
-# Consumir pedido de navegação rápida (botões da Home)
+# Em Pyodide/standalone (file://), pushState falha e st.navigation() perde
+# o contexto após qualquer st.rerun(), voltando sempre à página default.
+# O shim JS salva o path no window.location.hash; lemos aqui para restaurar.
 _all_pages = _pages_publicas + (_pages_autenticadas if usuario_logado else [])
 _pages_by_title = {p.title: p for p in _all_pages}
+_url_to_page   = {getattr(p, "url_path", None): p for p in _all_pages
+                  if getattr(p, "url_path", None)}
+
+if _is_pyodide() and pg.title == "Início":
+    try:
+        import js as _js  # pyodide only
+        _hash = str(getattr(_js.window.location, "hash", "") or "")
+        _path = _hash.lstrip("#/").split("?")[0].strip()
+        if _path and _path in _url_to_page:
+            pg = _url_to_page[_path]
+    except Exception:
+        pass
+
+# Consumir pedido de navegação rápida (botões da Home)
 _nav_target = st.session_state.pop("_nav_target", None)
 if _nav_target and _nav_target in _pages_by_title:
     st.switch_page(_pages_by_title[_nav_target])
