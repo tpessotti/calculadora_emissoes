@@ -10,7 +10,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tabs.Home import HomeTab
 from tabs.Unidades import UnidadesTab
 from tabs.Tabela import TabelaTab
-from tabs.Fluxo import FluxoTab
 from tabs.FatoresEmissao import FatoresEmissaoTab
 from tabs.Tecnologias import TecnologiasTab
 from tabs.Sankey import SankeyTab
@@ -106,7 +105,6 @@ class App:
                 "Navegação:",
                 [
                     "Início",
-                    "Diagrama de Fluxo",
                     "Unidades & Fluxos",
                     "Fatores de Emissão",
                     "Tecnologias",
@@ -123,8 +121,6 @@ class App:
             HomeTab()._render()
         elif aba == "Unidades & Fluxos":
             UnidadesTab()._render()
-        elif aba == "Diagrama de Fluxo":
-            FluxoTab()._render()
         elif aba == "Fatores de Emissão":
             FatoresEmissaoTab()._render()
         elif aba == "Tecnologias":

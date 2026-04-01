@@ -1,9 +1,9 @@
 import streamlit as st
-from streamlit_agraph import agraph, Node, Edge, Config
 from config import CANVAS_CONFIG
 from utils import UtilsUI
 import base64
 from io import BytesIO
+import plotly.graph_objects as go
 try:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.pdfgen import canvas as pdf_canvas
@@ -524,79 +524,74 @@ class FluxoTab:
                 st.session_state.esp_y
             )
             
-            # Aplicar configuração com zoom
-            config = Config(**CANVAS_CONFIG)
-            config.nodeHighlightBehavior = True
-            config.linkHighlightBehavior = True
-            
-            # Aplicar zoom ao width e height
             zoom = st.session_state.get("canvas_zoom", 1.0)
-            config.width = int(CANVAS_CONFIG["width"] * zoom)
-            config.height = int(CANVAS_CONFIG["height"] * zoom)
-            
-            # Container com borda estilizada
-            st.markdown("""
-                <style>
-                    div[data-testid="stVerticalBlock"] > div:has(iframe) {
-                        border: 3px solid #EDF0E7;
-                        border-radius: 8px;
-                        padding: 10px;
-                        background-color: #ffffff;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                    }
-                </style>
-            """, unsafe_allow_html=True)
-            
-            result = agraph(
-                nodes=self._create_nodes(posicoes),
-                edges=self._create_edges(),
-                config=config
+            fig = go.Figure()
+
+            # Desenhar arestas primeiro (atrás dos nós)
+            for edge in st.session_state.edges:
+                source_id = edge["source"]
+                target_id = edge["target"]
+                if source_id in posicoes and target_id in posicoes:
+                    x0, y0 = posicoes[source_id]["x"], posicoes[source_id]["y"]
+                    x1, y1 = posicoes[target_id]["x"], posicoes[target_id]["y"]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[x0, x1],
+                            y=[y0, y1],
+                            mode="lines",
+                            line=dict(color="#666666", width=2),
+                            hoverinfo="text",
+                            text=[f"{source_id} -> {target_id}", f"{source_id} -> {target_id}"],
+                            showlegend=False,
+                        )
+                    )
+
+            # Desenhar nós
+            node_x, node_y, labels, marker_colors, border_colors = [], [], [], [], []
+            for u in st.session_state.unidades:
+                if u.ID_ELO not in posicoes:
+                    continue
+                node_x.append(posicoes[u.ID_ELO]["x"])
+                node_y.append(posicoes[u.ID_ELO]["y"])
+                labels.append(self._get_node_label(u).replace("\n", "<br>"))
+                marker_colors.append("#e6f7ff" if not u.TaxacaoFronteira else "#ffebee")
+                border_colors.append("#0066cc" if not u.TaxacaoFronteira else "#cc0000")
+
+            fig.add_trace(
+                go.Scatter(
+                    x=node_x,
+                    y=node_y,
+                    mode="markers+text",
+                    text=[u.ID_ELO for u in st.session_state.unidades if u.ID_ELO in posicoes],
+                    textposition="middle center",
+                    hoverinfo="text",
+                    hovertext=labels,
+                    marker=dict(
+                        size=40,
+                        color=marker_colors,
+                        line=dict(color=border_colors, width=2),
+                        symbol="square",
+                    ),
+                    showlegend=False,
+                )
             )
 
-            if result:
-                if isinstance(result, str) and st.session_state.modo_selecao:
-                    self._handle_node_selection(result)
-                elif isinstance(result, dict) and st.session_state.modo_exclusao_fluxo:
-                    self._handle_edge_selection(result)
+            fig.update_layout(
+                width=int(CANVAS_CONFIG["width"] * zoom),
+                height=int(CANVAS_CONFIG["height"] * zoom),
+                margin=dict(l=20, r=20, t=20, b=20),
+                paper_bgcolor="#ffffff",
+                plot_bgcolor="#ffffff",
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            )
+
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+            if st.session_state.modo_selecao or st.session_state.modo_exclusao_fluxo:
+                st.info("A seleção direta pelo diagrama foi desativada com a remoção do módulo streamlit_agraph.")
         except Exception as e:
             st.error(f"Erro ao renderizar o diagrama: {e}")
-
-    def _handle_node_selection(self, node_id):
-        if node_id not in st.session_state.selected_nodes:
-            if len(st.session_state.selected_nodes) < 2:
-                st.session_state.selected_nodes.append(node_id)
-                st.rerun()
-        else:
-            st.session_state.selected_nodes.remove(node_id)
-            st.rerun()
-
-    def _handle_edge_selection(self, edge):
-        edge_data = {
-            'source': edge.get('from', edge.get('source')),
-            'target': edge.get('to', edge.get('target'))
-        }
-        if any(e['source'] == edge_data['source'] and e['target'] == edge_data['target']
-                for e in st.session_state.edges):
-            st.session_state.selected_edge = edge_data
-            st.rerun()
-
-    def _create_edges(self):
-        edges = []
-        for e in st.session_state.edges:
-            is_selected = (
-                st.session_state.selected_edge and
-                e['source'] == st.session_state.selected_edge['source'] and
-                e['target'] == st.session_state.selected_edge['target']
-            )
-            edges.append(Edge(
-                source=e['source'],
-                target=e['target'],
-                label=f"{e['source']} → {e['target']}",
-                color='#ff0000' if is_selected else '#666666',
-                width=4 if is_selected else 2,
-                highlightColor='#ff0000'
-            ))
-        return edges
 
     def _organize_nodes(self, unidades, conexoes, espacamento_x, espacamento_y):
         ordem = self.utils_ui.ec.determinar_ordem_fluxo(unidades, conexoes)
@@ -613,24 +608,6 @@ class FluxoTab:
             y = index * espacamento_y - (len(nos_na_camada) * espacamento_y) / 2
             posicoes[node] = {"x": x, "y": y}
         return posicoes
-
-    def _create_nodes(self, posicoes):
-        nodes = []
-        for u in st.session_state.unidades:
-            is_selected = u.ID_ELO in st.session_state.selected_nodes
-            nodes.append(Node(
-                id=u.ID_ELO,
-                label=self._get_node_label(u),
-                shape="box",
-                size=25,
-                color="#d2f8e1" if is_selected else ("#e6f7ff" if not u.TaxacaoFronteira else "#ffebee"),
-                borderColor="#00cc66" if is_selected else ("#0066cc" if not u.TaxacaoFronteira else "#cc0000"),
-                borderWidth=3 if is_selected else 2,
-                font={"align": "left", "color": "#333333", "size": 12},
-                x=posicoes[u.ID_ELO]["x"],
-                y=posicoes[u.ID_ELO]["y"]
-            ))
-        return nodes
 
     def _get_node_label(self, unidade):
         consumos = "\n".join([
