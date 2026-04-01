@@ -3,7 +3,12 @@ from config import CANVAS_CONFIG
 from utils import UtilsUI
 import base64
 from io import BytesIO
-import plotly.graph_objects as go
+try:
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+
 try:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.pdfgen import canvas as pdf_canvas
@@ -19,6 +24,11 @@ class FluxoTab:
         self.utils_ui = UtilsUI()
 
     def _render(self):
+        if not PLOTLY_AVAILABLE:
+            st.error("A aba de fluxo requer o pacote 'plotly', que não está disponível no ambiente.")
+            st.info("No Streamlit Cloud, verifique o requirements.txt publicado no branch main e reinicie a aplicação.")
+            return
+
         if not st.session_state.canvas_opened_once:
             st.session_state.refresh_canvas = True
             st.session_state.canvas_opened_once = True
