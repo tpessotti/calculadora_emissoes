@@ -1,15 +1,376 @@
 import streamlit as st
 import database
+import os
+import json
+from datetime import datetime
 from database import UnidadeProdutiva, Tecnologia
 import calculations
+from core.calc.fatores import FatorIndex
+from core.units import (
+    convert_mass,
+    get_default_mass_unit_from_session,
+    co2e_label,
+    co2e_intensity_label,
+    convert_co2e,
+    unit_keys,
+    normalize_unit,
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  FUNÇÕES CENTRALIZADAS DE UNIDADES — usar em todos os módulos
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_session_mass_unit() -> str:
+    """Retorna a unidade de massa selecionada na sessão (ex: 't', 'kg')."""
+    return get_default_mass_unit_from_session(st.session_state)
+
+
+def label_co2e() -> str:
+    """Rótulo de emissão para a unidade da sessão. Ex: 'tCO₂e', 'kgCO₂e'."""
+    return co2e_label(get_session_mass_unit())
+
+
+def label_intensidade() -> str:
+    """Rótulo de intensidade para a unidade da sessão. Ex: 'tCO₂e/t', 'kgCO₂e/kg'."""
+    return co2e_intensity_label(get_session_mass_unit())
+
+
+def label_massa() -> str:
+    """Rótulo da unidade de massa da sessão. Ex: 't', 'kg'."""
+    return get_session_mass_unit()
+
+
+def converte_emissao(valor_kgco2e: float) -> float:
+    """Converte emissão de kgCO₂e (interna) para a unidade da sessão."""
+    return convert_co2e(valor_kgco2e, get_session_mass_unit())
+
+
+def converte_intensidade(valor_kgco2e_por_t: float) -> float:
+    """Converte intensidade (kgCO₂e/t) para a unidade da sessão.
+
+    A razão XCO₂e/X é numericamente constante (÷ 1 000) independente
+    da unidade de massa escolhida, portanto usamos sempre conversão para 't'.
+    """
+    return convert_co2e(valor_kgco2e_por_t, "t")
+
+
+def converte_massa(valor: float, de: str = "t") -> float:
+    """Converte massa de ``de`` para a unidade da sessão."""
+    return convert_mass(valor, de, get_session_mass_unit())
+
+
+def fmt_emissao(valor_kgco2e: float, casas: int = 2) -> str:
+    """Converte e formata emissão (kgCO₂e → unidade da sessão)."""
+    val = converte_emissao(valor_kgco2e)
+    return f"{val:,.{casas}f}"
+
+
+def fmt_intensidade(valor_kgco2e_por_t: float, casas: int = 4) -> str:
+    """Converte e formata intensidade (kgCO₂e/t → unidade da sessão)."""
+    val = converte_intensidade(valor_kgco2e_por_t)
+    return f"{val:,.{casas}f}"
+
+
+def col_emissao(prefixo: str = "Emissão") -> str:
+    """Nome de coluna para emissão. Ex: 'Emissão (tCO₂e)'."""
+    return f"{prefixo} ({label_co2e()})"
+
+
+def col_intensidade(prefixo: str = "Intensidade") -> str:
+    """Nome de coluna para intensidade. Ex: 'Intensidade (tCO₂e/t)'."""
+    return f"{prefixo} ({label_intensidade()})"
+
+
+def _parse_ano_periodo(periodo):
+    try:
+        return int(float(str(periodo).strip()))
+    except (ValueError, TypeError):
+        return None
+
+
+def _resolver_fator_para_ano(nome_insumo, fatores, ano_ref):
+    """Resolve fator/escopo por consumível priorizando ano exato e fallback global.
+
+    Percorre escopos 1, 2 e 3 para encontrar o fator correto, sem assumir
+    que o consumível pertence ao Escopo 1.
+    """
+    idx = FatorIndex(fatores)
+    # 1) Tenta com o ano exato em cada escopo
+    for esc_try in ["1", "2", "3"]:
+        d = idx.get_fator_dict(nome_insumo, esc_try, ano=ano_ref)
+        if d is not None:
+            return float(d.get("fator_emissao", 0.0)), str(d.get("escopo", f"SCOPE {esc_try}"))
+    # 2) Fallback: busca linear por nome (qualquer escopo, qualquer ano)
+    nome_upper = str(nome_insumo).strip().upper()
+    for f in fatores:
+        if str(f.get("consumivel", "")).strip().upper() == nome_upper:
+            return float(f.get("fator_emissao", 0.0)), str(f.get("escopo", "1"))
+    return 0.0, "1"
+
+
+def _resolver_unidade_consumivel(nome_insumo, fatores):
+    nome = str(nome_insumo).strip().upper()
+    for f in fatores or []:
+        if str(f.get("consumivel", "")).strip().upper() == nome:
+            unidade = str(f.get("kgCO2e_unid", "") or "").strip()
+            if unidade:
+                return unidade
+    return "unid"
 
 class UtilsUI:
     def __init__(self):
         self.db = database.DatabaseManager()
         self.ec = calculations.EmissionCalculator()
 
+    @staticmethod
+    def _normalize_io_rows(rows):
+        normalized = []
+        for item in rows or []:
+            if not isinstance(item, dict):
+                continue
+            produto = str(item.get("produto_id", item.get("produto", "")) or "").strip()
+            unidade = str(item.get("unidade", "t") or "t").strip() or "t"
+            try:
+                quantidade = float(item.get("quantidade", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                quantidade = 0.0
+            normalized.append(
+                {
+                    "produto_id": produto,
+                    "quantidade": quantidade,
+                    "unidade": unidade,
+                }
+            )
+        return normalized
+
+    @staticmethod
+    def _remove_io_row(rows, index: int, min_rows: int = 1):
+        """Remove linha por índice mantendo quantidade mínima de linhas."""
+        data = list(rows or [])
+        if len(data) <= min_rows:
+            return data
+        if 0 <= index < len(data):
+            data.pop(index)
+        return data
+
+    @staticmethod
+    def _format_mass_precise(value: float, max_decimals: int = 12) -> str:
+        """Formata massa sem arredondamento agressivo para exibição na UI."""
+        try:
+            n = float(value)
+        except (TypeError, ValueError):
+            n = 0.0
+        text = f"{n:.{max_decimals}f}".rstrip("0").rstrip(".")
+        return text if text else "0"
+
+    @staticmethod
+    def _sum_io_rows_in_t(rows, fallback_unit: str = "t") -> float:
+        """Soma quantidades convertendo cada linha para toneladas."""
+        total_t = 0.0
+        for item in UtilsUI._normalize_io_rows(rows):
+            unidade = str(item.get("unidade", fallback_unit) or fallback_unit)
+            total_t += convert_mass(float(item.get("quantidade", 0.0) or 0.0), unidade, "t")
+        return total_t
+
+    def _init_io_rows_for_form(self, form_key: str, unidade=None):
+        input_key = f"{form_key}_inputs_rows"
+        output_key = f"{form_key}_outputs_rows"
+
+        if input_key not in st.session_state:
+            if unidade and getattr(unidade, "Inputs", None):
+                st.session_state[input_key] = self._normalize_io_rows(unidade.Inputs)
+            elif unidade:
+                st.session_state[input_key] = self._normalize_io_rows([
+                    {
+                        "produto_id": getattr(unidade, "Input", ""),
+                        "quantidade": getattr(unidade, "MassaInput", 0.0),
+                        "unidade": "t",
+                    }
+                ])
+            else:
+                st.session_state[input_key] = [{"produto_id": "", "quantidade": 0.0, "unidade": "t"}]
+
+        if output_key not in st.session_state:
+            if unidade and getattr(unidade, "Outputs", None):
+                st.session_state[output_key] = self._normalize_io_rows(unidade.Outputs)
+            elif unidade:
+                st.session_state[output_key] = self._normalize_io_rows([
+                    {
+                        "produto_id": getattr(unidade, "Output", ""),
+                        "quantidade": getattr(unidade, "MassaOutput", 0.0),
+                        "unidade": "t",
+                    }
+                ])
+            else:
+                st.session_state[output_key] = [{"produto_id": "", "quantidade": 0.0, "unidade": "t"}]
+
+    def _render_io_rows_editor(self, *, title: str, rows_key: str, products: list[str], mass_unit: str, add_button_key: str):
+        rows = self._normalize_io_rows(st.session_state.get(rows_key, []))
+
+        st.markdown(f"**{title}**")
+        if not rows:
+            st.caption("Nenhum item informado.")
+
+        for idx, row in enumerate(rows):
+            c1, c2, c3, c4 = st.columns([4, 3, 1.5, 1])
+            with c1:
+                produto = st.selectbox(
+                    "Produto",
+                    options=[""] + products,
+                    index=([""] + products).index(row.get("produto_id", "")) if row.get("produto_id", "") in ([""] + products) else 0,
+                    format_func=lambda v: "Selecione..." if v == "" else v,
+                    key=f"{rows_key}_produto_{idx}",
+                )
+            with c2:
+                quantidade = st.number_input(
+                    "Quantidade",
+                    min_value=0.0,
+                    value=float(row.get("quantidade", 0.0) or 0.0),
+                    step=0.000001,
+                    format="%.12f",
+                    key=f"{rows_key}_quantidade_{idx}",
+                )
+            with c3:
+                unidade_atual = normalize_unit(str(row.get("unidade", mass_unit) or mass_unit), default=mass_unit)
+                unit_options = [mass_unit] + [u for u in unit_keys() if u != mass_unit]
+                if unidade_atual not in unit_options:
+                    unit_options.append(unidade_atual)
+                unidade = st.selectbox(
+                    "Unid.",
+                    options=unit_options,
+                    index=unit_options.index(unidade_atual),
+                    key=f"{rows_key}_unidade_{idx}",
+                )
+            with c4:
+                st.markdown("<div style='height: 26px;'></div>", unsafe_allow_html=True)
+                if st.button("🗑️", key=f"{rows_key}_remove_{idx}", help="Remover linha"):
+                    rows = self._remove_io_row(rows, idx, min_rows=0)
+                    st.session_state[rows_key] = rows
+                    st.rerun()
+
+            rows[idx] = {
+                "produto_id": produto,
+                "quantidade": float(quantidade),
+                "unidade": unidade,
+            }
+
+        if st.button(f"+ Adicionar {'insumo' if 'inputs' in rows_key else 'saída'}", key=add_button_key):
+            rows.append({"produto_id": "", "quantidade": 0.0, "unidade": mass_unit})
+            st.session_state[rows_key] = rows
+            st.rerun()
+
+        total_t = self._sum_io_rows_in_t(rows, fallback_unit=mass_unit)
+        total_display = convert_mass(total_t, "t", mass_unit)
+        total_display_str = self._format_mass_precise(total_display)
+        st.caption(f"Total informado: {total_display_str} {mass_unit} ({len(rows)} item(ns))")
+
+        st.session_state[rows_key] = rows
+        return rows
+
+    def _ensure_catalog_inputs(self):
+        """Garante catálogos mínimos de localização e produtos no estado da sessão."""
+        unidades = st.session_state.get("unidades", [])
+
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        catalogos_file = os.path.join(data_dir, "catalogos.json")
+        file_localizacoes = []
+        file_produtos = []
+        if os.path.exists(catalogos_file):
+            try:
+                with open(catalogos_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                file_localizacoes = [str(v).strip() for v in data.get("localizacoes", []) if str(v).strip()]
+                file_produtos = [
+                    str(v).strip()
+                    for v in (data.get("insumos", []) or data.get("produtos", []))
+                    if str(v).strip()
+                ]
+            except Exception:
+                file_localizacoes = []
+                file_produtos = []
+
+        if "cadastro_localizacoes" not in st.session_state:
+            st.session_state.cadastro_localizacoes = sorted({
+                str(getattr(u, "Localizacao", "") or "").strip()
+                for u in unidades
+                if str(getattr(u, "Localizacao", "") or "").strip()
+            }.union(file_localizacoes))
+
+        if "cadastro_produtos" not in st.session_state:
+            st.session_state.cadastro_produtos = sorted({
+                p.strip()
+                for u in unidades
+                for p in [str(getattr(u, "Input", "") or ""), str(getattr(u, "Output", "") or "")]
+                if p.strip()
+            }.union(file_produtos))
+
+        if "cadastro_insumos" not in st.session_state:
+            st.session_state.cadastro_insumos = list(st.session_state.get("cadastro_produtos", []))
+        if "cadastro_produtos" not in st.session_state:
+            st.session_state.cadastro_produtos = list(st.session_state.get("cadastro_insumos", []))
+
+    def _save_catalogs_to_file(self):
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        catalogos_file = os.path.join(data_dir, "catalogos.json")
+        os.makedirs(data_dir, exist_ok=True)
+        payload = {
+            "localizacoes": sorted(set(st.session_state.get("cadastro_localizacoes", []))),
+            "insumos": sorted(set(st.session_state.get("cadastro_insumos", []))),
+        }
+        with open(catalogos_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    def _add_catalog_item(self, catalog_type: str, value: str):
+        value_clean = (value or "").strip()
+        if not value_clean:
+            return False, "Valor inválido."
+
+        if catalog_type == "localizacoes":
+            key = "cadastro_localizacoes"
+            label = "Localização"
+        else:
+            key = "cadastro_insumos"
+            label = "Insumo"
+
+        current = st.session_state.get(key, [])
+        if value_clean in current:
+            return False, f"{label} já cadastrado."
+
+        st.session_state[key] = sorted(current + [value_clean])
+        if catalog_type == "insumos":
+            st.session_state.cadastro_produtos = list(st.session_state.get("cadastro_insumos", []))
+        self._save_catalogs_to_file()
+        return True, f"{label} cadastrado com sucesso."
+
+    def _render_catalog_add_dialog(self, catalog_type: str, scope_key: str):
+        label = "localização" if catalog_type == "localizacoes" else "insumo"
+
+        @st.dialog(f"➕ Novo {label}", width="small")
+        def _dialog():
+            value = st.text_input(
+                f"Nome do {label}*",
+                key=f"{scope_key}_catalog_new_{catalog_type}",
+                placeholder=f"Ex: {'São Paulo' if catalog_type == 'localizacoes' else 'Clínquer'}",
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Salvar", key=f"{scope_key}_catalog_save_{catalog_type}", type="primary", use_container_width=True):
+                    ok, msg = self._add_catalog_item(catalog_type, value)
+                    if ok:
+                        st.toast(msg, icon="✅")
+                        st.session_state[f"{scope_key}_open_catalog_{catalog_type}"] = False
+                        st.rerun()
+                    st.warning(msg)
+            with c2:
+                if st.button("Cancelar", key=f"{scope_key}_catalog_cancel_{catalog_type}", use_container_width=True):
+                    st.session_state[f"{scope_key}_open_catalog_{catalog_type}"] = False
+                    st.rerun()
+
+        _dialog()
+
     def render_tecnologia_form(self, tecnologia=None, key_prefix="tec_form", read_only=False, 
-                               show_save_buttons=True, on_save_callback=None):
+                               show_save_buttons=True, on_save_callback=None, expanded=True):
         """
         Renderiza formulário para visualização ou edição de tecnologia
         
@@ -24,7 +385,7 @@ class UtilsUI:
             Tecnologia criada/editada (ou None se não salvou)
         """
         # Valores padrão ou da tecnologia existente
-        id_padrao = tecnologia.id if tecnologia else ""
+        id_padrao = tecnologia.id if tecnologia else self.db.next_tecnologia_id()
         nome_padrao = tecnologia.nome if tecnologia else ""
         insumos_atuais = [i["nome"] for i in tecnologia.insumos] if tecnologia else []
         unidades_atuais = [u["unidade"] for u in tecnologia.unidades] if tecnologia else []
@@ -38,14 +399,15 @@ class UtilsUI:
         else:
             expander_title = "➕ Criar Nova Tecnologia"
         
-        with st.expander(expander_title, expanded=False):
+        with st.expander(expander_title, expanded=expanded):
             col1, col2 = st.columns(2)
+            mass_unit = get_default_mass_unit_from_session(st.session_state)
             
             with col1:
                 tec_id = st.text_input(
                     "ID da Tecnologia*",
                     value=id_padrao,
-                    disabled=read_only,
+                    disabled=True,
                     key=f"{key_prefix}_id"
                 )
                 
@@ -89,7 +451,7 @@ class UtilsUI:
                                 1.0
                             )
                         st.number_input(
-                            f"Fator de Consumo: {nome}",
+                            f"Fator de Consumo: {nome} ({_resolver_unidade_consumivel(nome, fatores)}/{mass_unit})",
                             min_value=0.0,
                             value=valor_atual,
                             step=0.01,
@@ -196,7 +558,7 @@ class UtilsUI:
                                     
                                     if idx is not None:
                                         nova_tec = Tecnologia(
-                                            id=tec_id.strip(),
+                                            id=tecnologia.id,
                                             nome=tec_nome.strip(),
                                             insumos=insumos_preparados,
                                             unidades=limites_unidades
@@ -206,7 +568,7 @@ class UtilsUI:
                                         if on_save_callback:
                                             on_save_callback(nova_tec)
                                         else:
-                                            st.success(f"Tecnologia '{tec_nome}' atualizada!")
+                                            st.session_state["tecnologia_feedback_msg"] = f"Tecnologia '{tec_nome}' atualizada!"
                                             st.rerun()
                                         
                                         return nova_tec
@@ -224,7 +586,7 @@ class UtilsUI:
                             else:
                                 try:
                                     nova_tec = Tecnologia(
-                                        id=tec_id.strip(),
+                                        id=self.db.next_tecnologia_id(),
                                         nome=tec_nome.strip(),
                                         insumos=insumos_preparados,
                                         unidades=limites_unidades
@@ -234,7 +596,7 @@ class UtilsUI:
                                     if on_save_callback:
                                         on_save_callback(nova_tec)
                                     else:
-                                        st.success(f"Nova tecnologia '{tec_nome}' criada!")
+                                        st.session_state["tecnologia_feedback_msg"] = f"Nova tecnologia '{tec_nome}' criada!"
                                         st.rerun()
                                     
                                     return nova_tec
@@ -250,7 +612,7 @@ class UtilsUI:
                         else:
                             try:
                                 nova_tec = Tecnologia(
-                                    id=tec_id.strip(),
+                                    id=self.db.next_tecnologia_id(),
                                     nome=tec_nome.strip(),
                                     insumos=insumos_preparados,
                                     unidades=limites_unidades
@@ -260,7 +622,7 @@ class UtilsUI:
                                 if on_save_callback:
                                     on_save_callback(nova_tec)
                                 else:
-                                    st.success(f"Tecnologia '{tec_nome}' criada!")
+                                    st.session_state["tecnologia_feedback_msg"] = f"Tecnologia '{tec_nome}' criada!"
                                     st.rerun()
                                 
                                 return nova_tec
@@ -269,7 +631,7 @@ class UtilsUI:
         
         return None
 
-    def render_tecnologia(self, key_prefix="tec_selector", tecnologia_atual=None):
+    def render_tecnologia(self, key_prefix="tec_selector", tecnologia_atual=None, ano_referencia=None):
         """
         Componente unificado para selecionar e editar tecnologia
         
@@ -281,16 +643,67 @@ class UtilsUI:
             tuple: (tecnologia_selecionada, consumiveis, consumo_especifico)
         """
         st.markdown("### Tecnologia Associada")
-        
+
+        def _montar_consumo(tecnologia_ref):
+            consumiveis_local = []
+            consumo_especifico_local = []
+            for insumo in tecnologia_ref.insumos:
+                nome_insumo = insumo["nome"]
+                fator_consumo = insumo["fator_consumo"]
+                fator_emissao, escopo = _resolver_fator_para_ano(
+                    nome_insumo,
+                    st.session_state.fatores_emissao,
+                    ano_referencia,
+                )
+                consumiveis_local.append({
+                    "nome": nome_insumo,
+                    "fator": fator_emissao,
+                    "escopo": escopo
+                })
+                consumo_especifico_local.append(fator_consumo)
+            return consumiveis_local, consumo_especifico_local
+
         tecnologias = st.session_state.get("tecnologias_alternativas", [])
-        
+
         if not tecnologias:
-            st.info("Nenhuma tecnologia cadastrada. Use a aba 'Adicionar Nova' para criar.")
+            st.info("Nenhuma tecnologia cadastrada. Crie uma nova tecnologia para associar à unidade.")
+            nova_tecnologia = self.render_tecnologia_form(
+                tecnologia=None,
+                key_prefix=f"{key_prefix}_new_empty",
+                read_only=False,
+                show_save_buttons=True,
+                on_save_callback=lambda _t: True,
+                expanded=False
+            )
+            if nova_tecnologia:
+                consumiveis, consumo_especifico = _montar_consumo(nova_tecnologia)
+                return nova_tecnologia, consumiveis, consumo_especifico
             return None, [], []
-        
+
+        modo_tecnologia = st.radio(
+            "Como deseja associar a tecnologia?",
+            ["Selecionar existente", "Criar nova"],
+            horizontal=True,
+            key=f"{key_prefix}_modo_assoc",
+        )
+
+        if modo_tecnologia == "Criar nova":
+            nova_tecnologia = self.render_tecnologia_form(
+                tecnologia=None,
+                key_prefix=f"{key_prefix}_new",
+                read_only=False,
+                show_save_buttons=True,
+                on_save_callback=lambda _t: True,
+            )
+            if nova_tecnologia:
+                consumiveis, consumo_especifico = _montar_consumo(nova_tecnologia)
+                st.toast("Tecnologia criada e selecionada para esta unidade.", icon="✅")
+                return nova_tecnologia, consumiveis, consumo_especifico
+            st.info("Preencha e salve a nova tecnologia para continuar.")
+            return None, [], []
+
         tecnologias_dict = {f"{t.id} | {t.nome}": t for t in tecnologias}
-        
-        # Define seleção padrão
+
         if tecnologia_atual:
             tec_padrao_key = next(
                 (key for key, t in tecnologias_dict.items() if t.id == tecnologia_atual.id),
@@ -299,107 +712,135 @@ class UtilsUI:
             tec_index = list(tecnologias_dict.keys()).index(tec_padrao_key)
         else:
             tec_index = 0
-        
+
         tec_selecionada_str = st.selectbox(
             "Selecione a tecnologia:",
             list(tecnologias_dict.keys()),
             index=tec_index,
             key=f"{key_prefix}_select"
         )
-        
+
         tecnologia_escolhida = tecnologias_dict[tec_selecionada_str]
-        
-        # Toggle entre visualização e edição
+
         modo_edicao = st.toggle(
-            "✏️ Modo de Edição", 
-            value=False, 
+            "✏️ Modo de Edição",
+            value=False,
             key=f"{key_prefix}_modo_edicao",
             help="Ative para editar a tecnologia selecionada"
         )
-        
+
         if modo_edicao:
             st.markdown("#### Editar Tecnologia")
-            
-            # Usar o método reutilizável em modo edição
             self.render_tecnologia_form(
                 tecnologia=tecnologia_escolhida,
                 key_prefix=f"{key_prefix}_edit",
                 read_only=False,
                 show_save_buttons=True
             )
-            
             return None, [], []
-        else:
-            st.markdown("#### Visualizar Tecnologia")
-            
-            # Usar o método reutilizável em modo read-only
-            self.render_tecnologia_form(
-                tecnologia=tecnologia_escolhida,
-                key_prefix=f"{key_prefix}_view",
-                read_only=True,
-                show_save_buttons=False
-            )
-            
-            # Preparar consumíveis para retornar
-            consumiveis = []
-            consumo_especifico = []
-            
-            for insumo in tecnologia_escolhida.insumos:
-                nome_insumo = insumo["nome"]
-                fator_consumo = insumo["fator_consumo"]
-                fator_emissao = next(
-                    (f["fator_emissao"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
-                    0.0
-                )
-                escopo = next(
-                    (f["escopo"] for f in st.session_state.fatores_emissao if f["consumivel"] == nome_insumo),
-                    "1"
-                )
-                consumiveis.append({
-                    "nome": nome_insumo,
-                    "fator": fator_emissao,
-                    "escopo": escopo
-                })
-                consumo_especifico.append(fator_consumo)
-            
-            return tecnologia_escolhida, consumiveis, consumo_especifico
+
+        st.markdown("#### Visualizar Tecnologia")
+        self.render_tecnologia_form(
+            tecnologia=tecnologia_escolhida,
+            key_prefix=f"{key_prefix}_view",
+            read_only=True,
+            show_save_buttons=False
+        )
+        consumiveis, consumo_especifico = _montar_consumo(tecnologia_escolhida)
+        return tecnologia_escolhida, consumiveis, consumo_especifico
         
         # Se chegou aqui, retornar None pois está na aba de criação ou edição
         return None, [], []
 
     def render_form(self, modal):
         """Formulário para criação de nova unidade produtiva"""
+        self._ensure_catalog_inputs()
+        self._init_io_rows_for_form("create")
 
         if "fatores_emissao" not in st.session_state or not st.session_state.fatores_emissao:
             st.warning("Nenhum fator de emissão disponível. Importe antes de criar unidades.")
             return
 
+        localizacoes = st.session_state.get("cadastro_localizacoes", [])
+        produtos = st.session_state.get("cadastro_insumos", st.session_state.get("cadastro_produtos", []))
+        mass_unit = get_default_mass_unit_from_session(st.session_state)
+        anos_disponiveis = [str(ano) for ano in range(2017, 2100)]
+        ano_corrente = str(datetime.now().year)
+        ano_default = ano_corrente if ano_corrente in anos_disponiveis else anos_disponiveis[0]
+
         col1, col2 = st.columns(2)
 
         with col1:
-            id_elo = st.text_input("ID ELO*")
+            id_elo = self.db.next_unidade_id()
+            st.text_input("ID ELO*", value=id_elo, disabled=True, key="create_id_elo")
             nome = st.text_input("Nome*")
-            localizacao = st.text_input("Localização*")
-            periodo = st.text_input("Período*", value="2023")
+            c_loc, c_loc_btn = st.columns([6, 1])
+            with c_loc:
+                localizacao = st.selectbox(
+                    "Localização*",
+                    options=[""] + localizacoes,
+                    format_func=lambda v: "Selecione..." if v == "" else v,
+                    key="create_localizacao",
+                )
+            with c_loc_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("➕", key="create_add_localizacao", help="Cadastrar nova localização"):
+                    st.session_state["create_open_catalog_localizacoes"] = True
+            periodo = st.selectbox(
+                "Período*",
+                options=anos_disponiveis,
+                index=anos_disponiveis.index(ano_default),
+                key="create_periodo",
+            )
             taxacao_local = st.checkbox("Taxação Local")
 
         with col2:
-            input_insumo = st.text_input("Insumo Entrada")
-            output_insumo = st.text_input("Insumo Saída")
-            massa_input = st.number_input("Massa de Entrada (t)", value=0.0)
-            massa_output = st.number_input("Massa de Saída (t)", value=0.0)
+            if st.button("➕ Cadastrar novo produto/insumo", key="create_add_insumo_catalog", help="Cadastrar novo insumo"):
+                st.session_state["create_open_catalog_insumos"] = True
+
+            inputs_rows = self._render_io_rows_editor(
+                title="Entradas do processo",
+                rows_key="create_inputs_rows",
+                products=produtos,
+                mass_unit=mass_unit,
+                add_button_key="create_add_input_row",
+            )
+
+            outputs_rows = self._render_io_rows_editor(
+                title="Saídas do processo",
+                rows_key="create_outputs_rows",
+                products=produtos,
+                mass_unit=mass_unit,
+                add_button_key="create_add_output_row",
+            )
             taxacao_fronteira = st.checkbox("Taxação na Fronteira")
+
+        if st.session_state.get("create_open_catalog_localizacoes", False):
+            self._render_catalog_add_dialog("localizacoes", "create")
+        if st.session_state.get("create_open_catalog_insumos", False):
+            self._render_catalog_add_dialog("insumos", "create")
 
         st.divider()
 
         # Usar o componente unificado de tecnologia
         tecnologia_escolhida, consumiveis, consumo_especifico = self.render_tecnologia(
-            key_prefix="form_create"
+            key_prefix="form_create",
+            ano_referencia=_parse_ano_periodo(periodo),
         )
 
         if st.button("Salvar", key="form_create_save"):
             if not tecnologia_escolhida:
                 st.error("Selecione ou crie uma tecnologia antes de salvar.")
+                return
+
+            inputs_clean = [r for r in self._normalize_io_rows(inputs_rows) if r.get("produto_id") and float(r.get("quantidade", 0.0) or 0.0) > 0]
+            outputs_clean = [r for r in self._normalize_io_rows(outputs_rows) if r.get("produto_id") and float(r.get("quantidade", 0.0) or 0.0) > 0]
+
+            if not inputs_clean:
+                st.error("Informe ao menos 1 insumo de entrada com quantidade > 0.")
+                return
+            if not outputs_clean:
+                st.error("Informe ao menos 1 produto de saída com quantidade > 0.")
                 return
             
             try:
@@ -408,12 +849,22 @@ class UtilsUI:
                     nome=nome,
                     localizacao=localizacao,
                     periodo=periodo,
-                    input_insumo=input_insumo,
-                    massa_input=massa_input,
-                    output_insumo=output_insumo,
-                    massa_output=massa_output,
+                    input_insumo=inputs_clean[0]["produto_id"],
+                    massa_input=self._sum_io_rows_in_t(inputs_clean, fallback_unit=mass_unit),
+                    output_insumo=outputs_clean[0]["produto_id"],
+                    massa_output=self._sum_io_rows_in_t(outputs_clean, fallback_unit=mass_unit),
                     consumiveis=consumiveis,
                     consumo_especifico=consumo_especifico,
+                    inputs=[{
+                        "produto_id": i["produto_id"],
+                        "quantidade": convert_mass(float(i["quantidade"]), str(i.get("unidade", mass_unit) or mass_unit), "t"),
+                        "unidade": "t",
+                    } for i in inputs_clean],
+                    outputs=[{
+                        "produto_id": o["produto_id"],
+                        "quantidade": convert_mass(float(o["quantidade"]), str(o.get("unidade", mass_unit) or mass_unit), "t"),
+                        "unidade": "t",
+                    } for o in outputs_clean],
                     taxacao_fronteira=taxacao_fronteira,
                     taxacao_local=taxacao_local,
                     modal=modal,
@@ -427,6 +878,7 @@ class UtilsUI:
                                     input_insumo, massa_input, output_insumo, massa_output,
                                     consumiveis, consumo_especifico,
                                     taxacao_fronteira, taxacao_local,
+                                    inputs=None, outputs=None,
                                     modal=None, tecnologia=None,
                                     unidade_existente=None):
         """Cria ou atualiza uma unidade produtiva"""
@@ -448,6 +900,10 @@ class UtilsUI:
                 unidade.TaxacaoLocal = taxacao_local
                 unidade.Consumiveis = consumiveis
                 unidade.ConsumoEspecifico = consumo_especifico
+                unidade.Inputs = self._normalize_io_rows(inputs or [])
+                unidade.Outputs = self._normalize_io_rows(outputs or [])
+                if hasattr(unidade, "sync_legacy_fields_from_lists"):
+                    unidade.sync_legacy_fields_from_lists()
                 unidade.Tecnologia = tecnologia
             else:
                 unidade = UnidadeProdutiva(
@@ -461,6 +917,8 @@ class UtilsUI:
                     massa_output=massa_output,
                     consumiveis=consumiveis,
                     consumo_especifico=consumo_especifico,
+                    inputs=self._normalize_io_rows(inputs or []),
+                    outputs=self._normalize_io_rows(outputs or []),
                     taxacao_fronteira=taxacao_fronteira,
                     taxacao_local=taxacao_local,
                     tecnologia=tecnologia
@@ -472,7 +930,11 @@ class UtilsUI:
             self.db.propagar_pegada()
 
             acao = "atualizada" if unidade_existente else "adicionada"
-            st.success(f"Unidade {acao} com sucesso!")
+            st.session_state["unidade_feedback_msg"] = f"✅ Unidade {acao} com sucesso!"
+
+            # Sempre retornar para a tabela de unidades após salvar
+            st.session_state.pop("criando_nova_unidade", None)
+            st.session_state.pop("unidade_selecionada_tabela", None)
 
             if modal:
                 modal.close()
@@ -485,43 +947,75 @@ class UtilsUI:
 
     def render_table(self, unidades, edges, editar_callback=None, remover_callback=None):
         """Renderiza a tabela de unidades com opções de editar e remover"""
-        col_widths = [1.3, 2.3, 1.2, 1.2, 1.3, 1.3, 2.1, 2.5, 0.9, 1]
+        mass_unit = get_default_mass_unit_from_session(st.session_state)
+        col_widths = [1.2, 2.0, 1.0, 1.1, 1.1, 1.1, 1.1, 1.9, 2.2, 0.9, 0.9]
         col_header = st.columns(col_widths)
         header_labels = [
-            "ID", "Nome", "Entrada", "Saída", "Massa In", "Massa Out",
-            "Emissões Totais (tCO₂e)", "Destino", "Editar", "Remover"
+            "ID", "Nome", "Ano", "Entrada", "Saída", f"Massa In ({mass_unit})", f"Massa Out ({mass_unit})",
+            f"Emissões Totais ({co2e_label(mass_unit)})", "Destino", "Editar", "Remover"
         ]
 
         for col, label in zip(col_header, header_labels):
             col.markdown(f"**{label}**")
 
         for i, u in enumerate(unidades):
-            destinos = [e['target'] for e in edges if e['source'] == u.ID_ELO]
+            periodo_key = str(getattr(u, 'Periodo', '') or '')
+            row_key = f"{u.ID_ELO}_{periodo_key}_{i}"
+            destinos = [
+                f"{e['target']} ({e.get('periodo', '')})" if e.get('periodo') else e['target']
+                for e in edges
+                if e['source'] == u.ID_ELO
+            ]
             cols = st.columns(col_widths)
             bg_color = "#f9f9f9" if i % 2 == 0 else "#ffffff"
             style = f"background-color: {bg_color}; padding: 0.2em; border-radius: 0.3em"
 
             with cols[0]: st.markdown(f"<div style='{style}'>{u.ID_ELO}</div>", unsafe_allow_html=True)
             with cols[1]: st.markdown(f"<div style='{style}'>{u.Nome}</div>", unsafe_allow_html=True)
-            with cols[2]: st.markdown(f"<div style='{style}'>{u.Input}</div>", unsafe_allow_html=True)
-            with cols[3]: st.markdown(f"<div style='{style}'>{u.Output}</div>", unsafe_allow_html=True)
-            with cols[4]: st.markdown(f"<div style='{style}'>{u.MassaInput:.1f}</div>", unsafe_allow_html=True)
-            with cols[5]: st.markdown(f"<div style='{style}'>{u.MassaOutput:.1f}</div>", unsafe_allow_html=True)
+            with cols[2]: st.markdown(f"<div style='{style}'>{getattr(u, 'Periodo', '')}</div>", unsafe_allow_html=True)
+            with cols[3]: st.markdown(f"<div style='{style}'>{u.Input}</div>", unsafe_allow_html=True)
+            with cols[4]: st.markdown(f"<div style='{style}'>{u.Output}</div>", unsafe_allow_html=True)
+            massa_in_disp = convert_mass(u.MassaInput, "t", mass_unit)
+            massa_out_disp = convert_mass(u.MassaOutput, "t", mass_unit)
+            with cols[5]: st.markdown(f"<div style='{style}'>{self._format_mass_precise(massa_in_disp)}</div>", unsafe_allow_html=True)
+            with cols[6]: st.markdown(f"<div style='{style}'>{self._format_mass_precise(massa_out_disp)}</div>", unsafe_allow_html=True)
 
-            emissao_total = u.IntensidadeEmissao * u.MassaOutput
-            with cols[6]: st.markdown(f"<div style='{style}'>{emissao_total:.2f}</div>", unsafe_allow_html=True)
-            with cols[7]: st.markdown(f"<div style='{style}'>{', '.join(destinos)}</div>", unsafe_allow_html=True)
-
-            with cols[8]:
-                if editar_callback and st.button("✏️", key=f"editar_{u.ID_ELO}"):
-                    editar_callback(u.ID_ELO)
+            emissao_total = convert_co2e(u.IntensidadeEmissao * (u.MassaOutput or 0.0), mass_unit)
+            with cols[7]: st.markdown(f"<div style='{style}'>{emissao_total:.2f}</div>", unsafe_allow_html=True)
+            with cols[8]: st.markdown(f"<div style='{style}'>{', '.join(destinos)}</div>", unsafe_allow_html=True)
 
             with cols[9]:
-                if remover_callback and st.button("🗑️", key=f"remover_{u.ID_ELO}"):
+                if editar_callback and st.button("✏️", key=f"editar_{row_key}"):
+                    editar_callback(u.ID_ELO)
+
+            with cols[10]:
+                if remover_callback and st.button("🗑️", key=f"remover_{row_key}"):
                     remover_callback(u.ID_ELO)
 
     def render_edit_form(self, unidade, fatores_emissao, callback_salvar):
         """Formulário para edição de uma unidade produtiva com tecnologia associada"""
+        self._ensure_catalog_inputs()
+        self._init_io_rows_for_form(f"edit_{unidade.ID_ELO}", unidade=unidade)
+
+        localizacoes = st.session_state.get("cadastro_localizacoes", [])
+        produtos = st.session_state.get("cadastro_insumos", st.session_state.get("cadastro_produtos", []))
+        mass_unit = get_default_mass_unit_from_session(st.session_state)
+        localizacao_atual = str(unidade.Localizacao or "").strip()
+        input_atual = str(unidade.Input or "").strip()
+        output_atual = str(unidade.Output or "").strip()
+        anos_disponiveis = [str(ano) for ano in range(2017, 2100)]
+        ano_corrente = str(datetime.now().year)
+        ano_default = ano_corrente if ano_corrente in anos_disponiveis else anos_disponiveis[0]
+        periodo_atual = str(getattr(unidade, "Periodo", "") or "").strip()
+        if periodo_atual and periodo_atual not in anos_disponiveis:
+            anos_disponiveis = sorted(set(anos_disponiveis + [periodo_atual]))
+
+        if localizacao_atual and localizacao_atual not in localizacoes:
+            localizacoes = sorted(localizacoes + [localizacao_atual])
+        if input_atual and input_atual not in produtos:
+            produtos = sorted(produtos + [input_atual])
+        if output_atual and output_atual not in produtos:
+            produtos = sorted(produtos + [output_atual])
         
         # Campos de informação da unidade (fora do form para permitir interação com render_tecnologia)
         st.markdown(f"### Editando Unidade: {unidade.ID_ELO}")
@@ -530,16 +1024,52 @@ class UtilsUI:
 
         with col1:
             nome = st.text_input("Nome*", value=unidade.Nome, key=f"edit_{unidade.ID_ELO}_nome")
-            localizacao = st.text_input("Localização*", value=unidade.Localizacao, key=f"edit_{unidade.ID_ELO}_loc")
-            input_insumo = st.text_input("Insumo Entrada", value=unidade.Input, key=f"edit_{unidade.ID_ELO}_input")
-            massa_input = st.number_input("Massa de Entrada (t)", value=unidade.MassaInput, key=f"edit_{unidade.ID_ELO}_massa_in")
+            c_loc, c_loc_btn = st.columns([6, 1])
+            with c_loc:
+                localizacao = st.selectbox(
+                    "Localização*",
+                    options=[""] + localizacoes,
+                    index=([""] + localizacoes).index(localizacao_atual) if localizacao_atual in ([""] + localizacoes) else 0,
+                    format_func=lambda v: "Selecione..." if v == "" else v,
+                    key=f"edit_{unidade.ID_ELO}_loc",
+                )
+            with c_loc_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("➕", key=f"edit_{unidade.ID_ELO}_add_localizacao", help="Cadastrar nova localização"):
+                    st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_localizacoes"] = True
+
+            if st.button("➕ Cadastrar novo produto/insumo", key=f"edit_{unidade.ID_ELO}_add_insumo_catalog", help="Cadastrar novo insumo"):
+                st.session_state[f"edit_{unidade.ID_ELO}_open_catalog_insumos"] = True
+
+            inputs_rows = self._render_io_rows_editor(
+                title="Entradas do processo",
+                rows_key=f"edit_{unidade.ID_ELO}_inputs_rows",
+                products=produtos,
+                mass_unit=mass_unit,
+                add_button_key=f"edit_{unidade.ID_ELO}_add_input_row",
+            )
             tax_local = st.checkbox("Taxação Local", value=unidade.TaxacaoLocal, key=f"edit_{unidade.ID_ELO}_tax_local")
 
         with col2:
-            periodo = st.text_input("Período*", value=unidade.Periodo, key=f"edit_{unidade.ID_ELO}_periodo")
-            output_insumo = st.text_input("Insumo Saída", value=unidade.Output, key=f"edit_{unidade.ID_ELO}_output")
-            massa_output = st.number_input("Massa de Saída (t)", value=unidade.MassaOutput, key=f"edit_{unidade.ID_ELO}_massa_out")
+            periodo = st.selectbox(
+                "Período*",
+                options=anos_disponiveis,
+                index=anos_disponiveis.index(periodo_atual) if periodo_atual in anos_disponiveis else anos_disponiveis.index(ano_default),
+                key=f"edit_{unidade.ID_ELO}_periodo",
+            )
+            outputs_rows = self._render_io_rows_editor(
+                title="Saídas do processo",
+                rows_key=f"edit_{unidade.ID_ELO}_outputs_rows",
+                products=produtos,
+                mass_unit=mass_unit,
+                add_button_key=f"edit_{unidade.ID_ELO}_add_output_row",
+            )
             tax_fronteira = st.checkbox("Taxação na Fronteira", value=unidade.TaxacaoFronteira, key=f"edit_{unidade.ID_ELO}_tax_front")
+
+        if st.session_state.get(f"edit_{unidade.ID_ELO}_open_catalog_localizacoes", False):
+            self._render_catalog_add_dialog("localizacoes", f"edit_{unidade.ID_ELO}")
+        if st.session_state.get(f"edit_{unidade.ID_ELO}_open_catalog_insumos", False):
+            self._render_catalog_add_dialog("insumos", f"edit_{unidade.ID_ELO}")
 
         st.divider()
         
@@ -548,7 +1078,8 @@ class UtilsUI:
         
         tecnologia_escolhida, consumiveis, consumo_especifico = self.render_tecnologia(
             key_prefix=f"edit_{unidade.ID_ELO}",
-            tecnologia_atual=tecnologia_atual
+            tecnologia_atual=tecnologia_atual,
+            ano_referencia=_parse_ano_periodo(periodo),
         )
         
         st.divider()
@@ -562,18 +1093,38 @@ class UtilsUI:
             if not all([nome, localizacao, periodo]):
                 st.error("Preencha todos os campos obrigatórios (*)")
                 return
+
+            inputs_clean = [r for r in self._normalize_io_rows(inputs_rows) if r.get("produto_id") and float(r.get("quantidade", 0.0) or 0.0) > 0]
+            outputs_clean = [r for r in self._normalize_io_rows(outputs_rows) if r.get("produto_id") and float(r.get("quantidade", 0.0) or 0.0) > 0]
+
+            if not inputs_clean:
+                st.error("Informe ao menos 1 insumo de entrada com quantidade > 0.")
+                return
+            if not outputs_clean:
+                st.error("Informe ao menos 1 produto de saída com quantidade > 0.")
+                return
                 
             callback_salvar(
                 id_elo=unidade.ID_ELO,
                 nome=nome,
                 localizacao=localizacao,
                 periodo=periodo,
-                input_insumo=input_insumo,
-                massa_input=massa_input,
-                output_insumo=output_insumo,
-                massa_output=massa_output,
+                input_insumo=inputs_clean[0]["produto_id"],
+                massa_input=self._sum_io_rows_in_t(inputs_clean, fallback_unit=mass_unit),
+                output_insumo=outputs_clean[0]["produto_id"],
+                massa_output=self._sum_io_rows_in_t(outputs_clean, fallback_unit=mass_unit),
                 consumiveis=consumiveis,
                 consumo_especifico=consumo_especifico,
+                inputs=[{
+                    "produto_id": i["produto_id"],
+                    "quantidade": convert_mass(float(i["quantidade"]), str(i.get("unidade", mass_unit) or mass_unit), "t"),
+                    "unidade": "t",
+                } for i in inputs_clean],
+                outputs=[{
+                    "produto_id": o["produto_id"],
+                    "quantidade": convert_mass(float(o["quantidade"]), str(o.get("unidade", mass_unit) or mass_unit), "t"),
+                    "unidade": "t",
+                } for o in outputs_clean],
                 taxacao_fronteira=tax_fronteira,
                 taxacao_local=tax_local,
                 tecnologia=tecnologia_escolhida,

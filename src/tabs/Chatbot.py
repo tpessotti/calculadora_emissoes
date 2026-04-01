@@ -1,18 +1,96 @@
 import streamlit as st
 import requests
 import json
+import os
 from typing import List, Dict
 from datetime import datetime
+from core.units import (
+    co2e_label, co2e_intensity_label, convert_co2e,
+    get_default_mass_unit_from_session,
+)
 
 class ChatbotTab:
     def __init__(self):
         self.openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.modelos_disponiveis = [
-            "meta-llama/llama-3.3-8b-instruct:free",
-            "meta-llama/llama-4-scout:free",
-            "qwen/qwen3-4b:free",
-            "deepseek/deepseek-r1-0528-qwen3-8b:free"
+        self.modelos_padrao = [
+            "google/gemma-3n-e2b-it:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-20b:free",
+            "qwen/qwen3-vl-30b-a3b-thinking",
+            "openai/gpt-oss-120b:free"
         ]
+        self.modelos_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "data",
+            "chatbot_models.json",
+        )
+        self.modelos_disponiveis = self._carregar_modelos_disponiveis()
+
+    def _carregar_modelos_disponiveis(self) -> List[str]:
+        """Carrega modelos padrão + customizados do arquivo local."""
+        custom = []
+        try:
+            if os.path.exists(self.modelos_path):
+                with open(self.modelos_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    custom = [str(m).strip() for m in data if str(m).strip()]
+        except Exception:
+            custom = []
+
+        merged = []
+        for m in self.modelos_padrao + custom:
+            if m not in merged:
+                merged.append(m)
+        return merged
+
+    def _salvar_modelos_customizados(self, modelos: List[str]) -> None:
+        """Salva apenas modelos fora da lista padrão."""
+        try:
+            os.makedirs(os.path.dirname(self.modelos_path), exist_ok=True)
+            custom = [m for m in modelos if m not in self.modelos_padrao]
+            with open(self.modelos_path, "w", encoding="utf-8") as f:
+                json.dump(custom, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            st.warning(f"Não foi possível salvar a lista de modelos: {e}")
+
+    def _render_gerenciar_modelos(self, key_prefix: str = "chatbot"):
+        """UI para adicionar/remover modelos dinamicamente."""
+        with st.expander("🧩 Gerenciar modelos", expanded=False):
+            st.caption("Adicione IDs de modelos da OpenRouter para manter a lista sempre atualizada.")
+
+            novo_modelo = st.text_input(
+                "Novo modelo",
+                placeholder="Ex: mistralai/mistral-small-3.1-24b-instruct:free",
+                key=f"{key_prefix}_novo_modelo",
+            )
+
+            if st.button("➕ Adicionar modelo", key=f"{key_prefix}_add_modelo", use_container_width=True):
+                candidato = (novo_modelo or "").strip()
+                if not candidato:
+                    st.warning("Informe um modelo válido antes de adicionar.")
+                elif candidato in self.modelos_disponiveis:
+                    st.info("Esse modelo já está na lista.")
+                else:
+                    self.modelos_disponiveis.append(candidato)
+                    self._salvar_modelos_customizados(self.modelos_disponiveis)
+                    st.success("Modelo adicionado com sucesso.")
+                    st.rerun()
+
+            custom_models = [m for m in self.modelos_disponiveis if m not in self.modelos_padrao]
+            if custom_models:
+                remover = st.selectbox(
+                    "Remover modelo customizado",
+                    options=custom_models,
+                    key=f"{key_prefix}_remover_modelo",
+                )
+                if st.button("🗑️ Remover modelo", key=f"{key_prefix}_del_modelo", use_container_width=True):
+                    self.modelos_disponiveis = [m for m in self.modelos_disponiveis if m != remover]
+                    if st.session_state.get("modelo_selecionado") == remover:
+                        st.session_state.modelo_selecionado = self.modelos_disponiveis[0]
+                    self._salvar_modelos_customizados(self.modelos_disponiveis)
+                    st.success("Modelo removido com sucesso.")
+                    st.rerun()
         
     def _render(self):
         st.title("Assistente de Análise de Emissões")
@@ -33,6 +111,8 @@ class ChatbotTab:
     def _render_configuracao_api(self):
         """Renderiza formulário de configuração da API key"""
         st.info("👋 Para começar, configure sua API key da OpenRouter.")
+
+        self._render_gerenciar_modelos("config")
         
         with st.expander("ℹ️ Como obter uma API key?", expanded=True):
             st.markdown("""
@@ -80,13 +160,17 @@ class ChatbotTab:
         # Sidebar com configurações e contexto
         with st.sidebar:
             st.markdown("### ⚙️ Configurações")
+
+            self._render_gerenciar_modelos("sidebar")
             
             # Trocar modelo
             novo_modelo = st.selectbox(
                 "Modelo de IA",
                 self.modelos_disponiveis,
-                index=self.modelos_disponiveis.index(
-                    st.session_state.get("modelo_selecionado", self.modelos_disponiveis[0])
+                index=(
+                    self.modelos_disponiveis.index(st.session_state.get("modelo_selecionado"))
+                    if st.session_state.get("modelo_selecionado") in self.modelos_disponiveis
+                    else 0
                 )
             )
             if novo_modelo != st.session_state.get("modelo_selecionado"):
@@ -152,19 +236,22 @@ class ChatbotTab:
         if unidades:
             st.metric("Unidades Produtivas", len(unidades))
             
+            _mu   = get_default_mass_unit_from_session(st.session_state)
+            _lbl  = co2e_label(_mu)
+            _int  = co2e_intensity_label(_mu)
             # Calcular emissão total
             emissao_total = sum(
                 getattr(u, 'IntensidadeEmissao', 0) * getattr(u, 'MassaOutput', 0) 
                 for u in unidades
             )
-            st.metric("Emissão Total", f"{emissao_total:.2f} tCO2e")
+            st.metric("Emissão Total", f"{convert_co2e(emissao_total, _mu):.2f} {_lbl}")
             
             # Intensidade média
             if unidades:
                 intensidade_media = sum(
                     getattr(u, 'IntensidadeEmissao', 0) for u in unidades
                 ) / len(unidades)
-                st.metric("Intensidade Média", f"{intensidade_media:.3f} tCO2e/t")
+                st.metric("Intensidade Média", f"{convert_co2e(intensidade_media, 't'):.3f} {_int}")
         else:
             st.info("Nenhuma unidade cadastrada ainda.")
         
@@ -202,11 +289,14 @@ Suas capacidades incluem:
                 contexto += f"- Total de unidades produtivas: {len(unidades)}\n"
                 
                 for i, u in enumerate(unidades[:5], 1):  # Limitar a 5 unidades para não exceder tokens
+                    _mu_ctx  = get_default_mass_unit_from_session(st.session_state)
+                    _lbl_ctx = co2e_label(_mu_ctx)
+                    _int_ctx = co2e_intensity_label(_mu_ctx)
                     contexto += f"\n{i}. {getattr(u, 'Nome', 'Unidade')}:\n"
                     contexto += f"   - Localização: {getattr(u, 'Localizacao', 'N/A')}\n"
                     contexto += f"   - Massa Output: {getattr(u, 'MassaOutput', 0):.2f} t\n"
-                    contexto += f"   - Intensidade Emissão: {getattr(u, 'IntensidadeEmissao', 0):.3f} tCO2e/t\n"
-                    contexto += f"   - Pegada Total: {getattr(u, 'Pegada', 0):.2f} tCO2e\n"
+                    contexto += f"   - Intensidade Emissão: {convert_co2e(getattr(u, 'IntensidadeEmissao', 0), 't'):.3f} {_int_ctx}\n"
+                    contexto += f"   - Pegada Total: {convert_co2e(getattr(u, 'Pegada', 0) * getattr(u, 'MassaOutput', 0), _mu_ctx):.2f} {_lbl_ctx}\n"
                     
                     # Consumíveis
                     consumiveis = getattr(u, 'Consumiveis', [])
@@ -220,7 +310,7 @@ Suas capacidades incluem:
                 contexto += f"\n**FATORES DE EMISSÃO DISPONÍVEIS:** {len(fatores)} fatores cadastrados\n"
                 # Listar alguns fatores
                 for f in fatores[:5]:
-                    contexto += f"- {f.get('consumivel', 'N/A')}: {f.get('fator_emissao', 0):.3f} tCO2e/t (Escopo {f.get('escopo', 'N/A')})\n"
+                    contexto += f"- {f.get('consumivel', 'N/A')}: {f.get('fator_emissao', 0):.3f} kgCO₂e/{f.get('kgCO2e_unid', 'unid')} (Escopo {f.get('escopo', 'N/A')})\n"
         
         contexto += "\nResponda de forma clara, técnica quando necessário, mas acessível. Seja proativo em sugerir melhorias e análises."
         

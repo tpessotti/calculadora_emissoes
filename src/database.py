@@ -1,18 +1,90 @@
+from __future__ import annotations
+
 import streamlit as st
 import json
-from typing import List, Dict
+import re
+from typing import List, Dict, Optional, Any
 import pandas as pd
 #from database import Tecnologia
 from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Any
+from core.units import (
+    co2e_label, co2e_intensity_label, convert_co2e,
+    get_default_mass_unit_from_session,
+)
+
+
+def _parse_ano_periodo_db(periodo) -> Optional[int]:
+    """Converte string de período em inteiro de ano (None se inválido)."""
+    try:
+        return int(float(str(periodo).strip()))
+    except (ValueError, TypeError):
+        return None
+
+
+def _rebuild_consumiveis_from_tech(tecnologia, fatores_emissao: list, ano_ref: Optional[int]):
+    """Re-constrói Consumiveis e ConsumoEspecifico a partir dos insumos da tecnologia.
+
+    Faz busca ao vivo no banco de fatores para garantir que o nome do consumível
+    e o fator de emissão estão sempre atualizados, independentemente do que estava
+    salvo nos dados da sessão anterior.
+
+    Returns:
+        tuple: (consumiveis: list[dict], consumo_especifico: list[float])
+    """
+    consumiveis: List[dict] = []
+    consumo_especifico: List[float] = []
+
+    if not tecnologia or not getattr(tecnologia, "insumos", None):
+        return consumiveis, consumo_especifico
+
+    try:
+        from core.calc.fatores import FatorIndex
+        idx = FatorIndex(fatores_emissao) if fatores_emissao else None
+    except Exception:
+        idx = None
+
+    for insumo in tecnologia.insumos:
+        nome = str(insumo.get("nome", "")).strip()
+        fator_consumo = float(insumo.get("fator_consumo", 0.0))
+
+        fator_emissao = 0.0
+        escopo = "SCOPE 1"  # default
+
+        if idx and nome:
+            fator_dict = None
+            # Busca por escopo específico + ano
+            for esc_try in ["1", "2", "3"]:
+                fator_dict = idx.get_fator_dict(nome, esc_try, ano=ano_ref)
+                if fator_dict is not None:
+                    break
+            # Fallback: busca global (sem ano)
+            if fator_dict is None:
+                for esc_try in ["1", "2", "3"]:
+                    fator_dict = idx.get_fator_dict(nome, esc_try, ano=None)
+                    if fator_dict is not None:
+                        break
+            if fator_dict is not None:
+                fator_emissao = float(fator_dict.get("fator_emissao", 0.0))
+                escopo = str(fator_dict.get("escopo", "SCOPE 1"))
+
+        consumiveis.append({
+            "nome": nome,
+            "fator": fator_emissao,
+            "escopo": escopo,
+        })
+        consumo_especifico.append(fator_consumo)
+
+    return consumiveis, consumo_especifico
 
 @dataclass
 class Conexao:
     """Classe que representa uma conexão entre unidades produtivas"""
     origem: str
     destino: str
+    id: str = ""
     massa: float = 0.0  # Massa transferida na conexão
     label: str = "Fluxo"
+    periodo: str = ""   # Período/ano da conexão
 
     def to_dict(self):
         return asdict(self)
@@ -44,10 +116,37 @@ class Tecnologia:
         )
 
 class UnidadeProdutiva:
+    @staticmethod
+    def _normalize_io_list(items: Any) -> List[Dict[str, Any]]:
+        """Normaliza lista de entradas/saídas para o formato canônico."""
+        normalized: List[Dict[str, Any]] = []
+        if not isinstance(items, list):
+            return normalized
+
+        for raw in items:
+            if not isinstance(raw, dict):
+                continue
+            produto_id = str(raw.get("produto_id", raw.get("produto", "")) or "").strip()
+            unidade = str(raw.get("unidade", "t") or "t").strip() or "t"
+            try:
+                quantidade = float(raw.get("quantidade", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                quantidade = 0.0
+            normalized.append(
+                {
+                    "produto_id": produto_id,
+                    "quantidade": quantidade,
+                    "unidade": unidade,
+                }
+            )
+        return normalized
+
     def __init__(self, id_elo: str, nome: str, localizacao: str, periodo: str, 
                 input_insumo: str, massa_input: float,
                 output_insumo: str, massa_output: float,
                 consumiveis: list[dict], consumo_especifico: list[float],
+                inputs: Optional[List[Dict[str, Any]]] = None,
+                outputs: Optional[List[Dict[str, Any]]] = None,
                 taxacao_fronteira: bool = False, taxacao_local: bool = False,
                 tecnologia=None, conexao: 'Conexao' = None):  # novo parâmetro
         
@@ -56,10 +155,32 @@ class UnidadeProdutiva:
         self.Localizacao = localizacao
         self.Periodo = periodo
 
-        self.Input = input_insumo
-        self.MassaInput = massa_input
-        self.Output = output_insumo
-        self.MassaOutput = massa_output
+        if inputs is None:
+            inputs = [
+                {
+                    "produto_id": str(input_insumo or "").strip(),
+                    "quantidade": float(massa_input or 0.0),
+                    "unidade": "t",
+                }
+            ]
+        if outputs is None:
+            outputs = [
+                {
+                    "produto_id": str(output_insumo or "").strip(),
+                    "quantidade": float(massa_output or 0.0),
+                    "unidade": "t",
+                }
+            ]
+
+        self.Inputs = self._normalize_io_list(inputs)
+        self.Outputs = self._normalize_io_list(outputs)
+
+        # Campos legados permanecem para retrocompatibilidade com partes da UI.
+        self.Input = str(input_insumo or "").strip()
+        self.Output = str(output_insumo or "").strip()
+        self.MassaInput = float(massa_input or 0.0)
+        self.MassaOutput = float(massa_output or 0.0)
+        self.sync_legacy_fields_from_lists()
 
         self.Consumiveis = consumiveis
         self.ConsumoEspecifico = consumo_especifico
@@ -81,6 +202,17 @@ class UnidadeProdutiva:
         # Propriedades adicionais
         self.Tecnologia = tecnologia
         self.Conexao = conexao  # Instância de Conexao que sai desta unidade
+
+    def sync_legacy_fields_from_lists(self) -> None:
+        """Sincroniza campos legados (Input/Output/Massa*) a partir de Inputs/Outputs."""
+        if self.Inputs:
+            first_input = self.Inputs[0]
+            self.Input = str(first_input.get("produto_id", "") or "")
+            self.MassaInput = float(sum(float(i.get("quantidade", 0.0) or 0.0) for i in self.Inputs))
+        if self.Outputs:
+            first_output = self.Outputs[0]
+            self.Output = str(first_output.get("produto_id", "") or "")
+            self.MassaOutput = float(sum(float(o.get("quantidade", 0.0) or 0.0) for o in self.Outputs))
 
     def to_dict(self):
         # Converter Tecnologia para ID se for um objeto
@@ -108,6 +240,8 @@ class UnidadeProdutiva:
             "MassaInput": self.MassaInput,
             "Output": self.Output,
             "MassaOutput": self.MassaOutput,
+            "inputs": self.Inputs,
+            "outputs": self.Outputs,
             "Consumiveis": self.Consumiveis,
             "ConsumoEspecifico": self.ConsumoEspecifico,
             "IntensidadeEmissao": self.IntensidadeEmissao,
@@ -126,13 +260,6 @@ class UnidadeProdutiva:
         }
 
 
-from typing import List, Dict
-import streamlit as st
-import pandas as pd
-import json
-from database import UnidadeProdutiva, Conexao
-from calculations import EmissionCalculator
-
 class DatabaseManager:
     def __init__(self):
         self._init_session_data()
@@ -142,6 +269,56 @@ class DatabaseManager:
             st.session_state.unidades = []
         if "conexoes" not in st.session_state:
             st.session_state.conexoes = []
+
+    @staticmethod
+    def _next_sequential_id(prefix: str, existing_ids: List[str], width: int = 3) -> str:
+        pattern = re.compile(rf"^{re.escape(prefix)}(\d+)$", re.IGNORECASE)
+        used = set()
+        max_num = -1
+
+        for raw in existing_ids:
+            sid = str(raw or "").strip()
+            if not sid:
+                continue
+            used.add(sid.upper())
+            match = pattern.match(sid)
+            if not match:
+                continue
+            try:
+                num = int(match.group(1))
+                if num > max_num:
+                    max_num = num
+            except ValueError:
+                continue
+
+        next_num = max_num + 1
+        candidate = f"{prefix}{next_num:0{width}d}"
+        while candidate.upper() in used:
+            next_num += 1
+            candidate = f"{prefix}{next_num:0{width}d}"
+        return candidate
+
+    def next_unidade_id(self) -> str:
+        ids = [getattr(u, "ID_ELO", "") for u in st.session_state.get("unidades", [])]
+        return self._next_sequential_id("E", ids)
+
+    def next_tecnologia_id(self) -> str:
+        ids = []
+        for t in st.session_state.get("tecnologias_alternativas", []):
+            if hasattr(t, "id"):
+                ids.append(getattr(t, "id", ""))
+            elif isinstance(t, dict):
+                ids.append(t.get("id", ""))
+        return self._next_sequential_id("T", ids)
+
+    def next_fluxo_id(self) -> str:
+        ids = []
+        for c in st.session_state.get("conexoes", []):
+            if hasattr(c, "id"):
+                ids.append(getattr(c, "id", ""))
+            elif isinstance(c, dict):
+                ids.append(c.get("id", ""))
+        return self._next_sequential_id("F", ids)
 
     # --- Unidades ---
     def add_unidade(self, unidade: UnidadeProdutiva) -> None:
@@ -159,9 +336,13 @@ class DatabaseManager:
         return next((u for u in st.session_state.unidades if u.ID_ELO == id_elo), None)
 
     # --- Conexões ---
-    def add_edge(self, origem: str, destino: str, massa: float = 0.0) -> None:
-        if not any(c.origem == origem and c.destino == destino for c in st.session_state.conexoes):
-            st.session_state.conexoes.append(Conexao(origem=origem, destino=destino, massa=massa))
+    def add_edge(self, origem: str, destino: str, massa: float = 0.0, periodo: str = "", label: str = "Fluxo", id_fluxo: str = "") -> Optional[Conexao]:
+        if not any(c.origem == origem and c.destino == destino and c.periodo == periodo for c in st.session_state.conexoes):
+            fluxo_id = str(id_fluxo or "").strip() or self.next_fluxo_id()
+            conexao = Conexao(id=fluxo_id, origem=origem, destino=destino, massa=massa, label=label, periodo=periodo)
+            st.session_state.conexoes.append(conexao)
+            return conexao
+        return None
     
     def remove_edge(self, origem: str, destino: str) -> None:
         st.session_state.conexoes = [
@@ -178,6 +359,9 @@ class DatabaseManager:
 
     # --- Visualização ---
     def get_unidades_df(self) -> pd.DataFrame:
+        _mu = get_default_mass_unit_from_session(st.session_state)
+        _lbl = co2e_label(_mu)
+        _int_lbl = co2e_intensity_label(_mu)
         dados = []
         for unidade in st.session_state.unidades:
             dados.append({
@@ -187,12 +371,12 @@ class DatabaseManager:
                 "Período": unidade.Periodo,
                 "Input": unidade.Input,
                 "Output": unidade.Output,
-                "Emissão (CO₂)": f"{unidade.IntensidadeEmissao * unidade.MassaOutput:,.2f}",
-                "Intensidade (tCO₂/t)": f"{unidade.IntensidadeEmissao:.2f}",
-                "Int. Escopo 1": f"{unidade.IntensidadeEmissaoEscopo1:.2f}",
-                "Int. Escopo 2": f"{unidade.IntensidadeEmissaoEscopo2:.2f}",
-                "Int. Escopo 3": f"{unidade.IntensidadeEmissaoEscopo3:.2f}",
-                "Pegada (CO₂/t produto)": f"{unidade.Pegada:.2f}",
+                f"Emissão ({_lbl})": f"{convert_co2e(unidade.IntensidadeEmissao * unidade.MassaOutput, _mu):,.2f}",
+                f"Intensidade ({_int_lbl})": f"{convert_co2e(unidade.IntensidadeEmissao, 't'):,.2f}",
+                "Int. Escopo 1": f"{convert_co2e(unidade.IntensidadeEmissaoEscopo1, 't'):,.2f}",
+                "Int. Escopo 2": f"{convert_co2e(unidade.IntensidadeEmissaoEscopo2, 't'):,.2f}",
+                "Int. Escopo 3": f"{convert_co2e(unidade.IntensidadeEmissaoEscopo3, 't'):,.2f}",
+                f"Pegada ({_int_lbl})": f"{convert_co2e(unidade.Pegada, 't'):,.2f}",
                 "Pegada Escopo 1": f"{unidade.PegadaEscopo1:.2f}",
                 "Pegada Escopo 2": f"{unidade.PegadaEscopo2:.2f}",
                 "Pegada Escopo 3": f"{unidade.PegadaEscopo3:.2f}",
@@ -202,10 +386,12 @@ class DatabaseManager:
         return pd.DataFrame(dados)
     
     def get_estatisticas(self) -> Dict:
+        _mu = get_default_mass_unit_from_session(st.session_state)
+        raw_total = sum(u.IntensidadeEmissao * u.MassaOutput for u in st.session_state.unidades)
         return {
             "total_unidades": len(st.session_state.unidades),
             "total_conexoes": len(st.session_state.conexoes),
-            "emissao_total": sum(u.IntensidadeEmissao * u.MassaOutput for u in st.session_state.unidades)
+            "emissao_total": convert_co2e(raw_total, _mu),
         }
 
     def export_to_json(self):
@@ -220,6 +406,7 @@ class DatabaseManager:
         return json.dumps(data, indent=2, ensure_ascii=False)
 
     def import_from_json(self, json_str: str) -> bool:
+        from calculations import EmissionCalculator
         try:
             data = json.loads(json_str)
             
@@ -228,28 +415,40 @@ class DatabaseManager:
             insumos_disponiveis = {f["consumivel"] for f in fatores_emissao}
             insumos_faltando = set()
 
-            tecnologias_raw = data.get("tecnologias_alternativas", [])
+            tecnologias_raw = data.get("tecnologias_alternativas")
+            if tecnologias_raw is None:
+                tecnologias_raw = data.get("tecnologias", [])
             tecnologias_obj = []
             tecnologias_map = {}  # Mapa ID -> objeto Tecnologia
 
             for t in tecnologias_raw:
+                tec_id = str(t.get("id", "")).strip()
+                tec_nome = str(t.get("nome", "")).strip()
+                if not tec_id or not tec_nome:
+                    continue
+
                 insumos = []
                 for i in t.get("insumos", []):
-                    nome = i["nome"]
+                    nome = i.get("nome")
+                    if not nome:
+                        continue
                     if nome not in insumos_disponiveis:
                         insumos_faltando.add(nome)
                         insumos.append({"nome": nome, "fator_consumo": 0.0})
                     else:
-                        insumos.append(i)
+                        insumos.append({
+                            "nome": nome,
+                            "fator_consumo": i.get("fator_consumo", 1.0),
+                        })
                 
                 tecnologia = Tecnologia(
-                    id=t["id"],
-                    nome=t["nome"],
+                    id=tec_id,
+                    nome=tec_nome,
                     insumos=insumos,
                     unidades=t.get("unidades", [])
                 )
                 tecnologias_obj.append(tecnologia)
-                tecnologias_map[t["id"]] = tecnologia
+                tecnologias_map[tec_id] = tecnologia
 
             st.session_state.tecnologias_alternativas = tecnologias_obj
 
@@ -273,12 +472,54 @@ class DatabaseManager:
                 conexao_data = u_data.get("Conexao")
                 if conexao_data:
                     conexao = Conexao(
+                        id=conexao_data.get("id", ""),
                         origem=conexao_data.get("origem"),
                         destino=conexao_data.get("destino"),
                         massa=conexao_data.get("massa", 0.0),
-                        label=conexao_data.get("label", "Fluxo")
+                        label=conexao_data.get("label", "Fluxo"),
+                        periodo=conexao_data.get("periodo", ""),
                     )
-                
+
+                # ── Re-construir Consumiveis a partir da tecnologia (corrige nomes/fatores desatualizados) ──
+                ano_ref_u = _parse_ano_periodo_db(u_data.get("Periodo"))
+                if tecnologia and getattr(tecnologia, "insumos", None):
+                    consumiveis_u, consumo_especifico_u = _rebuild_consumiveis_from_tech(
+                        tecnologia, fatores_emissao, ano_ref_u
+                    )
+                    # Preserva ConsumoEspecifico salvo se a tecnologia não redefine os valores
+                    # (usuário pode ter ajustado os valores manualmente)
+                    ce_saved = u_data.get("ConsumoEspecifico", [])
+                    if len(ce_saved) == len(consumiveis_u):
+                        consumo_especifico_u = ce_saved
+                else:
+                    consumiveis_u = u_data.get("Consumiveis", [])
+                    consumo_especifico_u = u_data.get("ConsumoEspecifico", [])
+
+                inputs_u = UnidadeProdutiva._normalize_io_list(u_data.get("inputs", []))
+                outputs_u = UnidadeProdutiva._normalize_io_list(u_data.get("outputs", []))
+
+                # Compatibilidade com legado (input/output únicos)
+                if not inputs_u:
+                    inputs_u = UnidadeProdutiva._normalize_io_list(
+                        [
+                            {
+                                "produto_id": u_data.get("Input", ""),
+                                "quantidade": u_data.get("MassaInput", 0.0),
+                                "unidade": "t",
+                            }
+                        ]
+                    )
+                if not outputs_u:
+                    outputs_u = UnidadeProdutiva._normalize_io_list(
+                        [
+                            {
+                                "produto_id": u_data.get("Output", ""),
+                                "quantidade": u_data.get("MassaOutput", 0.0),
+                                "unidade": "t",
+                            }
+                        ]
+                    )
+
                 unidade = UnidadeProdutiva(
                     id_elo=u_data["ID_ELO"],
                     nome=u_data["Nome"],
@@ -288,47 +529,42 @@ class DatabaseManager:
                     massa_input=u_data.get("MassaInput", 0.0),
                     output_insumo=u_data["Output"],
                     massa_output=u_data.get("MassaOutput", 0.0),
-                    consumiveis=u_data.get("Consumiveis", []),
-                    consumo_especifico=u_data.get("ConsumoEspecifico", []),
+                    consumiveis=consumiveis_u,
+                    consumo_especifico=consumo_especifico_u,
+                    inputs=inputs_u,
+                    outputs=outputs_u,
                     taxacao_fronteira=u_data.get("TaxacaoFronteira", False),
                     taxacao_local=u_data.get("TaxacaoLocal", False),
                     tecnologia=tecnologia,
                     conexao=conexao
                 )
 
-                # Calcular emissões da unidade
+                # Recalcula emissões com consumíveis e fatores atualizados
+                # (não restaura valores salvos — garante consistência com o banco atual)
                 EmissionCalculator.calcular_emissoes(unidade)
-
-                # Restaurar atributos calculados, se existirem (sobrescreve o cálculo acima se houver valores salvos)
-                if "IntensidadeEmissao" in u_data:
-                    unidade.IntensidadeEmissao = u_data.get("IntensidadeEmissao", 0.0)
-                if "Pegada" in u_data:
-                    unidade.Pegada = u_data.get("Pegada", 0.0)
-                if "IntensidadeEmissaoEscopo1" in u_data:
-                    unidade.IntensidadeEmissaoEscopo1 = u_data.get("IntensidadeEmissaoEscopo1", 0.0)
-                if "IntensidadeEmissaoEscopo2" in u_data:
-                    unidade.IntensidadeEmissaoEscopo2 = u_data.get("IntensidadeEmissaoEscopo2", 0.0)
-                if "IntensidadeEmissaoEscopo3" in u_data:
-                    unidade.IntensidadeEmissaoEscopo3 = u_data.get("IntensidadeEmissaoEscopo3", 0.0)
-                if "PegadaEscopo1" in u_data:
-                    unidade.PegadaEscopo1 = u_data.get("PegadaEscopo1", 0.0)
-                if "PegadaEscopo2" in u_data:
-                    unidade.PegadaEscopo2 = u_data.get("PegadaEscopo2", 0.0)
-                if "PegadaEscopo3" in u_data:
-                    unidade.PegadaEscopo3 = u_data.get("PegadaEscopo3", 0.0)
 
                 st.session_state.unidades.append(unidade)
                 
                 # Se a unidade tem uma conexão, adicionar ao session_state.conexoes
                 if conexao:
-                    self.add_edge(conexao.origem, conexao.destino, massa=conexao.massa)
+                    self.add_edge(
+                        conexao.origem,
+                        conexao.destino,
+                        massa=conexao.massa,
+                        periodo=conexao.periodo,
+                        label=conexao.label,
+                        id_fluxo=conexao.id,
+                    )
 
-            print(f"DEBUG import_from_json: Total de conexões a importar: {len(data.get('conexoes', []))}")  # Debug
             for c_data in data.get("conexoes", []):
-                print(f"DEBUG import_from_json: Importando conexão: {c_data}")  # Debug
-                self.add_edge(c_data["origem"], c_data["destino"], massa=c_data.get("massa", 0.0))
-            
-            print(f"DEBUG import_from_json: Total de conexões em session_state após importação: {len(st.session_state.conexoes)}")  # Debug
+                self.add_edge(
+                    c_data["origem"],
+                    c_data["destino"],
+                    massa=c_data.get("massa", 0.0),
+                    periodo=c_data.get("periodo", ""),
+                    label=c_data.get("label", "Fluxo"),
+                    id_fluxo=c_data.get("id", ""),
+                )
             
             # Propagar a pegada após importar
             self.propagar_pegada()
@@ -339,11 +575,22 @@ class DatabaseManager:
             return False
 
     def get_edges_for_graph(self) -> List[Dict]:
-        return [{"source": c.origem, "target": c.destino, "massa": c.massa} for c in st.session_state.conexoes]
+        return [
+            {
+                "id": getattr(c, "id", ""),
+                "source": c.origem,
+                "target": c.destino,
+                "massa": c.massa,
+                "label": getattr(c, "label", "Fluxo"),
+                "periodo": c.periodo,
+            }
+            for c in st.session_state.conexoes
+        ]
 
     # --- Atualização de Pegadas ---
     def propagar_pegada(self):
         """Atualiza a pegada de todas as unidades com base nas conexões"""
+        from calculations import EmissionCalculator
         EmissionCalculator.propagar_pegada(
             st.session_state.unidades,
             self.get_edges_for_graph()

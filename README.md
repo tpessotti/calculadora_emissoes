@@ -1,17 +1,22 @@
 # Calculadora de Emissões de Carbono - CMP
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://streamlit.io/)
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Version](https://img.shields.io/badge/Version-0.2.0--beta-orange.svg?style=for-the-badge)](https://github.com/tpessotti/calculadora_emissoes)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
 ## 🌐 Acesso Rápido
 
-**🚀 [Acesse o aplicativo online](https://cmp-tool.streamlit.app/)** - Sem necessidade de instalação!
+**🚀 [Acesse o aplicativo online](https://cmp-tool.streamlit.app/)** - Versão com servidor Streamlit
+
+**🌐 Versão Standalone (Sem Servidor)** - Roda completamente no navegador!
+- Gere seu próprio arquivo HTML com: `python build_standalone.py`
+- Hospede em GitHub Pages, Netlify ou qualquer CDN
+- Funciona offline após primeiro carregamento
 
 O aplicativo está disponível gratuitamente no Streamlit Cloud e pode ser acessado diretamente pelo navegador.
 
-> ⚠️ **Versão Beta (v0.2.0-beta)**: Este aplicativo está em desenvolvimento ativo. Algumas funcionalidades podem estar em fase de testes e melhorias contínuas são realizadas regularmente. Feedback e sugestões são muito bem-vindos!
+> ⚠️ **Versão Beta (v0.3.0-beta)**: Este aplicativo está em desenvolvimento ativo. Algumas funcionalidades podem estar em fase de testes e melhorias contínuas são realizadas regularmente. Feedback e sugestões são muito bem-vindos!
 
 ## 📋 Sobre o Projeto
 
@@ -92,10 +97,12 @@ O sistema implementa metodologias de Avaliação de Ciclo de Vida (ACV) simplifi
 
 ### Pré-requisitos
 
-- Python 3.13 ou superior
+- Python 3.10 ou superior
 - pip (gerenciador de pacotes Python)
 
-### Instalação
+### Opção 1: Instalação Local (Desenvolvimento)
+
+Para executar o aplicativo localmente com todas as funcionalidades:
 
 1. Clone o repositório:
 ```bash
@@ -134,7 +141,59 @@ python run.py
 streamlit run src/app.py
 ```
 
-O aplicativo estará disponível em `http://localhost:8501`
+**Método 3 - Versão Standalone (Sem Servidor):**
+```bash
+# Gerar arquivo HTML standalone
+python build_standalone.py
+
+# Depois abra calculadora_emissoes_standalone.html no navegador
+# Ou hospede em qualquer servidor estático
+```
+
+O build standalone empacota automaticamente:
+- `src/` (aplicação Streamlit)
+- `core/` (contexto, parser de períodos, IO e validações)
+- `data/` (bases JSON)
+- `assets/` (arquivos de apoio)
+
+Além disso, o script garante defaults mínimos quando ausentes:
+- `data/user_sessions.json`
+- `data/json_db/database.json` (com `anos_disponiveis` padrão)
+- `data/fatores_emissao.json`
+
+O aplicativo estará disponível em `http://localhost:8501` (métodos 1 e 2)
+
+### Opção 2: Versão Standalone (Deploy sem Servidor)
+
+Para criar uma versão que roda completamente no navegador:
+
+1. Gere o arquivo HTML:
+```bash
+python build_standalone.py
+```
+
+2. O arquivo `calculadora_emissoes_standalone.html` será criado (~0.2 MB)
+
+3. Deploy options:
+   - **GitHub Pages**: Faça commit e push do arquivo HTML
+   - **Netlify**: Arraste e solte o arquivo
+   - **Vercel**: Deploy com um clique
+   - **Qualquer servidor HTTP**: Sirva o arquivo HTML
+
+4. Abra o arquivo no navegador ou acesse via URL hospedada
+
+**Vantagens da versão standalone:**
+- ✅ Sem necessidade de servidor Python
+- ✅ Funciona offline após primeiro carregamento  
+- ✅ Deploy gratuito e simples
+- ✅ URL personalizada
+
+**Limitações:**
+- ⚠️ Primeira carga baixa ~50-100MB (Pyodide)
+- ⚠️ Chatbot não disponível (incompatível com Stlite)
+- ⚠️ Algumas bibliotecas podem ter comportamento diferente
+
+Consulte `docs/STLITE_DEPLOYMENT.md` para mais detalhes.
 
 ## 📁 Estrutura do Projeto
 
@@ -166,10 +225,12 @@ calculadora_emissoes/
 │   └── *.xlsx                  # Planilhas de importação
 │
 ├── docs/                       # Documentação
+│   └── STLITE_DEPLOYMENT.md    # Guia de deployment standalone
 │
 ├── .streamlit/                 # Configurações do Streamlit
 ├── requirements.txt            # Dependências do projeto
 ├── run.py                      # Script de execução
+├── build_standalone.py         # Gera versão HTML standalone
 ├── README.md                   # Este arquivo
 ├── CHANGELOG.md                # Histórico de mudanças
 └── .gitignore                  # Arquivos ignorados pelo Git
