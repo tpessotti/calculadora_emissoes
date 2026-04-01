@@ -14,7 +14,7 @@ sys.path.insert(0, _src_dir)
 sys.path.insert(0, _root_dir)
 
 # ── app utils ─────────────────────────────────────────────────────────────────
-from multipage_utils import init_session_state, apply_theme, render_header_bar, render_sidebar_extras
+from multipage_utils import init_session_state, render_header_bar, render_sidebar_extras
 
 # ── tab imports ───────────────────────────────────────────────────────────────
 from tabs.Home import HomeTab
@@ -148,7 +148,7 @@ if st.session_state.pop("_show_loading", False) and usuario_logado and not _is_p
         """,
         height=0,
     )
-    time.sleep(2.4)
+    time.sleep(1.0)
     st.rerun()
 # ── page functions ────────────────────────────────────────────────────────────
 def page_home():

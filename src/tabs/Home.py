@@ -1,9 +1,9 @@
 import streamlit as st
-import pandas as pd
 from typing import Dict
 import json
 import os
 import sys
+from io import BytesIO
 
 # Garantir que o diretório pai e raiz estão no path
 _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,12 +17,17 @@ from database import UnidadeProdutiva, Conexao, Tecnologia
 from version import __version__, VERSION_INFO
 
 from core.context import AppContext
-from core.io.json_io import export_session_to_database, save_database, save_fatores_emissao
+from core.io.json_io import save_fatores_emissao
 from core.io.excel_io import gerar_template_excel, exportar_sessao_excel, excel_to_json_db
-from core.validation.schema import validar_database, ValidationReport
 from core.validation.relational import validar_integridade_relacional, formatar_relatorio_markdown
 from core.periodos import parse_periodo, PeriodoError
 from core.units import normalize_unit
+
+
+@st.cache_data(show_spinner=False)
+def _parse_excel_upload_cached(file_bytes: bytes) -> Dict:
+    """Cacheia parsing do template Excel para evitar retrabalho em cada rerun."""
+    return excel_to_json_db(BytesIO(file_bytes))
 
 class HomeTab:
     def __init__(self):
@@ -605,7 +610,7 @@ class HomeTab:
             )
             if uploaded is not None:
                 try:
-                    db_data = excel_to_json_db(uploaded)
+                    db_data = _parse_excel_upload_cached(uploaded.getvalue())
                     fatores_excel = db_data.get("fatores_emissao", [])
 
                     if fatores_excel:
@@ -680,6 +685,14 @@ class HomeTab:
                 except Exception as e:
                     st.error(f"Erro ao processar arquivo: {e}")
 
+        # ── Footer ────────────────────────────────────────────────
+        st.divider()
+        st.markdown(
+            f"<div style='text-align:center;color:#888;font-size:0.85em;'>"
+            f"CMP Calculadora de Emissões v{__version__} | {VERSION_INFO['status']}</div>",
+            unsafe_allow_html=True,
+        )
+
     def _normalizar_ano_fator(self, val):
         if val is None or str(val).strip() == "" or str(val).strip().lower() in ("nan", "none"):
             return None
@@ -749,14 +762,6 @@ class HomeTab:
                 resumo["adicionados"] += 1
 
         return existentes, resumo
-
-        # ── Footer ────────────────────────────────────────────────
-        st.divider()
-        st.markdown(
-            f"<div style='text-align:center;color:#888;font-size:0.85em;'>"
-            f"CMP Calculadora de Emissões v{__version__} | {VERSION_INFO['status']}</div>",
-            unsafe_allow_html=True,
-        )
 
     # ══════════════════════════════════════════════════════════════
     #  Métodos auxiliares mantidos para auto-restore no login
