@@ -1,7 +1,14 @@
 import streamlit as st
-import plotly.graph_objects as go
-import plotly.express as px
 import pandas as pd
+
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    _PLOTLY_AVAILABLE = True
+except ModuleNotFoundError:
+    go = None
+    px = None
+    _PLOTLY_AVAILABLE = False
 
 
 class SankeyTab:
@@ -9,6 +16,11 @@ class SankeyTab:
     
     def _render(self):
         """Renderiza o gráfico Sankey com análises interativas de emissões"""
+
+        if not _PLOTLY_AVAILABLE:
+            st.error("A aba Análise de Emissões requer o pacote 'plotly', que não está disponível no ambiente.")
+            st.info("No Streamlit Cloud, confirme se o arquivo requirements.txt atualizado foi publicado no branch main e faça um novo reboot da aplicação.")
+            return
         
         if not st.session_state.unidades or not st.session_state.edges:
             st.warning("Adicione unidades e fluxos para visualizar o diagrama Sankey e análises de emissões.")
