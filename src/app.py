@@ -23,7 +23,6 @@ from tabs.Unidades import UnidadesTab
 from tabs.FatoresEmissao import FatoresEmissaoTab
 from tabs.Tecnologias import TecnologiasTab
 from tabs.Reports import ReportsTab
-from tabs.Chatbot import ChatbotTab
 from tabs.Sessoes import SessoesTab
 from tabs.Settings import SettingsTab
 
@@ -188,6 +187,7 @@ def page_chatbot():
     if not usuario_logado:
         HomeTab()._render()
         return
+    from tabs.Chatbot import ChatbotTab
     ChatbotTab()._render()
 
 def page_sessoes():
@@ -215,8 +215,9 @@ _pages_autenticadas = [
     st.Page(page_fatores,     title="Fatores de Emissão",  url_path="fatores"),
     st.Page(page_tecnologias, title="Tecnologias",         url_path="tecnologias"),
     st.Page(page_relatorios,  title="Análise de Emissões", url_path="relatorios"),
-    st.Page(page_chatbot,     title="Assistente IA",       url_path="chatbot"),
 ]
+if st.session_state.get("chatbot_enabled", False):
+    _pages_autenticadas.append(st.Page(page_chatbot, title="Assistente IA", url_path="chatbot"))
 
 if usuario_logado:
     nav_pages = {f"👤 {usuario_logado}": _pages_publicas, "----------------------------------------------": _pages_autenticadas}

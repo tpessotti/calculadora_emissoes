@@ -25,23 +25,11 @@ from tabs.report_exports import (
     generate_md_painel_geral, generate_md_inventario, generate_md_ifrs,
     generate_md_analise_unidade, generate_md_comparativo,
     generate_pdf_painel_geral, generate_pdf_analise_unidade, generate_pdf_comparativo,
-    render_download_bar, REPORTLAB_AVAILABLE as _RL_AVAIL,
+    render_download_bar,
     _pdf_safe, _fmt_num,
 )
 
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.lib import colors as rl_colors
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak,
-        KeepTogether, HRFlowable
-    )
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_JUSTIFY, TA_LEFT
-    REPORTLAB_AVAILABLE = True
-except ImportError:
-    REPORTLAB_AVAILABLE = False
+REPORTLAB_AVAILABLE = False  # PDF generation removed; markdown-only exports
 
 try:
     from openpyxl import Workbook

@@ -17,31 +17,40 @@ logger = logging.getLogger(__name__)
 
 
 def _hash_unidades(unidades: list) -> str:
-    """Gera hash das unidades para invalidação de cache."""
+    """Gera hash das unidades para invalidação de cache.
+
+    Usa hashing incremental (um objeto por vez) para evitar alocar
+    uma string gigante com todos os dados concatenados — reduz
+    consumo de memória de pico em ambientes com heap limitada (WASM/Pyodide).
+    """
     try:
-        data = []
+        h = hashlib.md5()
         for u in unidades:
             if hasattr(u, "to_dict"):
-                data.append(u.to_dict())
+                chunk = json.dumps(u.to_dict(), sort_keys=True, default=str)
             elif isinstance(u, dict):
-                data.append(u)
-        raw = json.dumps(data, sort_keys=True, default=str)
-        return hashlib.md5(raw.encode()).hexdigest()
+                chunk = json.dumps(u, sort_keys=True, default=str)
+            else:
+                continue
+            h.update(chunk.encode())
+        return h.hexdigest()
     except Exception:
         return ""
 
 
 def _hash_conexoes(conexoes: list) -> str:
-    """Gera hash das conexões para invalidação de cache."""
+    """Gera hash das conexões para invalidação de cache (hashing incremental)."""
     try:
-        data = []
+        h = hashlib.md5()
         for c in conexoes:
             if hasattr(c, "to_dict"):
-                data.append(c.to_dict())
+                chunk = json.dumps(c.to_dict(), sort_keys=True, default=str)
             elif isinstance(c, dict):
-                data.append(c)
-        raw = json.dumps(data, sort_keys=True, default=str)
-        return hashlib.md5(raw.encode()).hexdigest()
+                chunk = json.dumps(c, sort_keys=True, default=str)
+            else:
+                continue
+            h.update(chunk.encode())
+        return h.hexdigest()
     except Exception:
         return ""
 

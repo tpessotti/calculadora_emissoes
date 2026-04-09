@@ -707,6 +707,13 @@ class SessoesTab:
                 save_database(ctx.db_master_path(), db_data)
             except Exception:
                 pass
+            # Persiste também no localStorage do browser (standalone/Pyodide).
+            # No-op silencioso quando não estiver rodando em ambiente Pyodide.
+            try:
+                from core.io.local_storage import ls_save, ls_session_key
+                ls_save(ls_session_key(usuario), sessao_data)
+            except Exception:
+                pass
             return True
         except Exception as e:
             st.error(f"Erro ao salvar sessão: {e}")

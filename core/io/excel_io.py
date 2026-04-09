@@ -476,7 +476,7 @@ def excel_to_json_db(filepath_or_bytes: Any) -> Dict[str, Any]:
 
     from core.validation.schema import SCHEMA_VERSION
 
-    sheets = pd.read_excel(filepath_or_bytes, sheet_name=None)
+    sheets = pd.read_excel(filepath_or_bytes, sheet_name=None, engine="calamine")
 
     result: Dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,

@@ -31,8 +31,20 @@ DEFAULT_REQUIREMENTS = [
     "plotly",
     "networkx",
     "openpyxl",
-    "requests",
+    "python-calamine",
 ]
+
+# Pacotes que NÃO funcionam (ou são pesados demais) no Pyodide/WASM.
+# São removidos automaticamente da lista de dependências ao gerar o standalone.
+#
+#   reportlab — usa extensões C não portadas para Pyodide; causa ImportError
+#               + ocupa ~30 MB na heap WASM desnecessariamente.
+#   requests  — sem socket real no browser; Pyodide usa pyodide.http / fetch.
+#               Manter causaria falhas silenciosas em qualquer chamada HTTP.
+STANDALONE_EXCLUDE: set[str] = {
+    "reportlab",
+    "requests",
+}
 
 # Template HTML base
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -380,8 +392,12 @@ def main():
 
     print("Iniciando build standalone...")
 
-    # Lista de dependências
+    # Lista de dependências — filtra pacotes incompatíveis com Pyodide
     requirements = load_requirements(requirements_file)
+    excluded = [r for r in requirements if r.lower() in STANDALONE_EXCLUDE]
+    requirements = [r for r in requirements if r.lower() not in STANDALONE_EXCLUDE]
+    if excluded:
+        print(f"Pacotes excluídos (incompatíveis com Pyodide): {', '.join(excluded)}")
     print(f"Dependências incluídas: {len(requirements)}")
     
     # Coletar arquivos

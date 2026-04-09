@@ -554,6 +554,20 @@ class SettingsTab:
                     st.session_state.pref_show_integrity_alerts = show_integrity
                     self._atualizar_preferencias_usuario()
 
+            with st.container(border=True):
+                st.markdown("**🤖 Assistente de IA**")
+
+                chatbot_enabled = st.toggle(
+                    "Habilitar Assistente de IA (Chatbot)",
+                    value=st.session_state.get("chatbot_enabled", False),
+                    key="pref_chatbot_enabled_toggle",
+                    help="Exibe o Assistente de IA no menu lateral. Requer conexão com a internet.",
+                )
+                if chatbot_enabled != st.session_state.get("chatbot_enabled", False):
+                    st.session_state.chatbot_enabled = chatbot_enabled
+                    self._atualizar_preferencias_usuario()
+                    st.rerun()
+
     def _converter_unidade_massa_global(self, unidade_antiga: str, unidade_nova: str) -> None:
         """Converte fatores de consumo (tecnologias e unidades) para nova unidade de massa."""
         unidade_antiga = normalize_unit(unidade_antiga)

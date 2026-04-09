@@ -25,19 +25,7 @@ def _unit_lbl():
     _mu = get_default_mass_unit_from_session(st.session_state)
     return co2e_label(_mu), co2e_intensity_label(_mu)
 
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.lib import colors as rl_colors
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak,
-        HRFlowable,
-    )
-    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-    REPORTLAB_AVAILABLE = True
-except ImportError:
-    REPORTLAB_AVAILABLE = False
+REPORTLAB_AVAILABLE = False  # PDF generation removed; markdown-only exports
 
 # ═══════════════════════════════════════════════════════════════════
 #  REPORT CONFIG — defaults, init, render, get
@@ -1007,7 +995,7 @@ def render_download_bar(
     filename_base: str = "relatorio",
 ):
     """
-    Renders a consistent download bar with MD, PDF and optional extra buttons.
+    Renders a consistent download bar with MD and optional extra buttons.
 
     Parameters
     ----------
@@ -1016,7 +1004,7 @@ def render_download_bar(
     md_content : str
         Markdown content to offer for download.
     pdf_bytes : bytes or None
-        PDF bytes to offer for download (None = button disabled).
+        Ignored (PDF generation removed; markdown-only exports).
     extra_downloads : dict or None
         Additional downloads: {"label": {"data": bytes/str, "filename": str, "mime": str}}
     filename_base : str
@@ -1026,7 +1014,7 @@ def render_download_bar(
     st.markdown("#### 📥 Exportar Relatório")
 
     extras = extra_downloads or {}
-    n_cols = 2 + len(extras)
+    n_cols = 1 + len(extras)
     cols = st.columns(n_cols)
 
     with cols[0]:
@@ -1039,26 +1027,8 @@ def render_download_bar(
             key=f"_dl_md_{tab_key}",
         )
 
-    with cols[1]:
-        if pdf_bytes and REPORTLAB_AVAILABLE:
-            st.download_button(
-                "📄 PDF",
-                data=pdf_bytes,
-                file_name=f"{filename_base}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key=f"_dl_pdf_{tab_key}",
-            )
-        else:
-            st.button(
-                "📄 PDF (indisponível)" if not REPORTLAB_AVAILABLE else "📄 PDF",
-                disabled=True,
-                use_container_width=True,
-                key=f"_dl_pdf_{tab_key}",
-            )
-
     for i, (label, info) in enumerate(extras.items()):
-        with cols[2 + i]:
+        with cols[1 + i]:
             st.download_button(
                 label,
                 data=info["data"],

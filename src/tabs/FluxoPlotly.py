@@ -11,14 +11,6 @@ from calculations import EmissionCalculator
 import base64
 from io import BytesIO
 
-try:
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.pdfgen import canvas as pdf_canvas
-    from reportlab.lib.utils import ImageReader
-    REPORTLAB_AVAILABLE = True
-except ImportError:
-    REPORTLAB_AVAILABLE = False
-
 
 # ─── Paleta de cores ────────────────────────────────────────────────
 COLORS = {

@@ -19,6 +19,19 @@ sys.path.insert(0, _root_dir)
 from database import DatabaseManager
 from core.context import AppContext
 from core.io.json_io import load_fatores_emissao
+from core.io.local_storage import ls_save, ls_load
+
+
+@st.cache_resource
+def _load_fatores_cached(path: str) -> list:
+    """Carrega fatores de emissão uma única vez e compartilha entre todas as sessões.
+
+    Usando cache_resource, o JSON é lido do disco apenas uma vez por processo
+    (ou por recarregamento do servidor). Evita duplicar ~14 KB de objetos JSON
+    em memória para cada sessão ativa, o que é crítico no ambiente WASM/Pyodide
+    onde a heap é compartilhada.
+    """
+    return load_fatores_emissao(path) or []
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
@@ -26,9 +39,12 @@ from core.io.json_io import load_fatores_emissao
 def _auto_restore_session(session_state: Optional[MutableMapping[str, Any]] = None) -> None:
     """Restaura automaticamente a sessão salva do usuário no primeiro rerun após o login.
 
-    Lê data/user_sessions.json e chama _importar_sessao (Settings) se existir
-    um registro salvo para o usuário logado.  O flag 'sessao_restaurada' evita
-    que a restauração seja disparada mais de uma vez por sessão de browser.
+    Tenta restaurar na seguinte ordem de prioridade:
+      1. data/user_sessions.json (modo servidor/desktop)
+      2. localStorage do browser via módulo local_storage (modo standalone/Pyodide)
+
+    O flag 'sessao_restaurada' evita que a restauração seja disparada mais de
+    uma vez por sessão de browser.
     """
     state = session_state if session_state is not None else st.session_state
 
@@ -41,17 +57,26 @@ def _auto_restore_session(session_state: Optional[MutableMapping[str, Any]] = No
     # Marca imediatamente para evitar re-entrada em caso de erro
     state["sessao_restaurada"] = True
 
+    sessao_data = None
+
+    # Prioridade 1: arquivo JSON no sistema de arquivos
     sessions_file = os.path.join(_root_dir, "data", "user_sessions.json")
-    if not os.path.exists(sessions_file):
-        return
+    if os.path.exists(sessions_file):
+        try:
+            with open(sessions_file, "r", encoding="utf-8") as f:
+                all_sessions = json.load(f)
+            sessao_data = all_sessions.get(usuario)
+        except Exception:
+            pass
 
-    try:
-        with open(sessions_file, "r", encoding="utf-8") as f:
-            all_sessions = json.load(f)
-    except Exception:
-        return
+    # Prioridade 2: localStorage do browser (standalone/Pyodide)
+    if not sessao_data:
+        try:
+            from core.io.local_storage import ls_load, ls_session_key
+            sessao_data = ls_load(ls_session_key(usuario))
+        except Exception:
+            pass
 
-    sessao_data = all_sessions.get(usuario)
     if not sessao_data:
         return
 
@@ -114,6 +139,7 @@ def init_session_state(
         "auto_save_interval": 20,
         "pref_show_save_toast": True,
         "pref_show_integrity_alerts": True,
+        "chatbot_enabled": False,
         "_auto_save_last_ts": 0.0,
         # restauração de sessão
         "sessao_restaurada": False,
@@ -123,7 +149,7 @@ def init_session_state(
             state[key] = value
 
     if "fatores_emissao" not in state or not state["fatores_emissao"]:
-        fatores = load_fatores_emissao(ctx.fatores_path())
+        fatores = _load_fatores_cached(ctx.fatores_path())
         if fatores:
             state["fatores_emissao"] = fatores
         else:

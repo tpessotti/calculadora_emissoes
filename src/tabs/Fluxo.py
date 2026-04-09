@@ -9,14 +9,6 @@ try:
 except ImportError:
     PLOTLY_AVAILABLE = False
 
-try:
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.pdfgen import canvas as pdf_canvas
-    from reportlab.lib.utils import ImageReader
-    REPORTLAB_AVAILABLE = True
-except ImportError:
-    REPORTLAB_AVAILABLE = False
-
 class FluxoTab:
     """Classe para gerenciar o diagrama de fluxo de unidades produtivas e suas conexões"""
 
@@ -57,13 +49,6 @@ class FluxoTab:
             with st.expander("📤 Exportar"):
                 st.markdown("#### Exportar Fluxo")
                 
-                # Botão para PDF
-                if st.button("Gerar Relatório PDF", use_container_width=True, type="secondary", key="export_pdf_sidebar"):
-                    if not REPORTLAB_AVAILABLE:
-                        st.error("⚠️ A biblioteca 'reportlab' não está instalada. Execute: pip install reportlab")
-                    else:
-                        self._export_to_pdf()
-
                 st.markdown("#### Exportar Dados")
                 
                 # Botão para JSON

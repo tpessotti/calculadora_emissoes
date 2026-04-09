@@ -71,7 +71,7 @@ class FatoresEmissaoTab:
 
             if uploaded_file and st.button("📄 Importar Planilha"):
                 try:
-                    df_importado = pd.read_excel(uploaded_file)
+                    df_importado = pd.read_excel(uploaded_file, engine="calamine")
                     df_importado.columns = [c.replace(" *", "").replace("*", "").strip() for c in df_importado.columns]
                     col_map = {
                         "Grupo_Consumivel": "grupo_consumivel",
