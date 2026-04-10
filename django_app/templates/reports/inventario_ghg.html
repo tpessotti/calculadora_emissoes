@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Inventário GHG — {{ APP_NAME }}{% endblock %}
+{% block nav_reports %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between mb-4">
+  <h4><i class="bi bi-file-earmark-bar-graph me-2"></i>Inventário GHG</h4>
+  <div>
+    <span class="badge bg-secondary">Ano: {{ ano_ativo|default:"todos" }}</span>
+  </div>
+</div>
+
+{% if no_fatores_warning %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Nenhum fator de emissão cadastrado.
+  <a href="{% url 'fatores:list' %}">Cadastrar fatores</a>.
+</div>
+{% endif %}
+
+{% if scope_totals %}
+<!-- Scope summary -->
+<div class="row g-3 mb-4">
+  {% for escopo, val in scope_totals.items %}
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body">
+        <div class="text-muted small">{{ escopo|title }}</div>
+        <div class="fs-4 fw-bold">{{ val|floatformat:4 }}</div>
+        <div class="text-muted small">kgCO₂e</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Per-unit table -->
+<div class="card shadow-sm">
+  <div class="card-header"><h6 class="mb-0">Por Unidade Produtiva</h6></div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Unidade</th>
+          <th>ID Elo</th>
+          <th class="text-end">Escopo 1</th>
+          <th class="text-end">Escopo 2</th>
+          <th class="text-end">Escopo 3</th>
+          <th class="text-end">Total (kgCO₂e/t)</th>
+          <th class="text-center">Fatores faltando</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in unit_data %}
+        <tr>
+          <td>{{ row.nome }}</td>
+          <td><code>{{ row.id_elo }}</code></td>
+          <td class="text-end">{{ row.escopo1 }}</td>
+          <td class="text-end">{{ row.escopo2 }}</td>
+          <td class="text-end">{{ row.escopo3 }}</td>
+          <td class="text-end fw-bold">{{ row.total }}</td>
+          <td class="text-center">
+            {% if row.missing > 0 %}
+            <span class="badge bg-warning text-dark">{{ row.missing }}</span>
+            {% else %}
+            <span class="badge bg-success">✓</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Sem dados calculados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

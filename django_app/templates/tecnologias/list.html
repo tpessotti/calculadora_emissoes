@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}Tecnologias{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="bi bi-cpu me-2"></i>Tecnologias</h1>
+    <a href="{% url 'tecnologias:create' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>Nova Tecnologia
+    </a>
+  </div>
+
+  <!-- Search -->
+  <form method="get" class="row g-2 mb-4">
+    <div class="col-sm-5">
+      <input type="text" name="q" value="{{ request.GET.q }}" class="form-control form-control-sm"
+             placeholder="Buscar por nome…">
+    </div>
+    <div class="col-sm-auto">
+      <button type="submit" class="btn btn-secondary btn-sm">
+        <i class="bi bi-search me-1"></i>Buscar
+      </button>
+      <a href="{% url 'tecnologias:list' %}" class="btn btn-link btn-sm">Limpar</a>
+    </div>
+  </form>
+
+  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
+    {% for tec in tecnologias %}
+    <div class="col">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title mb-1">{{ tec.nome }}</h5>
+          {% if tec.descricao %}
+          <p class="card-text text-muted small">{{ tec.descricao }}</p>
+          {% endif %}
+          {% if tec.consumiveis_padrao %}
+          <div class="mt-2">
+            <small class="text-muted d-block mb-1">Consumíveis padrão:</small>
+            {% for c in tec.consumiveis_padrao %}
+            <span class="badge bg-secondary me-1">{{ c }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        <div class="card-footer d-flex justify-content-end gap-2">
+          <a href="{% url 'tecnologias:update' tec.pk %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-pencil me-1"></i>Editar
+          </a>
+          <a href="{% url 'tecnologias:delete' tec.pk %}" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash me-1"></i>Excluir
+          </a>
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center text-muted py-5">
+      <i class="bi bi-cpu fs-1 d-block mb-3"></i>
+      <p>Nenhuma tecnologia cadastrada.</p>
+      <a href="{% url 'tecnologias:create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Adicionar primeira tecnologia
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

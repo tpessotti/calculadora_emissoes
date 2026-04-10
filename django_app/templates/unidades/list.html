@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Unidades Produtivas — {{ APP_NAME }}{% endblock %}
+{% block nav_unidades %}active{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'home' %}">Início</a></li>
+    <li class="breadcrumb-item active">Unidades Produtivas</li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-building me-2"></i>Unidades Produtivas</h4>
+  <a href="{% url 'unidades:create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle me-1"></i>Nova Unidade
+  </a>
+</div>
+
+<!-- Filters -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="q" class="form-control" placeholder="Buscar por nome ou ID elo..."
+               value="{{ filter_q }}">
+      </div>
+      <div class="col-md-3">
+        <input type="text" name="localizacao" class="form-control" placeholder="Localização..."
+               value="{{ filter_loc }}">
+      </div>
+      <div class="col-md-3">
+        <input type="text" name="tecnologia" class="form-control" placeholder="Tecnologia..."
+               value="{{ filter_tec }}">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-secondary w-100">
+          <i class="bi bi-search me-1"></i>Filtrar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>ID Elo</th>
+          <th>Nome</th>
+          <th>Localização</th>
+          <th>Tecnologia</th>
+          <th class="text-end">Pegada Total (kgCO₂e/t)</th>
+          <th class="text-end">Intensidade (kgCO₂e/t)</th>
+          <th class="text-center">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in unidades %}
+        <tr>
+          <td><code>{{ u.id_elo }}</code></td>
+          <td>
+            <a href="{% url 'unidades:detail' u.pk %}">{{ u.nome }}</a>
+          </td>
+          <td>{{ u.localizacao|default:"—" }}</td>
+          <td>{{ u.tecnologia|default:"—" }}</td>
+          <td class="text-end">
+            <span class="badge bg-{{ u.pegada_total|yesno:'danger,success,secondary' }}">
+              {{ u.pegada_total|floatformat:4 }}
+            </span>
+          </td>
+          <td class="text-end">{{ u.intensidade_total|floatformat:4 }}</td>
+          <td class="text-center">
+            <a href="{% url 'unidades:update' u.pk %}" class="btn btn-sm btn-outline-primary me-1">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <a href="{% url 'unidades:delete' u.pk %}" class="btn btn-sm btn-outline-danger"
+               onclick="return confirm('Excluir unidade {{ u.nome }}?')">
+              <i class="bi bi-trash"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center py-5 text-muted">
+          Nenhuma unidade cadastrada.
+          <a href="{% url 'unidades:create' %}">Criar nova unidade</a>.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if is_paginated %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <small class="text-muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</small>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if filter_q %}&q={{ filter_q }}{% endif %}">«</a>
+        </li>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if filter_q %}&q={{ filter_q }}{% endif %}">»</a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

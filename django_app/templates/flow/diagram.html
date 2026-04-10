@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Diagrama de Fluxo — {{ APP_NAME }}{% endblock %}
+{% block nav_fluxo %}active{% endblock %}
+
+{% block extra_head %}
+<!-- Plotly for the flow diagram -->
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  #flow-chart { height: 70vh; background: #f8f9fa; border-radius: 8px; }
+  #node-panel { max-height: 70vh; overflow-y: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-9">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between">
+        <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Diagrama de Fluxo</h5>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary" onclick="resetZoom()">
+            <i class="bi bi-arrows-fullscreen"></i>
+          </button>
+          <button class="btn btn-outline-secondary" onclick="downloadPNG()">
+            <i class="bi bi-download me-1"></i>PNG
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div id="flow-chart"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3" id="node-panel">
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0">Unidades</h6></div>
+      <div class="list-group list-group-flush" id="unit-list">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const NODES = {{ nodes_json|safe }};
+const EDGES = {{ edges_json|safe }};
+
+// Build node position map using a simple circular layout
+const n = NODES.length;
+const positions = {};
+NODES.forEach((node, i) => {
+  const angle = (2 * Math.PI * i) / n;
+  positions[node.id_elo] = {
+    x: Math.cos(angle),
+    y: Math.sin(angle),
+  };
+});
+
+// Edge traces
+const edgeTraces = EDGES.map(e => {
+  const src = positions[e.source], dst = positions[e.target];
+  if (!src || !dst) return null;
+  return {
+    x: [src.x, dst.x, null],
+    y: [src.y, dst.y, null],
+    mode: 'lines',
+    line: { width: 2, color: '#6c757d' },
+    hoverinfo: 'none',
+    showlegend: false,
+    type: 'scatter',
+  };
+}).filter(Boolean);
+
+// Emission intensity colour scale
+const maxPegada = Math.max(...NODES.map(n => n.pegada_total || 0), 1);
+
+const nodeTrace = {
+  x: NODES.map(n => positions[n.id_elo]?.x),
+  y: NODES.map(n => positions[n.id_elo]?.y),
+  mode: 'markers+text',
+  type: 'scatter',
+  text: NODES.map(n => n.nome),
+  textposition: 'top center',
+  marker: {
+    size: 20,
+    color: NODES.map(n => n.pegada_total || 0),
+    colorscale: 'RdYlGn',
+    reversescale: true,
+    cmax: maxPegada,
+    cmin: 0,
+    colorbar: { title: 'kgCO₂e/t', thickness: 12 },
+    line: { width: 2, color: '#fff' },
+  },
+  customdata: NODES,
+  hovertemplate:
+    '<b>%{text}</b><br>Pegada: %{marker.color:.4f} kgCO₂e/t<extra></extra>',
+};
+
+Plotly.newPlot('flow-chart', [...edgeTraces, nodeTrace], {
+  margin: { l: 20, r: 20, t: 20, b: 20 },
+  showlegend: false,
+  xaxis: { showgrid: false, zeroline: false, showticklabels: false },
+  yaxis: { showgrid: false, zeroline: false, showticklabels: false },
+  paper_bgcolor: '#f8f9fa',
+  plot_bgcolor: '#f8f9fa',
+}, { responsive: true });
+
+// Populate sidebar list
+const ul = document.getElementById('unit-list');
+NODES.forEach(n => {
+  const li = document.createElement('a');
+  li.className = 'list-group-item list-group-item-action small';
+  li.href = `/unidades/${n.id}/`;
+  li.innerHTML = `<strong>${n.nome}</strong><br>
+    <span class="text-muted">${n.id_elo}</span>
+    <span class="float-end badge bg-secondary">${(n.pegada_total||0).toFixed(3)}</span>`;
+  ul.appendChild(li);
+});
+
+function resetZoom() { Plotly.relayout('flow-chart', { 'xaxis.autorange': true, 'yaxis.autorange': true }); }
+function downloadPNG() { Plotly.downloadImage('flow-chart', { format: 'png', filename: 'diagrama_fluxo' }); }
+</script>
+{% endblock %}

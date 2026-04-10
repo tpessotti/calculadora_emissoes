@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}Confirmar Exclusão — {{ unidade.nome }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>Confirmar Exclusão
+        </div>
+        <div class="card-body">
+          <p class="mb-1">Tem certeza que deseja excluir a unidade produtiva:</p>
+          <p class="fw-bold fs-5">{{ unidade.nome }}</p>
+          <p class="text-muted small">ID ELO: {{ unidade.id_elo }}</p>
+          <p class="text-danger small">
+            <i class="bi bi-info-circle me-1"></i>
+            Esta ação também removerá todas as conexões de entrada e saída desta unidade.
+          </p>
+          <form method="post">
+            {% csrf_token %}
+            <div class="d-flex gap-2 mt-3">
+              <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash me-1"></i>Sim, excluir
+              </button>
+              <a href="{% url 'unidades:detail' unidade.pk %}" class="btn btn-outline-secondary">
+                Cancelar
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

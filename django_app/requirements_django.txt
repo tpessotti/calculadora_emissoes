@@ -1,0 +1,42 @@
+# Django core
+Django>=5.1,<6.0
+django-environ>=0.11.2
+
+# Auth
+django-allauth>=64.0.0
+
+# REST API
+djangorestframework>=3.15.0
+djangorestframework-simplejwt>=5.3.0
+django-cors-headers>=4.4.0
+drf-spectacular>=0.27.2
+
+# Database
+psycopg2-binary>=2.9.9  # PostgreSQL (production)
+
+# Async / Background tasks
+celery>=5.4.0
+redis>=5.0.0
+django-celery-results>=2.5.0
+
+# Template & UI
+django-crispy-forms>=2.3
+crispy-bootstrap5>=2024.2
+
+# Excel/IO (keep from existing project)
+openpyxl>=3.1.2
+python-calamine>=0.2.0
+pandas>=2.2.0
+
+# Calculations (keep from existing project)
+networkx>=3.3
+
+# Utilities
+python-decouple>=3.8
+whitenoise>=6.7.0
+gunicorn>=22.0.0
+
+# Dev / Test
+pytest-django>=4.8.0
+factory-boy>=3.3.0
+coverage>=7.5.0

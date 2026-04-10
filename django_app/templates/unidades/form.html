@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% block title %}{% if object %}Editar{% else %}Nova{% endif %} Unidade — {{ APP_NAME }}{% endblock %}
+{% block nav_unidades %}active{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'home' %}">Início</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'unidades:list' %}">Unidades</a></li>
+    <li class="breadcrumb-item active">{% if object %}{{ object.nome }}{% else %}Nova{% endif %}</li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-header">
+    <h5 class="mb-0">
+      <i class="bi bi-{% if object %}pencil{% else %}plus-circle{% endif %} me-2"></i>
+      {% if object %}Editar Unidade Produtiva{% else %}Nova Unidade Produtiva{% endif %}
+    </h5>
+  </div>
+  <div class="card-body">
+    {% crispy form %}
+  </div>
+</div>
+{% endblock %}

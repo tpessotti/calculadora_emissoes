@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}Fatores de Emissão{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="bi bi-database me-2"></i>Fatores de Emissão</h1>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#importModal">
+        <i class="bi bi-upload me-1"></i>Importar
+      </button>
+      <a href="{% url 'fatores:create' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>Novo Fator
+      </a>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <form method="get" class="row g-2 mb-4">
+    <div class="col-sm-4">
+      <input type="text" name="q" value="{{ request.GET.q }}" class="form-control form-control-sm"
+             placeholder="Buscar consumível…">
+    </div>
+    <div class="col-sm-3">
+      <select name="escopo" class="form-select form-select-sm">
+        <option value="">Todos os escopos</option>
+        <option value="1" {% if request.GET.escopo == "1" %}selected{% endif %}>Escopo 1</option>
+        <option value="2" {% if request.GET.escopo == "2" %}selected{% endif %}>Escopo 2</option>
+        <option value="3" {% if request.GET.escopo == "3" %}selected{% endif %}>Escopo 3</option>
+      </select>
+    </div>
+    <div class="col-sm-2">
+      <input type="number" name="ano" value="{{ request.GET.ano }}" class="form-control form-control-sm"
+             placeholder="Ano (vazio=global)">
+    </div>
+    <div class="col-sm-auto">
+      <button type="submit" class="btn btn-secondary btn-sm">
+        <i class="bi bi-search me-1"></i>Filtrar
+      </button>
+      <a href="{% url 'fatores:list' %}" class="btn btn-link btn-sm">Limpar</a>
+    </div>
+  </form>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Consumível</th>
+            <th>Escopo</th>
+            <th class="text-end">kg CO₂e / unid.</th>
+            <th>Ano</th>
+            <th>Fonte</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fator in fatores %}
+          <tr>
+            <td class="fw-semibold">{{ fator.consumivel }}</td>
+            <td>
+              <span class="badge
+                {% if fator.escopo == 1 %}bg-danger
+                {% elif fator.escopo == 2 %}bg-warning text-dark
+                {% else %}bg-info text-dark{% endif %}">
+                Escopo {{ fator.escopo }}
+              </span>
+            </td>
+            <td class="text-end font-monospace">{{ fator.kgco2e_unid|floatformat:4 }}</td>
+            <td>{{ fator.ano|default:"Global" }}</td>
+            <td class="text-muted small">{{ fator.fonte|default:"—" }}</td>
+            <td class="text-end">
+              <a href="{% url 'fatores:update' fator.pk %}" class="btn btn-link btn-sm py-0">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{% url 'fatores:delete' fator.pk %}" class="btn btn-link btn-sm py-0 text-danger">
+                <i class="bi bi-trash"></i>
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-5">
+              <i class="bi bi-database-x fs-3 d-block mb-2"></i>
+              Nenhum fator encontrado.
+              <a href="{% url 'fatores:create' %}">Adicionar o primeiro →</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if is_paginated %}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <small class="text-muted">{{ paginator.count }} fatores</small>
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">‹</a>
+          </li>
+          {% endif %}
+          <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+          {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">›</a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" enctype="multipart/form-data" action="{% url 'fatores:import' %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Importar Fatores</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">Suporta arquivos <code>.json</code> (formato catalogo) ou <code>.xlsx</code> com colunas:
+            <code>consumivel, escopo, kgco2e_unid</code> (e opcionalmente <code>ano, fonte</code>).</p>
+          <input type="file" name="arquivo" class="form-control" accept=".json,.xlsx" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Importar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

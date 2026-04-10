@@ -1,0 +1,69 @@
+/* Calculadora de Emissões — Main CSS */
+
+:root {
+  --primary: #0d6efd;
+  --success: #198754;
+  --warning: #ffc107;
+  --danger: #dc3545;
+  --sidebar-width: 240px;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background-color: #f0f2f5;
+}
+
+/* Navbar */
+.navbar-brand {
+  letter-spacing: 0.03em;
+}
+
+/* Cards */
+.card {
+  border-radius: 12px;
+}
+
+.card-header {
+  border-radius: 12px 12px 0 0 !important;
+}
+
+/* KPI cards hover effect */
+.card:hover {
+  transform: translateY(-2px);
+  transition: transform 0.2s ease;
+}
+
+/* Tables */
+.table > :not(caption) > * > * {
+  vertical-align: middle;
+}
+
+/* Emission intensity badge colours */
+.emission-low   { background-color: #d1e7dd; color: #0f5132; }
+.emission-mid   { background-color: #fff3cd; color: #664d03; }
+.emission-high  { background-color: #f8d7da; color: #842029; }
+
+/* Chat bubbles */
+#chat-box::-webkit-scrollbar { width: 6px; }
+#chat-box::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 3px; }
+
+/* Flow diagram */
+#flow-chart .plotly { border-radius: 0 0 12px 12px; }
+
+/* Breadcrumbs */
+.breadcrumb {
+  background: transparent;
+  padding: 0;
+}
+
+/* Footer */
+footer {
+  font-size: 0.85rem;
+}
+
+/* JSON textarea */
+textarea.form-control[name="inputs_raw"],
+textarea.form-control[name="outputs_raw"] {
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 0.85rem;
+}

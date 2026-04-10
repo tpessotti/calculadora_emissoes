@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}Análise Comparativa{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <h1 class="h3 mb-4"><i class="bi bi-graph-up-arrow me-2"></i>Análise Comparativa</h1>
+
+  <!-- Period selector -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label fw-semibold">Períodos (ex: 2020-2023, 2025)</label>
+          <input type="text" name="periodos" value="{{ periodos_str }}"
+                 class="form-control" placeholder="2020-2023">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Unidade CO₂e</label>
+          <select name="unidade" class="form-select">
+            <option value="tco2e" {% if unidade == "tco2e" %}selected{% endif %}>tCO₂e</option>
+            <option value="kgco2e" {% if unidade == "kgco2e" %}selected{% endif %}>kgCO₂e</option>
+          </select>
+        </div>
+        <div class="col-md-auto">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-search me-1"></i>Calcular
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+  </div>
+  {% endif %}
+
+  {% if pivot %}
+  <!-- Pivot table -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-table me-2"></i>Emissões por Unidade e Ano ({{ unidade }})</span>
+      <a href="?{{ request.GET.urlencode }}&export=xlsx" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-download me-1"></i>Exportar Excel
+      </a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Unidade</th>
+            {% for ano in anos %}
+            <th class="text-end">{{ ano }}</th>
+            {% endfor %}
+            <th class="text-end fw-bold">Var. Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in pivot %}
+          <tr>
+            <td>{{ row.unidade }}</td>
+            {% for v in row.valores %}
+            <td class="text-end font-monospace">{{ v|floatformat:2|default:"—" }}</td>
+            {% endfor %}
+            <td class="text-end fw-semibold
+              {% if row.variacao > 0 %}text-danger{% elif row.variacao < 0 %}text-success{% endif %}">
+              {% if row.variacao is not None %}
+              {{ row.variacao|floatformat:1 }}%
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary">
+          <tr>
+            <td class="fw-bold">Total</td>
+            {% for t in totais %}
+            <td class="text-end fw-bold font-monospace">{{ t|floatformat:2 }}</td>
+            {% endfor %}
+            <td class="text-end fw-bold
+              {% if variacao_total > 0 %}text-danger{% elif variacao_total < 0 %}text-success{% endif %}">
+              {% if variacao_total is not None %}{{ variacao_total|floatformat:1 }}%{% else %}—{% endif %}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- Chart placeholder (Plotly injected below) -->
+  <div class="card">
+    <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Evolução das Emissões</div>
+    <div class="card-body"><div id="chart-comparativo" style="min-height:350px"></div></div>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-bar-chart fs-1 d-block mb-3"></i>
+    <p>Informe os períodos acima e clique em <strong>Calcular</strong> para visualizar a comparação.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if chart_json %}
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<script>
+  const data = {{ chart_json|safe }};
+  Plotly.newPlot('chart-comparativo', data.data, data.layout, {responsive: true});
+</script>
+{% endif %}
+{% endblock %}

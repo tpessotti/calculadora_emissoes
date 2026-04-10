@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}{{ unidade.nome }} — {{ APP_NAME }}{% endblock %}
+{% block nav_unidades %}active{% endblock %}
+
+{% block content %}
+<div class="row">
+  <!-- Unit info -->
+  <div class="col-md-8">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-building me-2"></i>{{ unidade.nome }}</h5>
+        <div>
+          <a href="{% url 'unidades:update' unidade.pk %}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-pencil me-1"></i>Editar
+          </a>
+        </div>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">ID Elo</dt>
+          <dd class="col-sm-8"><code>{{ unidade.id_elo }}</code></dd>
+
+          <dt class="col-sm-4">Localização</dt>
+          <dd class="col-sm-8">{{ unidade.localizacao|default:"—" }}</dd>
+
+          <dt class="col-sm-4">Tecnologia</dt>
+          <dd class="col-sm-8">{{ unidade.tecnologia|default:"—" }}</dd>
+
+          <dt class="col-sm-4">Períodos</dt>
+          <dd class="col-sm-8">{{ unidade.periodos|default:"todos" }}</dd>
+
+          <dt class="col-sm-4">Massa Input (t)</dt>
+          <dd class="col-sm-8">{{ unidade.massa_input }}</dd>
+
+          <dt class="col-sm-4">Massa Output (t)</dt>
+          <dd class="col-sm-8">{{ unidade.massa_output }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Inputs list -->
+    {% if unidade.inputs %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header"><h6 class="mb-0">Insumos</h6></div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>Nome</th><th>Quantidade</th><th>Unidade</th><th>Escopo</th></tr>
+          </thead>
+          <tbody>
+            {% for inp in unidade.inputs %}
+            <tr>
+              <td>{{ inp.nome }}</td>
+              <td>{{ inp.quantidade }}</td>
+              <td>{{ inp.unidade|default:"—" }}</td>
+              <td><span class="badge bg-secondary">{{ inp.escopo|default:"Escopo 1" }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Emissions sidebar -->
+  <div class="col-md-4">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-danger text-white">
+        <h6 class="mb-0"><i class="bi bi-cloud me-2"></i>Emissões</h6>
+      </div>
+      <div class="card-body">
+        <table class="table table-sm mb-3">
+          <tbody>
+            <tr><td>Intensidade Escopo 1</td><td class="text-end"><strong>{{ unidade.intensidade_escopo1|floatformat:4 }}</strong></td></tr>
+            <tr><td>Intensidade Escopo 2</td><td class="text-end"><strong>{{ unidade.intensidade_escopo2|floatformat:4 }}</strong></td></tr>
+            <tr><td>Intensidade Escopo 3</td><td class="text-end"><strong>{{ unidade.intensidade_escopo3|floatformat:4 }}</strong></td></tr>
+            <tr class="table-warning"><td><strong>Intensidade Total</strong></td>
+                <td class="text-end"><strong>{{ unidade.intensidade_total|floatformat:4 }}</strong></td></tr>
+          </tbody>
+        </table>
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><td>Pegada Escopo 1</td><td class="text-end">{{ unidade.pegada_escopo1|floatformat:4 }}</td></tr>
+            <tr><td>Pegada Escopo 2</td><td class="text-end">{{ unidade.pegada_escopo2|floatformat:4 }}</td></tr>
+            <tr><td>Pegada Escopo 3</td><td class="text-end">{{ unidade.pegada_escopo3|floatformat:4 }}</td></tr>
+            <tr class="table-danger"><td><strong>Pegada Total</strong></td>
+                <td class="text-end"><strong>{{ unidade.pegada_total|floatformat:4 }}</strong></td></tr>
+          </tbody>
+        </table>
+        <div class="mt-3">
+          <button class="btn btn-sm btn-danger w-100" onclick="calcularEmissoes({{ unidade.pk }})">
+            <i class="bi bi-arrow-clockwise me-1"></i>Recalcular emissões
+          </button>
+        </div>
+        {% if emission_result and emission_result.missing_factors %}
+        <div class="alert alert-warning mt-3 mb-0 small">
+          <strong>Fatores faltando:</strong>
+          {% for mf in emission_result.missing_factors %}
+          <div>{{ mf.consumivel }} ({{ mf.escopo }}, {{ mf.ano|default:"global" }})</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Connections -->
+    {% if conexoes_saida or conexoes_entrada %}
+    <div class="card shadow-sm">
+      <div class="card-header"><h6 class="mb-0">Conexões</h6></div>
+      <div class="card-body p-0">
+        {% for c in conexoes_saida %}
+        <div class="d-flex align-items-center border-bottom px-3 py-2">
+          <i class="bi bi-arrow-right-circle text-success me-2"></i>
+          <span class="small">Para: <a href="{% url 'unidades:detail' c.destino.pk %}">{{ c.destino.nome }}</a>
+            <span class="text-muted">({{ c.massa }} t)</span></span>
+        </div>
+        {% endfor %}
+        {% for c in conexoes_entrada %}
+        <div class="d-flex align-items-center px-3 py-2">
+          <i class="bi bi-arrow-left-circle text-primary me-2"></i>
+          <span class="small">De: <a href="{% url 'unidades:detail' c.origem.pk %}">{{ c.origem.nome }}</a>
+            <span class="text-muted">({{ c.massa }} t)</span></span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function calcularEmissoes(pk) {
+  fetch(`/api/v1/unidades/${pk}/calcular/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  })
+  .then(r => r.json())
+  .then(() => location.reload())
+  .catch(() => alert('Erro ao calcular.'));
+}
+</script>
+{% endblock %}

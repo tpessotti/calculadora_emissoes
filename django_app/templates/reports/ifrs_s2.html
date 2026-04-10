@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}IFRS S2 — Divulgação de Riscos Climáticos{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 mb-2"><i class="bi bi-shield-check me-2"></i>IFRS S2 — Riscos Climáticos</h1>
+  <p class="text-muted mb-4">Preencha o questionário de divulgação de riscos e oportunidades climáticas conforme IFRS S2.</p>
+
+  <form method="post">
+    {% csrf_token %}
+
+    {% for secao in secoes %}
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">{{ secao.titulo }}</div>
+      <div class="card-body">
+        {% if secao.descricao %}
+        <p class="text-muted small mb-3">{{ secao.descricao }}</p>
+        {% endif %}
+        {% for q in secao.perguntas %}
+        <div class="mb-4">
+          <label class="form-label fw-semibold">{{ forloop.counter }}. {{ q.texto }}</label>
+          {% if q.tipo == "sim_nao" %}
+          <div class="d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="{{ q.id }}" value="sim"
+                     id="{{ q.id }}_sim" {% if answers|get_item:q.id == "sim" %}checked{% endif %}>
+              <label class="form-check-label" for="{{ q.id }}_sim">Sim</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="{{ q.id }}" value="nao"
+                     id="{{ q.id }}_nao" {% if answers|get_item:q.id == "nao" %}checked{% endif %}>
+              <label class="form-check-label" for="{{ q.id }}_nao">Não</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="{{ q.id }}" value="parcial"
+                     id="{{ q.id }}_parcial" {% if answers|get_item:q.id == "parcial" %}checked{% endif %}>
+              <label class="form-check-label" for="{{ q.id }}_parcial">Parcialmente</label>
+            </div>
+          </div>
+          {% elif q.tipo == "texto_longo" %}
+          <textarea class="form-control" name="{{ q.id }}" rows="4"
+                    placeholder="Descreva aqui…">{{ answers|get_item:q.id }}</textarea>
+          {% elif q.tipo == "multipla_escolha" %}
+          {% for op in q.opcoes %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="{{ q.id }}" value="{{ op }}"
+                   id="{{ q.id }}_{{ forloop.counter }}">
+            <label class="form-check-label" for="{{ q.id }}_{{ forloop.counter }}">{{ op }}</label>
+          </div>
+          {% endfor %}
+          {% else %}
+          <input type="text" class="form-control" name="{{ q.id }}"
+                 value="{{ answers|get_item:q.id }}" placeholder="{{ q.placeholder|default:'' }}">
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Progress indicator -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-semibold">Completude do questionário</span>
+          <span class="small text-muted">{{ completude }}%</span>
+        </div>
+        <div class="progress" style="height: 8px;">
+          <div class="progress-bar bg-success" style="width: {{ completude }}%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-floppy me-1"></i>Salvar respostas
+      </button>
+      <button type="submit" name="export" value="pdf" class="btn btn-outline-secondary" disabled title="Em breve">
+        <i class="bi bi-file-pdf me-1"></i>Exportar PDF
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

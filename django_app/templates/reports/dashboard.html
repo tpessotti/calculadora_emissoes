@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <h1 class="h3 mb-4"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
+
+  <!-- KPI Cards -->
+  <div class="row g-4 mb-5">
+    <div class="col-sm-6 col-xl-3">
+      <div class="card h-100 border-start border-danger border-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <p class="text-muted small mb-1">Total Escopo 1</p>
+              <h3 class="mb-0">{{ kpis.escopo1|floatformat:1 }}</h3>
+              <small class="text-muted">tCO₂e</small>
+            </div>
+            <i class="bi bi-fire fs-1 text-danger opacity-25"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="card h-100 border-start border-warning border-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <p class="text-muted small mb-1">Total Escopo 2</p>
+              <h3 class="mb-0">{{ kpis.escopo2|floatformat:1 }}</h3>
+              <small class="text-muted">tCO₂e</small>
+            </div>
+            <i class="bi bi-lightning-charge fs-1 text-warning opacity-25"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="card h-100 border-start border-info border-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <p class="text-muted small mb-1">Total Escopo 3</p>
+              <h3 class="mb-0">{{ kpis.escopo3|floatformat:1 }}</h3>
+              <small class="text-muted">tCO₂e</small>
+            </div>
+            <i class="bi bi-globe fs-1 text-info opacity-25"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="card h-100 border-start border-success border-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <p class="text-muted small mb-1">Total Geral</p>
+              <h3 class="mb-0">{{ kpis.total|floatformat:1 }}</h3>
+              <small class="text-muted">tCO₂e</small>
+            </div>
+            <i class="bi bi-bar-chart-line fs-1 text-success opacity-25"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick links -->
+  <div class="row g-4 mb-5">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body text-center py-4">
+          <i class="bi bi-diagram-3 fs-1 text-primary mb-3 d-block"></i>
+          <h5>Fluxo da Cadeia</h5>
+          <p class="text-muted small">Visualize as conexões entre unidades produtivas.</p>
+          <a href="{% url 'flow:diagram' %}" class="btn btn-outline-primary btn-sm">Abrir diagrama</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body text-center py-4">
+          <i class="bi bi-file-earmark-bar-graph fs-1 text-success mb-3 d-block"></i>
+          <h5>Inventário GHG</h5>
+          <p class="text-muted small">Relatório completo de emissões por escopo GHG Protocol.</p>
+          <a href="{% url 'reports:inventario_ghg' %}" class="btn btn-outline-success btn-sm">Ver inventário</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body text-center py-4">
+          <i class="bi bi-chat-dots fs-1 text-info mb-3 d-block"></i>
+          <h5>Assistente</h5>
+          <p class="text-muted small">Tire dúvidas sobre emissões com o chatbot.</p>
+          <a href="{% url 'chatbot:chat' %}" class="btn btn-outline-info btn-sm">Abrir chat</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent units -->
+  {% if recent_units %}
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-clock-history me-2"></i>Unidades Recentes</span>
+      <a href="{% url 'unidades:list' %}" class="btn btn-link btn-sm">Ver todas →</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nome</th>
+            <th>ID ELO</th>
+            <th class="text-end">Escopo 1+2 (tCO₂e)</th>
+            <th>Atualizado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in recent_units %}
+          <tr>
+            <td><a href="{% url 'unidades:detail' u.pk %}">{{ u.nome }}</a></td>
+            <td class="font-monospace text-muted small">{{ u.id_elo }}</td>
+            <td class="text-end">{{ u.intensidade_escopo1|add:u.intensidade_escopo2|floatformat:2 }}</td>
+            <td class="text-muted small">{{ u.updated_at|date:"d/m/Y" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
